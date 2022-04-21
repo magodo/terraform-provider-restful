@@ -2,17 +2,17 @@ package restapi
 
 import (
 	"context"
-	"net/http"
+	"fmt"
 	"net/url"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/magodo/terraform-provider-restapi/client"
 )
 
 type provider struct {
-	url string
-	*http.Client
+	*client.Client
 }
 
 type providerData struct {
@@ -61,8 +61,15 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 	if diags.HasError() {
 		return
 	}
-	p.url = config.BaseURL
-	p.Client = &http.Client{}
+	client, err := client.NewClient(config.BaseURL, nil)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Provider configuration failure",
+			fmt.Sprintf("failed to new client: %v", err),
+		)
+		return
+	}
+	p.Client = client
 	return
 }
 

@@ -4,14 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"net/url"
 	"path"
 	"path/filepath"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/magodo/terraform-provider-restapi/client"
 	"github.com/tidwall/gjson"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -110,33 +109,11 @@ func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, r
 		return
 	}
 
-	u, _ := url.Parse(r.p.url)
-	u.Path = u.Path + plan.Path.Value
-	url := u.String()
-	response, err := r.p.Client.Post(url, "application/json", strings.NewReader(plan.Body.Value))
+	b, err := r.p.Client.Create(plan.Path.Value, plan.Body.Value)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Creation failure",
-			fmt.Sprintf("Sending create request: %v", err),
-		)
-		return
-	}
-	defer response.Body.Close()
-
-	b, err := io.ReadAll(response.Body)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Creation failure",
-			fmt.Sprintf("Reading create response: %v", err),
-		)
-		return
-	}
-
-	// TODO: Support LRO
-	if response.StatusCode/100 != 2 {
-		resp.Diagnostics.AddError(
-			"Creation failure",
-			fmt.Sprintf("Unexpected response from create (%s - code: %d): %s", response.Status, response.StatusCode, string(b)),
+			err.Error(),
 		)
 		return
 	}
@@ -195,37 +172,19 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 		return
 	}
 
-	u, _ := url.Parse(r.p.url)
+	u, _ := url.Parse(r.p.BaseURL)
 	u.Path = u.Path + state.ID.Value
 	url := u.String()
-	response, err := r.p.Client.Get(url)
+
+	b, err := r.p.Client.Read(url)
 	if err != nil {
+		if err == client.ErrNotFound {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError(
 			"Read failure",
-			fmt.Sprintf("Sending read request: %v", err),
-		)
-		return
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode == http.StatusNotFound {
-		resp.State.RemoveResource(ctx)
-		return
-	}
-
-	b, err := io.ReadAll(response.Body)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Read failure",
-			fmt.Sprintf("Reading create response: %v", err),
-		)
-		return
-	}
-
-	if response.StatusCode/100 != 2 {
-		resp.Diagnostics.AddError(
-			"Read failure",
-			fmt.Sprintf("Unexpected response from read (%s - code: %d): %s", response.Status, response.StatusCode, string(b)),
+			err.Error(),
 		)
 		return
 	}
@@ -248,7 +207,7 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 		return
 	}
 
-	state.Path = types.String{Value: filepath.Dir(strings.TrimPrefix(url, r.p.url))}
+	state.Path = types.String{Value: filepath.Dir(strings.TrimPrefix(url, r.p.BaseURL))}
 	state.Body = types.String{Value: string(body)}
 
 	diags = resp.State.Set(ctx, state)
@@ -270,53 +229,23 @@ func (r resource) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, r
 		return
 	}
 
-	u, _ := url.Parse(r.p.url)
+	u, _ := url.Parse(r.p.BaseURL)
 	u.Path = u.Path + state.ID.Value
 	url := u.String()
-	deleteReq, err := http.NewRequest("DELETE", url, nil)
+	_, err := r.p.Client.Delete(url)
 	if err != nil {
-		resp.Diagnostics.AddError(
-			"Delete failure",
-			fmt.Sprintf("Building delete request: %v", err),
-		)
-		return
-	}
-
-	response, err := r.p.Client.Do(deleteReq)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Delete failure",
-			fmt.Sprintf("Sending delete request: %v", err),
-		)
-		return
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode/100 == 2 {
-		resp.State.RemoveResource(ctx)
-		return
-	}
-
-	// TODO: Support LRO
-	switch response.StatusCode {
-	case http.StatusNotFound:
-		resp.State.RemoveResource(ctx)
-		return
-	default:
-		b, err := io.ReadAll(response.Body)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Delete failure",
-				fmt.Sprintf("Reading delete response: %v", err),
-			)
+		if err == client.ErrNotFound {
+			resp.State.RemoveResource(ctx)
 			return
 		}
 		resp.Diagnostics.AddError(
 			"Delete failure",
-			fmt.Sprintf("Unexpected response from delete (%s - code: %d): %s", response.Status, response.StatusCode, string(b)),
+			err.Error(),
 		)
 		return
 	}
+	resp.State.RemoveResource(ctx)
+	return
 }
 
 func (resource) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
