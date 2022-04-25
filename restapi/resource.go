@@ -4,10 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"path"
 	"path/filepath"
-	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/magodo/terraform-provider-restapi/client"
@@ -142,7 +140,6 @@ func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, r
 	state := plan
 	state.ID = types.String{Value: resourceId}
 	diags = resp.State.Set(ctx, state)
-
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
@@ -172,11 +169,7 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 		return
 	}
 
-	u, _ := url.Parse(r.p.BaseURL)
-	u.Path = u.Path + state.ID.Value
-	url := u.String()
-
-	b, err := r.p.Client.Read(url)
+	b, err := r.p.Client.Read(state.ID.Value)
 	if err != nil {
 		if err == client.ErrNotFound {
 			resp.State.RemoveResource(ctx)
@@ -207,7 +200,7 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 		return
 	}
 
-	state.Path = types.String{Value: filepath.Dir(strings.TrimPrefix(url, r.p.BaseURL))}
+	state.Path = types.String{Value: filepath.Dir(state.ID.Value)}
 	state.Body = types.String{Value: string(body)}
 
 	diags = resp.State.Set(ctx, state)
@@ -217,8 +210,51 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 	}
 }
 
-func (resource) Update(context.Context, tfsdk.UpdateResourceRequest, *tfsdk.UpdateResourceResponse) {
-	panic("unimplemented")
+func (r resource) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
+	var state resourceData
+	diags := req.State.Get(ctx, &state)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
+
+	id := state.ID.Value
+
+	var plan resourceData
+	diags = req.Plan.Get(ctx, &plan)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
+
+	if _, err := r.p.Client.Update(id, plan.Body.Value); err != nil {
+		resp.Diagnostics.AddError(
+			"Update failure",
+			err.Error(),
+		)
+		return
+	}
+
+	diags = resp.State.Set(ctx, state)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
+
+	rreq := tfsdk.ReadResourceRequest{
+		State:        resp.State,
+		ProviderMeta: req.ProviderMeta,
+	}
+	rresp := tfsdk.ReadResourceResponse{
+		State:       resp.State,
+		Diagnostics: resp.Diagnostics,
+	}
+	r.Read(ctx, rreq, &rresp)
+
+	*resp = tfsdk.UpdateResourceResponse{
+		State:       rresp.State,
+		Diagnostics: rresp.Diagnostics,
+	}
 }
 
 func (r resource) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
@@ -229,10 +265,7 @@ func (r resource) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, r
 		return
 	}
 
-	u, _ := url.Parse(r.p.BaseURL)
-	u.Path = u.Path + state.ID.Value
-	url := u.String()
-	_, err := r.p.Client.Delete(url)
+	_, err := r.p.Client.Delete(state.ID.Value)
 	if err != nil {
 		if err == client.ErrNotFound {
 			resp.State.RemoveResource(ctx)

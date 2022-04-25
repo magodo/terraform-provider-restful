@@ -91,6 +91,22 @@ func (c *Client) Read(path string) ([]byte, error) {
 	return resp.Body(), nil
 }
 
+func (c *Client) Update(path string, body interface{}) ([]byte, error) {
+	req := c.R().SetBody(body)
+	if c.contentType != "" {
+		req = req.SetHeader("Content-Type", c.contentType)
+	}
+	resp, err := req.Put(path)
+	if err != nil {
+		return nil, err
+	}
+	// TODO: Support LRO
+	if resp.StatusCode()/100 != 2 {
+		return nil, fmt.Errorf("Unexpected response (%s - code: %d): %s", resp.Status(), resp.StatusCode(), string(resp.Body()))
+	}
+	return resp.Body(), nil
+}
+
 func (c *Client) Delete(path string) ([]byte, error) {
 	resp, err := c.R().Delete(path)
 	if err != nil {
