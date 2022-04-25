@@ -183,5 +183,7 @@ func (*provider) GetResources(context.Context) (map[string]tfsdk.ResourceType, d
 }
 
 func (*provider) GetDataSources(context.Context) (map[string]tfsdk.DataSourceType, diag.Diagnostics) {
-	return nil, nil
+	return map[string]tfsdk.DataSourceType{
+		"restapi_resource": dataSourceType{},
+	}, nil
 }

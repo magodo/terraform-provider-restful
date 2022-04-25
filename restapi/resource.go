@@ -20,7 +20,6 @@ import (
 type resourceType struct{}
 
 func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	tftypes.NewAttributePath()
 	return tfsdk.Schema{
 		Description:         "Restful resource",
 		MarkdownDescription: "Restful resource",
