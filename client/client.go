@@ -1,12 +1,15 @@
 package client
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 
 	"github.com/go-resty/resty/v2"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/clientcredentials"
 )
 
 // ErrNotFound is expected to be returned for `Read` when the resource with the specified id doesn't exist.
@@ -20,23 +23,37 @@ type Client struct {
 	contentType  string
 }
 
-type Option struct {
-	// The HTTP verb used for creating the resource. Possible values are `POST` (default) and `PUT`.
-	CreateMethod string
-
-	// The value set to `Content-Type` for create and update request. Defaults to `application/json`.
-	ContentType string
-}
-
-func NewClient(baseURL string, opt *Option) (*Client, error) {
+func NewClient(ctx context.Context, baseURL string, opt *Option) (*Client, error) {
 	if opt == nil {
 		opt = &Option{}
 	}
+
+	client := resty.New()
+	if opt, ok := opt.Security.(OAuth2ClientCredentialOption); ok {
+		cfg := clientcredentials.Config{
+			ClientID:       opt.ClientID,
+			ClientSecret:   opt.ClientSecret,
+			TokenURL:       opt.TokenURL,
+			Scopes:         opt.Scopes,
+			EndpointParams: opt.EndpointParams,
+			AuthStyle:      oauth2.AuthStyleAutoDetect,
+		}
+		switch opt.AuthStyle {
+		case OAuth2AuthStyleInHeader:
+			cfg.AuthStyle = oauth2.AuthStyleInHeader
+		case OAuth2AuthStyleInParams:
+			cfg.AuthStyle = oauth2.AuthStyleInParams
+		}
+
+		ts := cfg.TokenSource(ctx)
+		client = resty.NewWithClient(oauth2.NewClient(ctx, ts))
+	}
+
 	if _, err := url.Parse(baseURL); err != nil {
 		return nil, err
 	}
 
-	c := resty.New().SetBaseURL(baseURL)
+	client.SetBaseURL(baseURL)
 
 	createMethod := "POST"
 	if opt.CreateMethod != "" {
@@ -49,7 +66,7 @@ func NewClient(baseURL string, opt *Option) (*Client, error) {
 	}
 
 	return &Client{
-		Client:       c,
+		Client:       client,
 		createMethod: createMethod,
 		contentType:  contentType,
 	}, nil
