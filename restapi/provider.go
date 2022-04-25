@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -22,7 +23,14 @@ type providerData struct {
 }
 
 type securityData struct {
+	HTTP   *httpData   `tfsdk:"http"`
 	OAuth2 *oauth2Data `tfsdk:"oauth2"`
+}
+
+type httpData struct {
+	Type     string  `tfsdk:"type"`
+	Username *string `tfsdk:"username"`
+	Password *string `tfsdk:"password"`
 }
 
 type oauth2Data struct {
@@ -31,7 +39,7 @@ type oauth2Data struct {
 	TokenUrl       string              `tfsdk:"token_url"`
 	Scopes         []string            `tfsdk:"scopes"`
 	EndpointParams map[string][]string `tfsdk:"endpoint_params"`
-	AuthStyle      string              `tfsdk:"auth_style"`
+	AuthStyle      *string             `tfsdk:"auth_style"`
 }
 
 func New() tfsdk.Provider {
@@ -53,9 +61,37 @@ func (*provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 				Description:         "The OpenAPI security scheme that is be used by the operations",
 				MarkdownDescription: "The OpenAPI security scheme that is be used by the operations",
 				Optional:            true,
-				// TODO: Add Validator to ensure when this is non-null, there is only one specific scheme is set.
 				Attributes: tfsdk.SingleNestedAttributes(
 					map[string]tfsdk.Attribute{
+						"http": {
+							Description:         "Configuration for the HTTP authentication scheme",
+							MarkdownDescription: "Configuration for the HTTP authentication scheme",
+							Optional:            true,
+							Attributes: tfsdk.SingleNestedAttributes(
+								map[string]tfsdk.Attribute{
+									"type": {
+										Description:         fmt.Sprintf("The type of the authentication scheme. Possible values are `%s`", client.HTTPAuthTypeBasic),
+										MarkdownDescription: fmt.Sprintf("The type of the authentication scheme. Possible values are `%s`", client.HTTPAuthTypeBasic),
+										Required:            true,
+										Type:                types.StringType,
+										Validators:          []tfsdk.AttributeValidator{validator.StringInSlice(string(client.HTTPAuthTypeBasic))},
+									},
+									"username": {
+										Description:         "The username",
+										MarkdownDescription: "The username",
+										Type:                types.StringType,
+										Optional:            true,
+									},
+									"password": {
+										Description:         "The user password",
+										MarkdownDescription: "The user password",
+										Type:                types.StringType,
+										Optional:            true,
+										Sensitive:           true,
+									},
+								},
+							),
+						},
 						"oauth2": {
 							Description:         "Configuration for the OAuth Client Credentials flow",
 							MarkdownDescription: "Configuration for the OAuth Client Credentials flow",
@@ -94,11 +130,13 @@ func (*provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 										Optional:            true,
 									},
 									"auth_style": {
-										Type:                types.StringType,
-										Description:         "How the endpoint wants the client ID & secret sent. Possible values are `in_params` and `in_header`. If absent, the style used will be auto detected.",
-										MarkdownDescription: "How the endpoint wants the client ID & secret sent. Possible values are `in_params` and `in_header`. If absent, the style used will be auto detected.",
-										Optional:            true,
-										Validators:          []tfsdk.AttributeValidator{validator.StringInSlice(string(client.OAuth2AuthStyleInParams), string(client.OAuth2AuthStyleInHeader))},
+										Type: types.StringType,
+										Description: fmt.Sprintf("How the endpoint wants the client ID & secret sent. Possible values are `%s` and `%s`. If absent, the style used will be auto detected.",
+											client.OAuth2AuthStyleInParams, client.OAuth2AuthStyleInHeader),
+										MarkdownDescription: fmt.Sprintf("How the endpoint wants the client ID & secret sent. Possible values are `%s` and `%s`. If absent, the style used will be auto detected.",
+											client.OAuth2AuthStyleInParams, client.OAuth2AuthStyleInHeader),
+										Optional:   true,
+										Validators: []tfsdk.AttributeValidator{validator.StringInSlice(string(client.OAuth2AuthStyleInParams), string(client.OAuth2AuthStyleInHeader))},
 									},
 								},
 							),
@@ -125,18 +163,53 @@ func (p *provider) ValidateConfig(ctx context.Context, req tfsdk.ValidateProvide
 		return
 	}
 	if sec := config.Security; sec != nil {
-		// Check whether there is exactly one scheme is defined.
-		// TODO check there are not multiple schemes defined.
+		l := []string{}
+		if sec.HTTP != nil {
+			l = append(l, "http")
+		}
+		if sec.OAuth2 != nil {
+			l = append(l, "oauth2")
+		}
 
-		switch {
-		case sec.OAuth2 != nil:
-			// Nothing to check further here.
-		default:
+		if len(l) == 0 {
 			resp.Diagnostics.AddError(
 				"Invalid configuration",
-				"There is no security scheme defined",
+				"There is no security scheme specified",
 			)
 			return
+		}
+		if len(l) > 1 {
+			resp.Diagnostics.AddError(
+				"Invalid configuration",
+				"More than one scheme is specified: "+strings.Join(l, ","),
+			)
+			return
+		}
+
+		switch {
+		case sec.HTTP != nil:
+			// Validate that exactly one valid scheme is specified, based on type
+			setting := sec.HTTP
+			switch setting.Type {
+			case string(client.HTTPAuthTypeBasic):
+				if setting.Username == nil {
+					resp.Diagnostics.AddError(
+						"Invalid configuration",
+						"`username` is not set for HTTP basic authentication",
+					)
+				}
+				if setting.Password == nil {
+					resp.Diagnostics.AddError(
+						"Invalid configuration",
+						"`password` is not set for HTTP basic authentication",
+					)
+				}
+				if resp.Diagnostics.HasError() {
+					return
+				}
+			}
+		case sec.OAuth2 != nil:
+			// Nothing to further validate here
 		}
 	}
 }
@@ -152,15 +225,29 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 	var opt client.Option
 	if sec := config.Security; sec != nil {
 		switch {
+		case sec.HTTP != nil:
+			sopt := client.HTTPAuthOption{
+				Type: client.HTTPAuthTypeBasic,
+			}
+			if sec.HTTP.Username != nil {
+				sopt.Username = *sec.HTTP.Username
+			}
+			if sec.HTTP.Password != nil {
+				sopt.Password = *sec.HTTP.Password
+			}
+			opt.Security = sopt
 		case sec.OAuth2 != nil:
-			opt.Security = client.OAuth2ClientCredentialOption{
+			sopt := client.OAuth2ClientCredentialOption{
 				ClientID:       sec.OAuth2.ClientID,
 				ClientSecret:   sec.OAuth2.ClientSecret,
 				TokenURL:       sec.OAuth2.TokenUrl,
 				Scopes:         sec.OAuth2.Scopes,
 				EndpointParams: sec.OAuth2.EndpointParams,
-				AuthStyle:      client.OAuth2AuthStyle(sec.OAuth2.AuthStyle),
 			}
+			if sec.OAuth2.AuthStyle != nil {
+				sopt.AuthStyle = client.OAuth2AuthStyle(*sec.OAuth2.AuthStyle)
+			}
+			opt.Security = sopt
 		}
 	}
 

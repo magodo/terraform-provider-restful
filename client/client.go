@@ -8,8 +8,6 @@ import (
 	"net/url"
 
 	"github.com/go-resty/resty/v2"
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/clientcredentials"
 )
 
 // ErrNotFound is expected to be returned for `Read` when the resource with the specified id doesn't exist.
@@ -29,24 +27,8 @@ func NewClient(ctx context.Context, baseURL string, opt *Option) (*Client, error
 	}
 
 	client := resty.New()
-	if opt, ok := opt.Security.(OAuth2ClientCredentialOption); ok {
-		cfg := clientcredentials.Config{
-			ClientID:       opt.ClientID,
-			ClientSecret:   opt.ClientSecret,
-			TokenURL:       opt.TokenURL,
-			Scopes:         opt.Scopes,
-			EndpointParams: opt.EndpointParams,
-			AuthStyle:      oauth2.AuthStyleAutoDetect,
-		}
-		switch opt.AuthStyle {
-		case OAuth2AuthStyleInHeader:
-			cfg.AuthStyle = oauth2.AuthStyleInHeader
-		case OAuth2AuthStyleInParams:
-			cfg.AuthStyle = oauth2.AuthStyleInParams
-		}
-
-		ts := cfg.TokenSource(ctx)
-		client = resty.NewWithClient(oauth2.NewClient(ctx, ts))
+	if opt.Security != nil {
+		client = opt.Security.newClient(ctx)
 	}
 
 	if _, err := url.Parse(baseURL); err != nil {

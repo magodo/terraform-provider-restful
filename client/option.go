@@ -1,5 +1,13 @@
 package client
 
+import (
+	"context"
+
+	"github.com/go-resty/resty/v2"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/clientcredentials"
+)
+
 type Option struct {
 	Security securityOption
 
@@ -11,7 +19,28 @@ type Option struct {
 }
 
 type securityOption interface {
-	isSecurityOption()
+	newClient(ctx context.Context) *resty.Client
+}
+
+type HTTPAuthType string
+
+const (
+	HTTPAuthTypeBasic HTTPAuthType = "Basic"
+)
+
+type HTTPAuthOption struct {
+	Type     HTTPAuthType
+	Username string
+	Password string
+}
+
+func (opt HTTPAuthOption) newClient(ctx context.Context) *resty.Client {
+	client := resty.New()
+	switch opt.Type {
+	case HTTPAuthTypeBasic:
+		client.SetBasicAuth(opt.Username, opt.Password)
+	}
+	return client
 }
 
 type OAuth2AuthStyle string
@@ -30,24 +59,22 @@ type OAuth2ClientCredentialOption struct {
 	AuthStyle      OAuth2AuthStyle
 }
 
-func (opt OAuth2ClientCredentialOption) isSecurityOption() {}
+func (opt OAuth2ClientCredentialOption) newClient(ctx context.Context) *resty.Client {
+	cfg := clientcredentials.Config{
+		ClientID:       opt.ClientID,
+		ClientSecret:   opt.ClientSecret,
+		TokenURL:       opt.TokenURL,
+		Scopes:         opt.Scopes,
+		EndpointParams: opt.EndpointParams,
+		AuthStyle:      oauth2.AuthStyleAutoDetect,
+	}
+	switch opt.AuthStyle {
+	case OAuth2AuthStyleInHeader:
+		cfg.AuthStyle = oauth2.AuthStyleInHeader
+	case OAuth2AuthStyleInParams:
+		cfg.AuthStyle = oauth2.AuthStyleInParams
+	}
 
-// func (opt OAuth2ClientCredentialOption) configureClient(ctx context.Context, client *http.Client) {
-// 	cfg := clientcredentials.Config{
-// 		ClientID:       opt.ClientID,
-// 		ClientSecret:   opt.ClientSecret,
-// 		TokenURL:       opt.TokenURL,
-// 		Scopes:         opt.Scopes,
-// 		EndpointParams: opt.EndpointParams,
-// 		AuthStyle:      oauth2.AuthStyleAutoDetect,
-// 	}
-// 	switch opt.AuthStyle {
-// 	case OAuth2AuthStyleInHeader:
-// 		cfg.AuthStyle = oauth2.AuthStyleInHeader
-// 	case OAuth2AuthStyleInParams:
-// 		cfg.AuthStyle = oauth2.AuthStyleInParams
-// 	}
-
-// 	ts := cfg.TokenSource(ctx)
-// 	oauth2.NewClient(ctx, ts)
-// }
+	ts := cfg.TokenSource(ctx)
+	return resty.NewWithClient(oauth2.NewClient(ctx, ts))
+}
