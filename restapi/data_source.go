@@ -2,6 +2,7 @@ package restapi
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -55,7 +56,15 @@ func (d dataSource) Read(ctx context.Context, req tfsdk.ReadDataSourceRequest, r
 		return
 	}
 
-	b, err := d.p.Client.Read(config.ID.Value)
+	c, err := d.p.ClientBuilder.Build(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Read failure",
+			fmt.Sprintf("failed to build client: %v", err.Error()),
+		)
+	}
+
+	b, err := c.Read(config.ID.Value)
 	if err != nil {
 		if err == client.ErrNotFound {
 			resp.State.RemoveResource(ctx)

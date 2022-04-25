@@ -14,7 +14,7 @@ import (
 )
 
 type provider struct {
-	*client.Client
+	client.ClientBuilder
 }
 
 type providerData struct {
@@ -251,15 +251,10 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 		}
 	}
 
-	client, err := client.NewClient(ctx, config.BaseURL, &opt)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Provider configuration failure",
-			fmt.Sprintf("failed to new client: %v", err),
-		)
-		return
+	p.ClientBuilder = client.ClientBuilder{
+		BaseURL: config.BaseURL,
+		Option:  &opt,
 	}
-	p.Client = client
 	return
 }
 

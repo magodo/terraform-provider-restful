@@ -106,7 +106,15 @@ func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, r
 		return
 	}
 
-	b, err := r.p.Client.Create(plan.Path.Value, plan.Body.Value)
+	c, err := r.p.ClientBuilder.Build(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Create failure",
+			fmt.Sprintf("failed to build client: %v", err.Error()),
+		)
+	}
+
+	b, err := c.Create(plan.Path.Value, plan.Body.Value)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Creation failure",
@@ -168,7 +176,15 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 		return
 	}
 
-	b, err := r.p.Client.Read(state.ID.Value)
+	c, err := r.p.ClientBuilder.Build(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Read failure",
+			fmt.Sprintf("failed to build client: %v", err.Error()),
+		)
+	}
+
+	b, err := c.Read(state.ID.Value)
 	if err != nil {
 		if err == client.ErrNotFound {
 			resp.State.RemoveResource(ctx)
@@ -226,7 +242,15 @@ func (r resource) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, r
 		return
 	}
 
-	if _, err := r.p.Client.Update(id, plan.Body.Value); err != nil {
+	c, err := r.p.ClientBuilder.Build(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Update failure",
+			fmt.Sprintf("failed to build client: %v", err.Error()),
+		)
+	}
+
+	if _, err := c.Update(id, plan.Body.Value); err != nil {
 		resp.Diagnostics.AddError(
 			"Update failure",
 			err.Error(),
@@ -264,8 +288,15 @@ func (r resource) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, r
 		return
 	}
 
-	_, err := r.p.Client.Delete(state.ID.Value)
+	c, err := r.p.ClientBuilder.Build(ctx)
 	if err != nil {
+		resp.Diagnostics.AddError(
+			"Delete failure",
+			fmt.Sprintf("failed to build client: %v", err.Error()),
+		)
+	}
+
+	if _, err := c.Delete(state.ID.Value); err != nil {
 		if err == client.ErrNotFound {
 			resp.State.RemoveResource(ctx)
 			return

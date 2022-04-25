@@ -21,7 +21,13 @@ type Client struct {
 	contentType  string
 }
 
-func NewClient(ctx context.Context, baseURL string, opt *Option) (*Client, error) {
+type ClientBuilder struct {
+	BaseURL string
+	Option  *Option
+}
+
+func (b ClientBuilder) Build(ctx context.Context) (*Client, error) {
+	opt := b.Option
 	if opt == nil {
 		opt = &Option{}
 	}
@@ -31,11 +37,11 @@ func NewClient(ctx context.Context, baseURL string, opt *Option) (*Client, error
 		client = opt.Security.newClient(ctx)
 	}
 
-	if _, err := url.Parse(baseURL); err != nil {
+	if _, err := url.Parse(b.BaseURL); err != nil {
 		return nil, err
 	}
 
-	client.SetBaseURL(baseURL)
+	client.SetBaseURL(b.BaseURL)
 
 	createMethod := "POST"
 	if opt.CreateMethod != "" {
