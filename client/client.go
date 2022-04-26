@@ -16,32 +16,25 @@ var ErrNotFound = errors.New("resource not found")
 type Client struct {
 	*resty.Client
 
-	// Per request options
-	createMethod string
-	contentType  string
+	CreateMethod string
+	ContentType  string
 }
 
-type ClientBuilder struct {
-	BaseURL string
-	Option  *Option
-}
-
-func (b ClientBuilder) Build(ctx context.Context) (*Client, error) {
-	opt := b.Option
+func New(baseURL string, opt *Option) (*Client, error) {
 	if opt == nil {
 		opt = &Option{}
 	}
 
 	client := resty.New()
 	if opt.Security != nil {
-		client = opt.Security.newClient(ctx)
+		client = opt.Security.newClient()
 	}
 
-	if _, err := url.Parse(b.BaseURL); err != nil {
+	if _, err := url.Parse(baseURL); err != nil {
 		return nil, err
 	}
 
-	client.SetBaseURL(b.BaseURL)
+	client.SetBaseURL(baseURL)
 
 	createMethod := "POST"
 	if opt.CreateMethod != "" {
@@ -55,17 +48,17 @@ func (b ClientBuilder) Build(ctx context.Context) (*Client, error) {
 
 	return &Client{
 		Client:       client,
-		createMethod: createMethod,
-		contentType:  contentType,
+		CreateMethod: createMethod,
+		ContentType:  contentType,
 	}, nil
 }
 
-func (c *Client) Create(path string, body interface{}) ([]byte, error) {
-	req := c.R().SetBody(body)
-	if c.contentType != "" {
-		req = req.SetHeader("Content-Type", c.contentType)
+func (c *Client) Create(ctx context.Context, path string, body interface{}) ([]byte, error) {
+	req := c.R().SetContext(ctx).SetBody(body)
+	if c.ContentType != "" {
+		req = req.SetHeader("Content-Type", c.ContentType)
 	}
-	switch c.createMethod {
+	switch c.CreateMethod {
 	case "POST":
 		resp, err := req.Post(path)
 		if err != nil {
@@ -77,13 +70,21 @@ func (c *Client) Create(path string, body interface{}) ([]byte, error) {
 		}
 		return resp.Body(), nil
 	case "PUT":
-		panic("TBD")
+		resp, err := req.Put(path)
+		if err != nil {
+			return nil, err
+		}
+		// TODO: Support LRO
+		if resp.StatusCode()/100 != 2 {
+			return nil, fmt.Errorf("Unexpected response (%s - code: %d): %s", resp.Status(), resp.StatusCode(), string(resp.Body()))
+		}
+		return resp.Body(), nil
 	}
-	return nil, fmt.Errorf("unknown create method: %s", c.createMethod)
+	return nil, fmt.Errorf("unknown create method: %s", c.CreateMethod)
 }
 
-func (c *Client) Read(path string) ([]byte, error) {
-	resp, err := c.R().Get(path)
+func (c *Client) Read(ctx context.Context, path string) ([]byte, error) {
+	resp, err := c.R().SetContext(ctx).Get(path)
 	if err != nil {
 		return nil, err
 	}
@@ -96,10 +97,10 @@ func (c *Client) Read(path string) ([]byte, error) {
 	return resp.Body(), nil
 }
 
-func (c *Client) Update(path string, body interface{}) ([]byte, error) {
-	req := c.R().SetBody(body)
-	if c.contentType != "" {
-		req = req.SetHeader("Content-Type", c.contentType)
+func (c *Client) Update(ctx context.Context, path string, body interface{}) ([]byte, error) {
+	req := c.R().SetContext(ctx).SetBody(body)
+	if c.ContentType != "" {
+		req = req.SetHeader("Content-Type", c.ContentType)
 	}
 	resp, err := req.Put(path)
 	if err != nil {
@@ -112,8 +113,8 @@ func (c *Client) Update(path string, body interface{}) ([]byte, error) {
 	return resp.Body(), nil
 }
 
-func (c *Client) Delete(path string) ([]byte, error) {
-	resp, err := c.R().Delete(path)
+func (c *Client) Delete(ctx context.Context, path string) ([]byte, error) {
+	resp, err := c.R().SetContext(ctx).Delete(path)
 	if err != nil {
 		return nil, err
 	}

@@ -114,14 +114,7 @@ func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, r
 		return
 	}
 
-	c, err := r.p.ClientBuilder.Build(ctx)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Create failure",
-			fmt.Sprintf("failed to build client: %v", err.Error()),
-		)
-	}
-
+	c := r.p.client
 	if len(plan.Query.Elems) != 0 {
 		m := map[string]string{}
 		for k, v := range plan.Query.Elems {
@@ -130,7 +123,7 @@ func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, r
 		c.SetQueryParams(m)
 	}
 
-	b, err := c.Create(plan.Path.Value, plan.Body.Value)
+	b, err := c.Create(ctx, plan.Path.Value, plan.Body.Value)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Creation failure",
@@ -139,27 +132,33 @@ func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, r
 		return
 	}
 
-	// TODO: Is the response always guaranteed to be an object, maybe array?
-	var body map[string]interface{}
-	if err := json.Unmarshal(b, &body); err != nil {
-		resp.Diagnostics.AddError(
-			"Creation failure",
-			fmt.Sprintf("Unmarshalling create response: %v", err),
-		)
-		return
+	var resourceId string
+	switch c.CreateMethod {
+	case "POST":
+		// TODO: Is the response always guaranteed to be an object, maybe array?
+		var body map[string]interface{}
+		if err := json.Unmarshal(b, &body); err != nil {
+			resp.Diagnostics.AddError(
+				"Creation failure",
+				fmt.Sprintf("Unmarshalling create response: %v", err),
+			)
+			return
+		}
+
+		result := gjson.Get(string(b), plan.IdPath.Value)
+		if !result.Exists() {
+			resp.Diagnostics.AddError(
+				"Creation failure",
+				fmt.Sprintf("Can't find resource id in path %q", plan.IdPath.Value),
+			)
+			return
+		}
+		id := result.String()
+		resourceId = path.Join(plan.Path.Value, id)
+	case "PUT":
+		resourceId = plan.Path.Value
 	}
 
-	result := gjson.Get(string(b), plan.IdPath.Value)
-	if !result.Exists() {
-		resp.Diagnostics.AddError(
-			"Creation failure",
-			fmt.Sprintf("Can't find resource id in path %q", plan.IdPath.Value),
-		)
-		return
-	}
-	id := result.String()
-
-	resourceId := path.Join(plan.Path.Value, id)
 	state := plan
 	state.ID = types.String{Value: resourceId}
 	diags = resp.State.Set(ctx, state)
@@ -192,14 +191,7 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 		return
 	}
 
-	c, err := r.p.ClientBuilder.Build(ctx)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Read failure",
-			fmt.Sprintf("failed to build client: %v", err.Error()),
-		)
-	}
-
+	c := r.p.client
 	if len(state.Query.Elems) != 0 {
 		m := map[string]string{}
 		for k, v := range state.Query.Elems {
@@ -208,7 +200,7 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 		c.SetQueryParams(m)
 	}
 
-	b, err := c.Read(state.ID.Value)
+	b, err := c.Read(ctx, state.ID.Value)
 	if err != nil {
 		if err == client.ErrNotFound {
 			resp.State.RemoveResource(ctx)
@@ -239,7 +231,12 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 		return
 	}
 
-	state.Path = types.String{Value: filepath.Dir(state.ID.Value)}
+	switch c.CreateMethod {
+	case "POST":
+		state.Path = types.String{Value: filepath.Dir(state.ID.Value)}
+	case "PUT":
+		state.Path = types.String{Value: state.ID.Value}
+	}
 	state.Body = types.String{Value: string(body)}
 
 	diags = resp.State.Set(ctx, state)
@@ -257,8 +254,6 @@ func (r resource) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, r
 		return
 	}
 
-	id := state.ID.Value
-
 	var plan resourceData
 	diags = req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
@@ -266,14 +261,7 @@ func (r resource) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, r
 		return
 	}
 
-	c, err := r.p.ClientBuilder.Build(ctx)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Update failure",
-			fmt.Sprintf("failed to build client: %v", err.Error()),
-		)
-	}
-
+	c := r.p.client
 	if len(plan.Query.Elems) != 0 {
 		m := map[string]string{}
 		for k, v := range plan.Query.Elems {
@@ -282,7 +270,7 @@ func (r resource) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, r
 		c.SetQueryParams(m)
 	}
 
-	if _, err := c.Update(id, plan.Body.Value); err != nil {
+	if _, err := c.Update(ctx, state.ID.Value, plan.Body.Value); err != nil {
 		resp.Diagnostics.AddError(
 			"Update failure",
 			err.Error(),
@@ -320,14 +308,7 @@ func (r resource) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, r
 		return
 	}
 
-	c, err := r.p.ClientBuilder.Build(ctx)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Delete failure",
-			fmt.Sprintf("failed to build client: %v", err.Error()),
-		)
-	}
-
+	c := r.p.client
 	if len(state.Query.Elems) != 0 {
 		m := map[string]string{}
 		for k, v := range state.Query.Elems {
@@ -336,7 +317,7 @@ func (r resource) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, r
 		c.SetQueryParams(m)
 	}
 
-	if _, err := c.Delete(state.ID.Value); err != nil {
+	if _, err := c.Delete(ctx, state.ID.Value); err != nil {
 		if err == client.ErrNotFound {
 			resp.State.RemoveResource(ctx)
 			return

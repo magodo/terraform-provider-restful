@@ -14,12 +14,13 @@ import (
 )
 
 type provider struct {
-	client.ClientBuilder
+	client *client.Client
 }
 
 type providerData struct {
-	BaseURL  string        `tfsdk:"base_url"`
-	Security *securityData `tfsdk:"security"`
+	BaseURL      string        `tfsdk:"base_url"`
+	Security     *securityData `tfsdk:"security"`
+	CreateMethod *string       `tfsdk:"create_method"`
 }
 
 type securityData struct {
@@ -144,14 +145,25 @@ func (*provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 					},
 				),
 			},
+			"create_method": {
+				Type:                types.StringType,
+				Description:         "The method used to create the resource. Possible values are `PUT` and `POST`.",
+				MarkdownDescription: "The method used to create the resource. Possible values are `PUT` and `POST`.",
+				Optional:            true,
+				Computed:            true,
+				// Plan Modifier seems doesn't work in provider schema.
+				//PlanModifiers:       []tfsdk.AttributePlanModifier{DefaultAttribute(types.String{Value: "POST"})},
+				Validators: []tfsdk.AttributeValidator{validator.StringInSlice("PUT", "POST")},
+			},
 		},
 	}, nil
 }
 
 func (p *provider) ValidateConfig(ctx context.Context, req tfsdk.ValidateProviderConfigRequest, resp *tfsdk.ValidateProviderConfigResponse) {
 	type pt struct {
-		BaseURL  types.String `tfsdk:"base_url"`
-		Security types.Object `tfsdk:"security"`
+		BaseURL      types.String `tfsdk:"base_url"`
+		Security     types.Object `tfsdk:"security"`
+		CreateMethod types.String `tfsdk:"create_method"`
 	}
 
 	var config pt
@@ -213,6 +225,9 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 	}
 
 	var opt client.Option
+	if config.CreateMethod != nil {
+		opt.CreateMethod = *config.CreateMethod
+	}
 	if sec := config.Security; sec != nil {
 		switch {
 		case sec.HTTP != nil:
@@ -247,9 +262,13 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 		}
 	}
 
-	p.ClientBuilder = client.ClientBuilder{
-		BaseURL: config.BaseURL,
-		Option:  &opt,
+	var err error
+	p.client, err = client.New(config.BaseURL, &opt)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Failed to configure provider",
+			fmt.Sprintf("Failed to new client: %v", err),
+		)
 	}
 	return
 }
