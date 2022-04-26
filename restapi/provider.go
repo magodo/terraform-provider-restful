@@ -13,14 +13,21 @@ import (
 	"github.com/magodo/terraform-provider-restapi/restapi/validator"
 )
 
+type apiOption struct {
+	CreateMethod string
+	Query        map[string]string
+}
+
 type provider struct {
 	client *client.Client
+	apiOpt apiOption
 }
 
 type providerData struct {
-	BaseURL      string        `tfsdk:"base_url"`
-	Security     *securityData `tfsdk:"security"`
-	CreateMethod *string       `tfsdk:"create_method"`
+	BaseURL      string            `tfsdk:"base_url"`
+	Security     *securityData     `tfsdk:"security"`
+	CreateMethod *string           `tfsdk:"create_method"`
+	Query        map[string]string `tfsdk:"query"`
 }
 
 type securityData struct {
@@ -147,13 +154,17 @@ func (*provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 			},
 			"create_method": {
 				Type:                types.StringType,
-				Description:         "The method used to create the resource. Possible values are `PUT` and `POST`.",
-				MarkdownDescription: "The method used to create the resource. Possible values are `PUT` and `POST`.",
+				Description:         "The method used to create the resource. Possible values are `PUT` and `POST`. Defaults to `POST`.",
+				MarkdownDescription: "The method used to create the resource. Possible values are `PUT` and `POST`. Defaults to `POST`.",
 				Optional:            true,
-				Computed:            true,
-				// Plan Modifier seems doesn't work in provider schema.
-				//PlanModifiers:       []tfsdk.AttributePlanModifier{DefaultAttribute(types.String{Value: "POST"})},
+				// Need a way to set the default value, plan modifier doesn't work here.
 				Validators: []tfsdk.AttributeValidator{validator.StringInSlice("PUT", "POST")},
+			},
+			"query": {
+				Description:         "The query parameters that are applied to each request",
+				MarkdownDescription: "The query parameters that are applied to each request",
+				Type:                types.MapType{ElemType: types.StringType},
+				Optional:            true,
 			},
 		},
 	}, nil
@@ -164,6 +175,7 @@ func (p *provider) ValidateConfig(ctx context.Context, req tfsdk.ValidateProvide
 		BaseURL      types.String `tfsdk:"base_url"`
 		Security     types.Object `tfsdk:"security"`
 		CreateMethod types.String `tfsdk:"create_method"`
+		Query        types.Map    `tfsdk:"query"`
 	}
 
 	var config pt
@@ -224,10 +236,7 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 		return
 	}
 
-	var opt client.Option
-	if config.CreateMethod != nil {
-		opt.CreateMethod = *config.CreateMethod
-	}
+	clientOpt := client.BuildOption{}
 	if sec := config.Security; sec != nil {
 		switch {
 		case sec.HTTP != nil:
@@ -240,7 +249,7 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 			if sec.HTTP.Password != nil {
 				sopt.Password = *sec.HTTP.Password
 			}
-			opt.Security = sopt
+			clientOpt.Security = sopt
 		case sec.OAuth2 != nil:
 			sopt := client.OAuth2ClientCredentialOption{
 				ClientID:       sec.OAuth2.ClientID,
@@ -252,7 +261,7 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 			if sec.OAuth2.AuthStyle != nil {
 				sopt.AuthStyle = client.OAuth2AuthStyle(*sec.OAuth2.AuthStyle)
 			}
-			opt.Security = sopt
+			clientOpt.Security = sopt
 		default:
 			resp.Diagnostics.AddError(
 				"Failed to configure provider",
@@ -263,13 +272,25 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 	}
 
 	var err error
-	p.client, err = client.New(config.BaseURL, &opt)
+	p.client, err = client.New(config.BaseURL, &clientOpt)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Failed to configure provider",
 			fmt.Sprintf("Failed to new client: %v", err),
 		)
 	}
+
+	p.apiOpt = apiOption{
+		CreateMethod: "POST",
+		Query:        map[string]string{},
+	}
+	if config.CreateMethod != nil {
+		p.apiOpt.CreateMethod = *config.CreateMethod
+	}
+	if config.Query != nil {
+		p.apiOpt.Query = config.Query
+	}
+
 	return
 }
 

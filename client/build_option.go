@@ -8,14 +8,8 @@ import (
 	"golang.org/x/oauth2/clientcredentials"
 )
 
-type Option struct {
+type BuildOption struct {
 	Security securityOption
-
-	// The HTTP verb used for creating the resource. Possible values are `POST` (default) and `PUT`.
-	CreateMethod string
-
-	// The value set to `Content-Type` for create and update request. Defaults to `application/json`.
-	ContentType string
 }
 
 type securityOption interface {

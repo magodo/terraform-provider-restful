@@ -23,8 +23,8 @@ func (d dataSourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnos
 				Required:            true,
 			},
 			"query": {
-				Description:         "The query used to read the data source",
-				MarkdownDescription: "The query used to read the data source",
+				Description:         "The query parameters that are applied to each request. This won't clean up the `query` set in the provider block, expcet the value with the same key.",
+				MarkdownDescription: "The query parameters that are applied to each request. This won't clean up the `query` set in the provider block, expcet the value with the same key.",
 				Type:                types.MapType{ElemType: types.StringType},
 				Optional:            true,
 			},
@@ -63,15 +63,17 @@ func (d dataSource) Read(ctx context.Context, req tfsdk.ReadDataSourceRequest, r
 	}
 
 	c := d.p.client
+
+	opt := client.ReadOption{
+		Query: d.p.apiOpt.Query,
+	}
 	if len(config.Query.Elems) != 0 {
-		m := map[string]string{}
 		for k, v := range config.Query.Elems {
-			m[k] = v.(types.String).Value
+			opt.Query[k] = v.(types.String).Value
 		}
-		c.SetQueryParams(m)
 	}
 
-	b, err := c.Read(ctx, config.ID.Value)
+	b, err := c.Read(ctx, config.ID.Value, opt)
 	if err != nil {
 		if err == client.ErrNotFound {
 			resp.State.RemoveResource(ctx)

@@ -15,14 +15,11 @@ var ErrNotFound = errors.New("resource not found")
 
 type Client struct {
 	*resty.Client
-
-	CreateMethod string
-	ContentType  string
 }
 
-func New(baseURL string, opt *Option) (*Client, error) {
+func New(baseURL string, opt *BuildOption) (*Client, error) {
 	if opt == nil {
-		opt = &Option{}
+		opt = &BuildOption{}
 	}
 
 	client := resty.New()
@@ -35,30 +32,20 @@ func New(baseURL string, opt *Option) (*Client, error) {
 	}
 
 	client.SetBaseURL(baseURL)
-
-	createMethod := "POST"
-	if opt.CreateMethod != "" {
-		createMethod = opt.CreateMethod
-	}
-
-	contentType := "application/json"
-	if opt.ContentType != "" {
-		contentType = opt.ContentType
-	}
-
-	return &Client{
-		Client:       client,
-		CreateMethod: createMethod,
-		ContentType:  contentType,
-	}, nil
+	return &Client{client}, nil
 }
 
-func (c *Client) Create(ctx context.Context, path string, body interface{}) ([]byte, error) {
+type CreateOption struct {
+	Method string
+	Query  map[string]string
+}
+
+func (c *Client) Create(ctx context.Context, path string, body interface{}, opt CreateOption) ([]byte, error) {
 	req := c.R().SetContext(ctx).SetBody(body)
-	if c.ContentType != "" {
-		req = req.SetHeader("Content-Type", c.ContentType)
-	}
-	switch c.CreateMethod {
+	req.SetQueryParams(opt.Query)
+	req = req.SetHeader("Content-Type", "application/json")
+
+	switch opt.Method {
 	case "POST":
 		resp, err := req.Post(path)
 		if err != nil {
@@ -79,12 +66,20 @@ func (c *Client) Create(ctx context.Context, path string, body interface{}) ([]b
 			return nil, fmt.Errorf("Unexpected response (%s - code: %d): %s", resp.Status(), resp.StatusCode(), string(resp.Body()))
 		}
 		return resp.Body(), nil
+	default:
+		return nil, fmt.Errorf("unknown create method: %s", opt.Method)
 	}
-	return nil, fmt.Errorf("unknown create method: %s", c.CreateMethod)
 }
 
-func (c *Client) Read(ctx context.Context, path string) ([]byte, error) {
-	resp, err := c.R().SetContext(ctx).Get(path)
+type ReadOption struct {
+	Query map[string]string
+}
+
+func (c *Client) Read(ctx context.Context, path string, opt ReadOption) ([]byte, error) {
+	req := c.R().SetContext(ctx)
+	req.SetQueryParams(opt.Query)
+
+	resp, err := req.Get(path)
 	if err != nil {
 		return nil, err
 	}
@@ -97,11 +92,15 @@ func (c *Client) Read(ctx context.Context, path string) ([]byte, error) {
 	return resp.Body(), nil
 }
 
-func (c *Client) Update(ctx context.Context, path string, body interface{}) ([]byte, error) {
+type UpdateOption struct {
+	Query map[string]string
+}
+
+func (c *Client) Update(ctx context.Context, path string, body interface{}, opt UpdateOption) ([]byte, error) {
 	req := c.R().SetContext(ctx).SetBody(body)
-	if c.ContentType != "" {
-		req = req.SetHeader("Content-Type", c.ContentType)
-	}
+	req.SetQueryParams(opt.Query)
+	req = req.SetHeader("Content-Type", "application/json")
+
 	resp, err := req.Put(path)
 	if err != nil {
 		return nil, err
@@ -113,8 +112,15 @@ func (c *Client) Update(ctx context.Context, path string, body interface{}) ([]b
 	return resp.Body(), nil
 }
 
-func (c *Client) Delete(ctx context.Context, path string) ([]byte, error) {
-	resp, err := c.R().SetContext(ctx).Delete(path)
+type DeleteOption struct {
+	Query map[string]string
+}
+
+func (c *Client) Delete(ctx context.Context, path string, opt DeleteOption) ([]byte, error) {
+	req := c.R().SetContext(ctx)
+	req.SetQueryParams(opt.Query)
+
+	resp, err := req.Delete(path)
 	if err != nil {
 		return nil, err
 	}

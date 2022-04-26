@@ -8,6 +8,9 @@ import (
 	"path"
 	"path/filepath"
 
+	"github.com/magodo/terraform-provider-restapi/restapi/planmodifier"
+	"github.com/magodo/terraform-provider-restapi/restapi/validator"
+
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/magodo/terraform-provider-restapi/client"
 	"github.com/tidwall/gjson"
@@ -43,12 +46,6 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 					tfsdk.RequiresReplace(),
 				},
 			},
-			"query": {
-				Description:         "The query parameter",
-				MarkdownDescription: "The query parameter",
-				Type:                types.MapType{ElemType: types.StringType},
-				Optional:            true,
-			},
 			"body": {
 				Description:         "The properties of the resource",
 				MarkdownDescription: "The properties of the resource",
@@ -57,13 +54,13 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 			},
 
 			"id_path": {
-				Description:         "The path to the id attribute in the response",
-				MarkdownDescription: "The path to the id attribute in the response, which is only used during creation of the resource to construct the resource identifier",
+				Description:         "The path to the id attribute in the response. This is ignored when `create_method` is `PUT`.",
+				MarkdownDescription: "The path to the id attribute in the response, which is only used during creation of the resource to construct the resource identifier. This is ignored when `create_method` is `PUT`.",
 				Optional:            true,
 				Computed:            true,
 				Type:                types.StringType,
 				PlanModifiers: []tfsdk.AttributePlanModifier{
-					DefaultAttributePlanModifier{
+					planmodifier.DefaultAttributePlanModifier{
 						Default: types.String{Value: "id"},
 					},
 				},
@@ -75,13 +72,26 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 				Computed:            true,
 				Type:                types.ListType{ElemType: types.StringType},
 				PlanModifiers: []tfsdk.AttributePlanModifier{
-					DefaultAttributePlanModifier{
+					planmodifier.DefaultAttributePlanModifier{
 						Default: types.List{
 							ElemType: types.StringType,
 							Elems:    []attr.Value{},
 						},
 					},
 				},
+			},
+			"create_method": {
+				Description:         "The method used to create the resource. Possible values are `PUT` and `POST`. Defaults to `POST`. This overrides the `create_method` set in the provider block.",
+				MarkdownDescription: "The method used to create the resource. Possible values are `PUT` and `POST`. Defaults to `POST`. This overrides the `create_method` set in the provider block.",
+				Type:                types.StringType,
+				Optional:            true,
+				Validators:          []tfsdk.AttributeValidator{validator.StringInSlice("PUT", "POST")},
+			},
+			"query": {
+				Description:         "The query parameters that are applied to each request. This won't clean up the `query` set in the provider block, expcet the value with the same key.",
+				MarkdownDescription: "The query parameters that are applied to each request. This won't clean up the `query` set in the provider block, expcet the value with the same key.",
+				Type:                types.MapType{ElemType: types.StringType},
+				Optional:            true,
 			},
 		},
 	}, nil
@@ -100,10 +110,11 @@ var _ tfsdk.Resource = resource{}
 type resourceData struct {
 	ID            types.String `tfsdk:"id"`
 	Path          types.String `tfsdk:"path"`
-	Query         types.Map    `tfsdk:"query"`
 	Body          types.String `tfsdk:"body"`
 	IdPath        types.String `tfsdk:"id_path"`
 	IgnoreChanges types.List   `tfsdk:"ignore_changes"`
+	CreateMethod  types.String `tfsdk:"create_method"`
+	Query         types.Map    `tfsdk:"query"`
 }
 
 func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
@@ -115,15 +126,21 @@ func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, r
 	}
 
 	c := r.p.client
+
+	opt := client.CreateOption{
+		Method: r.p.apiOpt.CreateMethod,
+		Query:  r.p.apiOpt.Query,
+	}
 	if len(plan.Query.Elems) != 0 {
-		m := map[string]string{}
 		for k, v := range plan.Query.Elems {
-			m[k] = v.(types.String).Value
+			opt.Query[k] = v.(types.String).Value
 		}
-		c.SetQueryParams(m)
+	}
+	if !plan.CreateMethod.Null {
+		opt.Method = plan.CreateMethod.Value
 	}
 
-	b, err := c.Create(ctx, plan.Path.Value, plan.Body.Value)
+	b, err := c.Create(ctx, plan.Path.Value, plan.Body.Value, opt)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Creation failure",
@@ -133,7 +150,7 @@ func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, r
 	}
 
 	var resourceId string
-	switch c.CreateMethod {
+	switch r.p.apiOpt.CreateMethod {
 	case "POST":
 		// TODO: Is the response always guaranteed to be an object, maybe array?
 		var body map[string]interface{}
@@ -192,15 +209,17 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 	}
 
 	c := r.p.client
+
+	opt := client.ReadOption{
+		Query: r.p.apiOpt.Query,
+	}
 	if len(state.Query.Elems) != 0 {
-		m := map[string]string{}
 		for k, v := range state.Query.Elems {
-			m[k] = v.(types.String).Value
+			opt.Query[k] = v.(types.String).Value
 		}
-		c.SetQueryParams(m)
 	}
 
-	b, err := c.Read(ctx, state.ID.Value)
+	b, err := c.Read(ctx, state.ID.Value, opt)
 	if err != nil {
 		if err == client.ErrNotFound {
 			resp.State.RemoveResource(ctx)
@@ -231,7 +250,7 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 		return
 	}
 
-	switch c.CreateMethod {
+	switch r.p.apiOpt.CreateMethod {
 	case "POST":
 		state.Path = types.String{Value: filepath.Dir(state.ID.Value)}
 	case "PUT":
@@ -262,15 +281,17 @@ func (r resource) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, r
 	}
 
 	c := r.p.client
+
+	opt := client.UpdateOption{
+		Query: r.p.apiOpt.Query,
+	}
 	if len(plan.Query.Elems) != 0 {
-		m := map[string]string{}
 		for k, v := range plan.Query.Elems {
-			m[k] = v.(types.String).Value
+			opt.Query[k] = v.(types.String).Value
 		}
-		c.SetQueryParams(m)
 	}
 
-	if _, err := c.Update(ctx, state.ID.Value, plan.Body.Value); err != nil {
+	if _, err := c.Update(ctx, state.ID.Value, plan.Body.Value, opt); err != nil {
 		resp.Diagnostics.AddError(
 			"Update failure",
 			err.Error(),
@@ -309,15 +330,17 @@ func (r resource) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, r
 	}
 
 	c := r.p.client
+
+	opt := client.DeleteOption{
+		Query: r.p.apiOpt.Query,
+	}
 	if len(state.Query.Elems) != 0 {
-		m := map[string]string{}
 		for k, v := range state.Query.Elems {
-			m[k] = v.(types.String).Value
+			opt.Query[k] = v.(types.String).Value
 		}
-		c.SetQueryParams(m)
 	}
 
-	if _, err := c.Delete(ctx, state.ID.Value); err != nil {
+	if _, err := c.Delete(ctx, state.ID.Value, opt); err != nil {
 		if err == client.ErrNotFound {
 			resp.State.RemoveResource(ctx)
 			return

@@ -10,6 +10,10 @@ import (
 // ModifyBody modifies the body based on the current state, removing anyattribute
 // attribute that only exists in the body, or is specified to be ignored.
 func ModifyBody(state, body string, ignoreChanges []string) (string, error) {
+	// This happens when importing resource, where there is no corresponding state.
+	if state == "" {
+		return body, nil
+	}
 	var stateJSON map[string]interface{}
 	if err := json.Unmarshal([]byte(state), &stateJSON); err != nil {
 		return "", fmt.Errorf("unmarshal the state %s: %v", state, err)
