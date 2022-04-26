@@ -28,9 +28,9 @@ func (d dataSourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnos
 				Type:                types.MapType{ElemType: types.StringType},
 				Optional:            true,
 			},
-			"body": {
-				Description:         "The properties of the resource",
-				MarkdownDescription: "The properties of the resource",
+			"output": {
+				Description:         "The response body after reading the resource",
+				MarkdownDescription: "The response body after reading the resource",
 				Type:                types.StringType,
 				Computed:            true,
 			},
@@ -49,9 +49,9 @@ type dataSource struct {
 var _ tfsdk.DataSource = dataSource{}
 
 type dataSourceData struct {
-	ID    types.String `tfsdk:"id"`
-	Query types.Map    `tfsdk:"query"`
-	Body  types.String `tfsdk:"body"`
+	ID     types.String `tfsdk:"id"`
+	Query  types.Map    `tfsdk:"query"`
+	Output types.String `tfsdk:"output"`
 }
 
 func (d dataSource) Read(ctx context.Context, req tfsdk.ReadDataSourceRequest, resp *tfsdk.ReadDataSourceResponse) {
@@ -89,7 +89,7 @@ func (d dataSource) Read(ctx context.Context, req tfsdk.ReadDataSourceRequest, r
 	state := dataSourceData{
 		ID:    config.ID,
 		Query: config.Query,
-		Body: types.String{
+		Output: types.String{
 			Value: string(b),
 		},
 	}

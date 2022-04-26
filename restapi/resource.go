@@ -52,7 +52,6 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 				Type:                types.StringType,
 				Required:            true,
 			},
-
 			"id_path": {
 				Description:         "The path to the id attribute in the response. This is ignored when `create_method` is `PUT`.",
 				MarkdownDescription: "The path to the id attribute in the response, which is only used during creation of the resource to construct the resource identifier. This is ignored when `create_method` is `PUT`.",
@@ -93,6 +92,12 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 				Type:                types.MapType{ElemType: types.StringType},
 				Optional:            true,
 			},
+			"output": {
+				Description:         "The response body after reading the resource",
+				MarkdownDescription: "The response body after reading the resource",
+				Type:                types.StringType,
+				Computed:            true,
+			},
 		},
 	}, nil
 }
@@ -115,6 +120,7 @@ type resourceData struct {
 	IgnoreChanges types.List   `tfsdk:"ignore_changes"`
 	CreateMethod  types.String `tfsdk:"create_method"`
 	Query         types.Map    `tfsdk:"query"`
+	Output        types.String `tfsdk:"output"`
 }
 
 func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
@@ -257,6 +263,7 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 		state.Path = types.String{Value: state.ID.Value}
 	}
 	state.Body = types.String{Value: string(body)}
+	state.Output = types.String{Value: string(b)}
 
 	diags = resp.State.Set(ctx, state)
 	resp.Diagnostics.Append(diags...)
