@@ -149,34 +149,38 @@ func (*provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 }
 
 func (p *provider) ValidateConfig(ctx context.Context, req tfsdk.ValidateProviderConfigRequest, resp *tfsdk.ValidateProviderConfigResponse) {
-	var config providerData
+	type pt struct {
+		BaseURL  types.String `tfsdk:"base_url"`
+		Security types.Object `tfsdk:"security"`
+	}
+
+	var config pt
 	diags := req.Config.Get(ctx, &config)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
 	}
-	if _, err := url.Parse(config.BaseURL); err != nil {
-		resp.Diagnostics.AddError(
-			"Invalid configuration",
-			"The `base_url` is not a valid URL",
-		)
-		return
-	}
-	if sec := config.Security; sec != nil {
-		l := []string{}
-		if sec.HTTP != nil {
-			l = append(l, "http")
-		}
-		if sec.OAuth2 != nil {
-			l = append(l, "oauth2")
-		}
 
-		if len(l) == 0 {
+	if !config.BaseURL.Unknown {
+		if _, err := url.Parse(config.BaseURL.Value); err != nil {
 			resp.Diagnostics.AddError(
 				"Invalid configuration",
-				"There is no security scheme specified",
+				"The `base_url` is not a valid URL",
 			)
 			return
+		}
+	}
+
+	if !config.Security.Unknown {
+		httpObj := config.Security.Attrs["http"].(types.Object)
+		oauth2Obj := config.Security.Attrs["oauth2"].(types.Object)
+
+		l := []string{}
+		if !httpObj.Null && !httpObj.Unknown {
+			l = append(l, "http")
+		}
+		if !oauth2Obj.Null && !oauth2Obj.Unknown {
+			l = append(l, "oauth2")
 		}
 		if len(l) > 1 {
 			resp.Diagnostics.AddError(
@@ -186,30 +190,16 @@ func (p *provider) ValidateConfig(ctx context.Context, req tfsdk.ValidateProvide
 			return
 		}
 
-		switch {
-		case sec.HTTP != nil:
-			// Validate that exactly one valid scheme is specified, based on type
-			setting := sec.HTTP
-			switch setting.Type {
-			case string(client.HTTPAuthTypeBasic):
-				if setting.Username == nil {
-					resp.Diagnostics.AddError(
-						"Invalid configuration",
-						"`username` is not set for HTTP basic authentication",
-					)
-				}
-				if setting.Password == nil {
-					resp.Diagnostics.AddError(
-						"Invalid configuration",
-						"`password` is not set for HTTP basic authentication",
-					)
-				}
-				if resp.Diagnostics.HasError() {
-					return
-				}
+		// In case any of the block is unknown, we don't know whether it will evaluate into null or not.
+		// Here, we do best effort to ensure at least one of them is set.
+		if httpObj.Null && oauth2Obj.Null {
+			if len(l) == 0 {
+				resp.Diagnostics.AddError(
+					"Invalid configuration",
+					"There is no security scheme specified",
+				)
+				return
 			}
-		case sec.OAuth2 != nil:
-			// Nothing to further validate here
 		}
 	}
 }
@@ -248,6 +238,12 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 				sopt.AuthStyle = client.OAuth2AuthStyle(*sec.OAuth2.AuthStyle)
 			}
 			opt.Security = sopt
+		default:
+			resp.Diagnostics.AddError(
+				"Failed to configure provider",
+				"There is no security scheme specified",
+			)
+			return
 		}
 	}
 

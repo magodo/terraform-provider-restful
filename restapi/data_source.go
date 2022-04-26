@@ -18,10 +18,16 @@ func (d dataSourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnos
 		MarkdownDescription: "Restful data source",
 		Attributes: map[string]tfsdk.Attribute{
 			"id": {
-				Description:         "The ID of the Resource",
-				MarkdownDescription: "The ID of the Resource",
+				Description:         "The ID of the Resource, i.e. The path of the data source, relative to the `base_url` of the provider",
+				MarkdownDescription: "The ID of the Resource, i.e. The path of the data source, relative to the `base_url` of the provider",
 				Type:                types.StringType,
 				Required:            true,
+			},
+			"query": {
+				Description:         "The query used to read the data source",
+				MarkdownDescription: "The query used to read the data source",
+				Type:                types.MapType{ElemType: types.StringType},
+				Optional:            true,
 			},
 			"body": {
 				Description:         "The properties of the resource",
@@ -44,8 +50,9 @@ type dataSource struct {
 var _ tfsdk.DataSource = dataSource{}
 
 type dataSourceData struct {
-	ID   types.String `tfsdk:"id"`
-	Body types.String `tfsdk:"body"`
+	ID    types.String `tfsdk:"id"`
+	Query types.Map    `tfsdk:"query"`
+	Body  types.String `tfsdk:"body"`
 }
 
 func (d dataSource) Read(ctx context.Context, req tfsdk.ReadDataSourceRequest, resp *tfsdk.ReadDataSourceResponse) {
@@ -64,6 +71,14 @@ func (d dataSource) Read(ctx context.Context, req tfsdk.ReadDataSourceRequest, r
 		)
 	}
 
+	if len(config.Query.Elems) != 0 {
+		m := map[string]string{}
+		for k, v := range config.Query.Elems {
+			m[k] = v.(types.String).Value
+		}
+		c.SetQueryParams(m)
+	}
+
 	b, err := c.Read(config.ID.Value)
 	if err != nil {
 		if err == client.ErrNotFound {
@@ -78,7 +93,8 @@ func (d dataSource) Read(ctx context.Context, req tfsdk.ReadDataSourceRequest, r
 	}
 
 	state := dataSourceData{
-		ID: config.ID,
+		ID:    config.ID,
+		Query: config.Query,
 		Body: types.String{
 			Value: string(b),
 		},

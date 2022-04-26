@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"path"
 	"path/filepath"
 
@@ -25,8 +26,8 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 		MarkdownDescription: "Restful resource",
 		Attributes: map[string]tfsdk.Attribute{
 			"id": {
-				Description:         "The ID of the Resource",
-				MarkdownDescription: "The ID of the Resource",
+				Description:         "The ID of the Resource. Same as the `path` when the `create_method` is `PUT`",
+				MarkdownDescription: "The ID of the Resource. Same as the `path` when the `create_method` is `PUT`",
 				Type:                types.StringType,
 				Computed:            true,
 				PlanModifiers: []tfsdk.AttributePlanModifier{
@@ -34,13 +35,19 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 				},
 			},
 			"path": {
-				Description:         "The path of the resource, relative to the `base_url`",
-				MarkdownDescription: "The path of the resource, relative to the `base_url`",
+				Description:         "The path of the resource, relative to the `base_url` of the provider. It differs when `create_method` is `PUT` and `POST`",
+				MarkdownDescription: "The path of the resource, relative to the `base_url` of the provider. It differs when `create_method` is `PUT` and `POST`",
 				Type:                types.StringType,
 				Required:            true,
 				PlanModifiers: []tfsdk.AttributePlanModifier{
 					tfsdk.RequiresReplace(),
 				},
+			},
+			"query": {
+				Description:         "The query parameter",
+				MarkdownDescription: "The query parameter",
+				Type:                types.MapType{ElemType: types.StringType},
+				Optional:            true,
 			},
 			"body": {
 				Description:         "The properties of the resource",
@@ -93,6 +100,7 @@ var _ tfsdk.Resource = resource{}
 type resourceData struct {
 	ID            types.String `tfsdk:"id"`
 	Path          types.String `tfsdk:"path"`
+	Query         types.Map    `tfsdk:"query"`
 	Body          types.String `tfsdk:"body"`
 	IdPath        types.String `tfsdk:"id_path"`
 	IgnoreChanges types.List   `tfsdk:"ignore_changes"`
@@ -112,6 +120,14 @@ func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, r
 			"Create failure",
 			fmt.Sprintf("failed to build client: %v", err.Error()),
 		)
+	}
+
+	if len(plan.Query.Elems) != 0 {
+		m := map[string]string{}
+		for k, v := range plan.Query.Elems {
+			m[k] = v.(types.String).Value
+		}
+		c.SetQueryParams(m)
 	}
 
 	b, err := c.Create(plan.Path.Value, plan.Body.Value)
@@ -184,6 +200,14 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 		)
 	}
 
+	if len(state.Query.Elems) != 0 {
+		m := map[string]string{}
+		for k, v := range state.Query.Elems {
+			m[k] = v.(types.String).Value
+		}
+		c.SetQueryParams(m)
+	}
+
 	b, err := c.Read(state.ID.Value)
 	if err != nil {
 		if err == client.ErrNotFound {
@@ -250,6 +274,14 @@ func (r resource) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, r
 		)
 	}
 
+	if len(plan.Query.Elems) != 0 {
+		m := map[string]string{}
+		for k, v := range plan.Query.Elems {
+			m[k] = v.(types.String).Value
+		}
+		c.SetQueryParams(m)
+	}
+
 	if _, err := c.Update(id, plan.Body.Value); err != nil {
 		resp.Diagnostics.AddError(
 			"Update failure",
@@ -296,6 +328,14 @@ func (r resource) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, r
 		)
 	}
 
+	if len(state.Query.Elems) != 0 {
+		m := map[string]string{}
+		for k, v := range state.Query.Elems {
+			m[k] = v.(types.String).Value
+		}
+		c.SetQueryParams(m)
+	}
+
 	if _, err := c.Delete(state.ID.Value); err != nil {
 		if err == client.ErrNotFound {
 			resp.State.RemoveResource(ctx)
@@ -312,5 +352,38 @@ func (r resource) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, r
 }
 
 func (resource) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
-	tfsdk.ResourceImportStatePassthroughID(ctx, tftypes.NewAttributePath().WithAttributeName("id"), req, resp)
+	idPath := tftypes.NewAttributePath().WithAttributeName("id")
+	if idPath == nil || tftypes.NewAttributePath().Equal(idPath) {
+		resp.Diagnostics.AddError(
+			"Resource Import Error",
+			"The attribute path `id` is nil or empty",
+		)
+	}
+	queryPath := tftypes.NewAttributePath().WithAttributeName("query")
+	if queryPath == nil || tftypes.NewAttributePath().Equal(queryPath) {
+		resp.Diagnostics.AddError(
+			"Resource Import Error",
+			"The attribute path `query` is nil or empty",
+		)
+	}
+
+	u, err := url.Parse(req.ID)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Resource Import Error",
+			fmt.Sprintf("Invalid id format: %v", err),
+		)
+	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, idPath, u.Path)...)
+
+	if len(u.Query()) != 0 {
+		m := map[string]string{}
+		for k, l := range u.Query() {
+			// Here we only accept unique query keys, since the resty's SetQueryParams method assume one key only has one value.
+			if len(l) == 1 {
+				m[k] = l[0]
+			}
+		}
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, queryPath, m)...)
+	}
 }
