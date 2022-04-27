@@ -1,12 +1,12 @@
-package restapi
+package provider
 
 import (
 	"context"
+	"github.com/magodo/terraform-provider-restful/internal/client"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/magodo/terraform-provider-restapi/client"
 )
 
 type dataSourceType struct{}

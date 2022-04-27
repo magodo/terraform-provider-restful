@@ -1,4 +1,4 @@
-module github.com/magodo/terraform-provider-restapi
+module github.com/magodo/terraform-provider-restful
 
 go 1.18
 

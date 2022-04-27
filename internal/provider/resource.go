@@ -1,18 +1,17 @@
-package restapi
+package provider
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/magodo/terraform-provider-restful/internal/client"
+	"github.com/magodo/terraform-provider-restful/internal/planmodifier"
+	"github.com/magodo/terraform-provider-restful/internal/validator"
 	"net/url"
 	"path"
 	"path/filepath"
 
-	"github.com/magodo/terraform-provider-restapi/restapi/planmodifier"
-	"github.com/magodo/terraform-provider-restapi/restapi/validator"
-
 	"github.com/hashicorp/terraform-plugin-framework/attr"
-	"github.com/magodo/terraform-provider-restapi/client"
 	"github.com/tidwall/gjson"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -148,7 +147,7 @@ func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, r
 		if err == nil {
 			resp.Diagnostics.AddError(
 				"Resource already exists",
-				fmt.Sprintf("A resource with the ID %q already exists - to be managed via Terraform this resource needs to be imported into the State. Please see the resource documentation for %q for more information.", plan.Path.Value, `restapi_resource`),
+				fmt.Sprintf("A resource with the ID %q already exists - to be managed via Terraform this resource needs to be imported into the State. Please see the resource documentation for %q for more information.", plan.Path.Value, `restful_resource`),
 			)
 			return
 		}

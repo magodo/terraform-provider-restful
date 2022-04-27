@@ -3,10 +3,10 @@ package main
 import (
 	"context"
 	"flag"
+	"github.com/magodo/terraform-provider-restful/internal/provider"
 	"log"
 
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
-	"github.com/magodo/terraform-provider-restapi/restapi"
 )
 
 func main() {
@@ -18,10 +18,10 @@ func main() {
 	ctx := context.Background()
 	serveOpts := tfsdk.ServeOpts{
 		Debug: debug,
-		Name:  "registry.terraform.io/magodo/restapi",
+		Name:  "registry.terraform.io/magodo/restful",
 	}
 
-	err := tfsdk.Serve(ctx, restapi.New, serveOpts)
+	err := tfsdk.Serve(ctx, provider.New, serveOpts)
 
 	if err != nil {
 		log.Fatalf("Error serving provider: %s", err)
