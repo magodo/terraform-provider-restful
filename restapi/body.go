@@ -7,16 +7,16 @@ import (
 	"github.com/tidwall/sjson"
 )
 
-// ModifyBody modifies the body based on the current state, removing anyattribute
+// ModifyBody modifies the body based on the base body, removing anyattribute
 // attribute that only exists in the body, or is specified to be ignored.
-func ModifyBody(state, body string, ignoreChanges []string) (string, error) {
+func ModifyBody(base, body string, ignoreChanges []string) (string, error) {
 	// This happens when importing resource, where there is no corresponding state.
-	if state == "" {
+	if base == "" {
 		return body, nil
 	}
-	var stateJSON map[string]interface{}
-	if err := json.Unmarshal([]byte(state), &stateJSON); err != nil {
-		return "", fmt.Errorf("unmarshal the state %s: %v", state, err)
+	var baseJSON map[string]interface{}
+	if err := json.Unmarshal([]byte(base), &baseJSON); err != nil {
+		return "", fmt.Errorf("unmarshal the base %s: %v", base, err)
 	}
 	var bodyJSON map[string]interface{}
 	if err := json.Unmarshal([]byte(body), &bodyJSON); err != nil {
@@ -29,7 +29,7 @@ func ModifyBody(state, body string, ignoreChanges []string) (string, error) {
 			return "", fmt.Errorf("deleting attribute in path %q: %v", path, err)
 		}
 	}
-	b, err := json.Marshal(getUpdatedJSON(stateJSON, bodyJSON))
+	b, err := json.Marshal(getUpdatedJSON(baseJSON, bodyJSON))
 	return string(b), err
 }
 

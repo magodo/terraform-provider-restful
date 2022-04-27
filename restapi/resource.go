@@ -210,9 +210,8 @@ func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, r
 		resourceId = plan.Path.Value
 	}
 
-	state := plan
-	state.ID = types.String{Value: resourceId}
-	diags = resp.State.Set(ctx, state)
+	plan.ID = types.String{Value: resourceId}
+	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
@@ -334,7 +333,7 @@ func (r resource) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, r
 		return
 	}
 
-	diags = resp.State.Set(ctx, state)
+	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
