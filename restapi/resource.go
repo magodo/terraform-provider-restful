@@ -133,6 +133,34 @@ func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, r
 
 	c := r.p.client
 
+	// Existance check for resources whose create method is `PUT`, in which case the `path` is the same as its ID.
+	// It is not possible to query the resource prior creation for resources whose create method is `POST`, since the `path` in this case is not enough for a `GET`.
+	if r.p.apiOpt.CreateMethod == "PUT" {
+		opt := client.ReadOption{
+			Query: r.p.apiOpt.Query,
+		}
+		if len(plan.Query.Elems) != 0 {
+			for k, v := range plan.Query.Elems {
+				opt.Query[k] = v.(types.String).Value
+			}
+		}
+		_, err := c.Read(ctx, plan.Path.Value, opt)
+		if err == nil {
+			resp.Diagnostics.AddError(
+				"Resource already exists",
+				fmt.Sprintf("A resource with the ID %q already exists - to be managed via Terraform this resource needs to be imported into the State. Please see the resource documentation for %q for more information.", plan.Path.Value, `restapi_resource`),
+			)
+			return
+		}
+		if err != nil && err != client.ErrNotFound {
+			resp.Diagnostics.AddError(
+				"Existance check failed",
+				err.Error(),
+			)
+			return
+		}
+	}
+
 	opt := client.CreateOption{
 		Method: r.p.apiOpt.CreateMethod,
 		Query:  r.p.apiOpt.Query,
@@ -150,7 +178,7 @@ func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, r
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Creation failure",
-			err.Error(),
+			fmt.Sprintf("Creating: %v", err),
 		)
 		return
 	}
