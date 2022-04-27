@@ -3,10 +3,11 @@ package provider
 import (
 	"context"
 	"fmt"
-	client2 "github.com/magodo/terraform-provider-restful/internal/client"
-	"github.com/magodo/terraform-provider-restful/internal/validator"
 	"net/url"
 	"strings"
+
+	client2 "github.com/magodo/terraform-provider-restful/internal/client"
+	"github.com/magodo/terraform-provider-restful/internal/validator"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -195,7 +196,7 @@ func (p *provider) ValidateConfig(ctx context.Context, req tfsdk.ValidateProvide
 		}
 	}
 
-	if !config.Security.Unknown {
+	if !config.Security.Unknown && !config.Security.Null {
 		httpObj := config.Security.Attrs["http"].(types.Object)
 		oauth2Obj := config.Security.Attrs["oauth2"].(types.Object)
 
