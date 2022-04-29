@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/magodo/terraform-provider-restful/internal/client"
 	client2 "github.com/magodo/terraform-provider-restful/internal/client"
 	"github.com/magodo/terraform-provider-restful/internal/validator"
 
@@ -16,7 +17,46 @@ import (
 
 type apiOption struct {
 	CreateMethod string
-	Query        map[string]string
+	Query        client.Query
+}
+
+func (opt apiOption) ForDataSourceRead(ctx context.Context, d dataSourceData) (*client.ReadOption, diag.Diagnostics) {
+	out := client.ReadOption{
+		Query: opt.Query.Clone().MergeFromTFValue(ctx, d.Query),
+	}
+	return &out, nil
+}
+
+func (opt apiOption) ForResourceCreate(ctx context.Context, d resourceData) (*client.CreateOption, diag.Diagnostics) {
+	out := client.CreateOption{
+		Method: opt.CreateMethod,
+		Query:  opt.Query.Clone().MergeFromTFValue(ctx, d.Query),
+	}
+	if !d.CreateMethod.Null && d.CreateMethod.Value != "" {
+		out.Method = d.CreateMethod.Value
+	}
+	return &out, nil
+}
+
+func (opt apiOption) ForResourceRead(ctx context.Context, d resourceData) (*client.ReadOption, diag.Diagnostics) {
+	out := client.ReadOption{
+		Query: opt.Query.Clone().MergeFromTFValue(ctx, d.Query),
+	}
+	return &out, nil
+}
+
+func (opt apiOption) ForResourceUpdate(ctx context.Context, d resourceData) (*client.UpdateOption, diag.Diagnostics) {
+	out := client.UpdateOption{
+		Query: opt.Query.Clone().MergeFromTFValue(ctx, d.Query),
+	}
+	return &out, nil
+}
+
+func (opt apiOption) ForResourceDelete(ctx context.Context, d resourceData) (*client.DeleteOption, diag.Diagnostics) {
+	out := client.DeleteOption{
+		Query: opt.Query.Clone().MergeFromTFValue(ctx, d.Query),
+	}
+	return &out, nil
 }
 
 type provider struct {
@@ -25,10 +65,10 @@ type provider struct {
 }
 
 type providerData struct {
-	BaseURL      string            `tfsdk:"base_url"`
-	Security     *securityData     `tfsdk:"security"`
-	CreateMethod *string           `tfsdk:"create_method"`
-	Query        map[string]string `tfsdk:"query"`
+	BaseURL      string              `tfsdk:"base_url"`
+	Security     *securityData       `tfsdk:"security"`
+	CreateMethod *string             `tfsdk:"create_method"`
+	Query        map[string][]string `tfsdk:"query"`
 }
 
 type securityData struct {
@@ -164,7 +204,7 @@ func (*provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 			"query": {
 				Description:         "The query parameters that are applied to each request",
 				MarkdownDescription: "The query parameters that are applied to each request",
-				Type:                types.MapType{ElemType: types.StringType},
+				Type:                types.MapType{ElemType: types.ListType{ElemType: types.StringType}},
 				Optional:            true,
 			},
 		},
@@ -283,7 +323,7 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 
 	p.apiOpt = apiOption{
 		CreateMethod: "POST",
-		Query:        map[string]string{},
+		Query:        map[string][]string{},
 	}
 	if config.CreateMethod != nil {
 		p.apiOpt.CreateMethod = *config.CreateMethod

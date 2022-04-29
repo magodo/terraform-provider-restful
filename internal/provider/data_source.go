@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+
 	"github.com/magodo/terraform-provider-restful/internal/client"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -25,7 +26,7 @@ func (d dataSourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnos
 			"query": {
 				Description:         "The query parameters that are applied to each request. This won't clean up the `query` set in the provider block, expcet the value with the same key.",
 				MarkdownDescription: "The query parameters that are applied to each request. This won't clean up the `query` set in the provider block, expcet the value with the same key.",
-				Type:                types.MapType{ElemType: types.StringType},
+				Type:                types.MapType{ElemType: types.ListType{ElemType: types.StringType}},
 				Optional:            true,
 			},
 			"output": {
@@ -64,16 +65,13 @@ func (d dataSource) Read(ctx context.Context, req tfsdk.ReadDataSourceRequest, r
 
 	c := d.p.client
 
-	opt := client.ReadOption{
-		Query: d.p.apiOpt.Query,
-	}
-	if len(config.Query.Elems) != 0 {
-		for k, v := range config.Query.Elems {
-			opt.Query[k] = v.(types.String).Value
-		}
+	opt, diags := d.p.apiOpt.ForDataSourceRead(ctx, config)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
 	}
 
-	b, err := c.Read(ctx, config.ID.Value, opt)
+	b, err := c.Read(ctx, config.ID.Value, *opt)
 	if err != nil {
 		if err == client.ErrNotFound {
 			resp.State.RemoveResource(ctx)

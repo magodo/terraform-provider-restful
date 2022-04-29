@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/magodo/terraform-provider-restful/internal/client"
-	"github.com/magodo/terraform-provider-restful/internal/planmodifier"
-	"github.com/magodo/terraform-provider-restful/internal/validator"
 	"net/url"
 	"path"
 	"path/filepath"
+
+	"github.com/magodo/terraform-provider-restful/internal/client"
+	"github.com/magodo/terraform-provider-restful/internal/planmodifier"
+	"github.com/magodo/terraform-provider-restful/internal/validator"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/tidwall/gjson"
@@ -83,13 +84,15 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 				MarkdownDescription: "The method used to create the resource. Possible values are `PUT` and `POST`. Defaults to `POST`. This overrides the `create_method` set in the provider block.",
 				Type:                types.StringType,
 				Optional:            true,
+				Computed:            true,
 				Validators:          []tfsdk.AttributeValidator{validator.StringInSlice("PUT", "POST")},
 			},
 			"query": {
 				Description:         "The query parameters that are applied to each request. This won't clean up the `query` set in the provider block, expcet the value with the same key.",
 				MarkdownDescription: "The query parameters that are applied to each request. This won't clean up the `query` set in the provider block, expcet the value with the same key.",
-				Type:                types.MapType{ElemType: types.StringType},
+				Type:                types.MapType{ElemType: types.ListType{ElemType: types.StringType}},
 				Optional:            true,
+				Computed:            true,
 			},
 			"output": {
 				Description:         "The response body after reading the resource",
@@ -132,18 +135,21 @@ func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, r
 
 	c := r.p.client
 
+	opt, diags := r.p.apiOpt.ForResourceCreate(ctx, plan)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
+
 	// Existance check for resources whose create method is `PUT`, in which case the `path` is the same as its ID.
 	// It is not possible to query the resource prior creation for resources whose create method is `POST`, since the `path` in this case is not enough for a `GET`.
-	if r.p.apiOpt.CreateMethod == "PUT" {
-		opt := client.ReadOption{
-			Query: r.p.apiOpt.Query,
+	if opt.Method == "PUT" {
+		opt, diags := r.p.apiOpt.ForResourceRead(ctx, plan)
+		resp.Diagnostics.Append(diags...)
+		if diags.HasError() {
+			return
 		}
-		if len(plan.Query.Elems) != 0 {
-			for k, v := range plan.Query.Elems {
-				opt.Query[k] = v.(types.String).Value
-			}
-		}
-		_, err := c.Read(ctx, plan.Path.Value, opt)
+		_, err := c.Read(ctx, plan.Path.Value, *opt)
 		if err == nil {
 			resp.Diagnostics.AddError(
 				"Resource already exists",
@@ -160,20 +166,7 @@ func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, r
 		}
 	}
 
-	opt := client.CreateOption{
-		Method: r.p.apiOpt.CreateMethod,
-		Query:  r.p.apiOpt.Query,
-	}
-	if len(plan.Query.Elems) != 0 {
-		for k, v := range plan.Query.Elems {
-			opt.Query[k] = v.(types.String).Value
-		}
-	}
-	if !plan.CreateMethod.Null {
-		opt.Method = plan.CreateMethod.Value
-	}
-
-	b, err := c.Create(ctx, plan.Path.Value, plan.Body.Value, opt)
+	b, err := c.Create(ctx, plan.Path.Value, plan.Body.Value, *opt)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Creation failure",
@@ -209,7 +202,13 @@ func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, r
 		resourceId = plan.Path.Value
 	}
 
+	// Set overridable attributes from option to state
+	plan.Query = opt.Query.ToTFValue()
+	plan.CreateMethod = types.String{Value: opt.Method}
+
+	// Set resource ID to state
 	plan.ID = types.String{Value: resourceId}
+
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
@@ -242,16 +241,13 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 
 	c := r.p.client
 
-	opt := client.ReadOption{
-		Query: r.p.apiOpt.Query,
-	}
-	if len(state.Query.Elems) != 0 {
-		for k, v := range state.Query.Elems {
-			opt.Query[k] = v.(types.String).Value
-		}
+	opt, diags := r.p.apiOpt.ForResourceRead(ctx, state)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
 	}
 
-	b, err := c.Read(ctx, state.ID.Value, opt)
+	b, err := c.Read(ctx, state.ID.Value, *opt)
 	if err != nil {
 		if err == client.ErrNotFound {
 			resp.State.RemoveResource(ctx)
@@ -288,6 +284,11 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 	case "PUT":
 		state.Path = types.String{Value: state.ID.Value}
 	}
+
+	// Set overridable attributes from option to state
+	state.Query = opt.Query.ToTFValue()
+
+	// Set computed attributes
 	state.Body = types.String{Value: string(body)}
 	state.Output = types.String{Value: string(b)}
 
@@ -315,22 +316,22 @@ func (r resource) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, r
 
 	c := r.p.client
 
-	opt := client.UpdateOption{
-		Query: r.p.apiOpt.Query,
-	}
-	if len(plan.Query.Elems) != 0 {
-		for k, v := range plan.Query.Elems {
-			opt.Query[k] = v.(types.String).Value
-		}
+	opt, diags := r.p.apiOpt.ForResourceUpdate(ctx, plan)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
 	}
 
-	if _, err := c.Update(ctx, state.ID.Value, plan.Body.Value, opt); err != nil {
+	if _, err := c.Update(ctx, state.ID.Value, plan.Body.Value, *opt); err != nil {
 		resp.Diagnostics.AddError(
 			"Update failure",
 			err.Error(),
 		)
 		return
 	}
+
+	// Set overridable attributes from option to state
+	plan.Query = opt.Query.ToTFValue()
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
@@ -364,16 +365,13 @@ func (r resource) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, r
 
 	c := r.p.client
 
-	opt := client.DeleteOption{
-		Query: r.p.apiOpt.Query,
-	}
-	if len(state.Query.Elems) != 0 {
-		for k, v := range state.Query.Elems {
-			opt.Query[k] = v.(types.String).Value
-		}
+	opt, diags := r.p.apiOpt.ForResourceDelete(ctx, state)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
 	}
 
-	if _, err := c.Delete(ctx, state.ID.Value, opt); err != nil {
+	if _, err := c.Delete(ctx, state.ID.Value, *opt); err != nil {
 		if err == client.ErrNotFound {
 			resp.State.RemoveResource(ctx)
 			return
@@ -414,12 +412,9 @@ func (resource) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRe
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, idPath, u.Path)...)
 
 	if len(u.Query()) != 0 {
-		m := map[string]string{}
+		m := map[string][]string{}
 		for k, l := range u.Query() {
-			// Here we only accept unique query keys, since the resty's SetQueryParams method assume one key only has one value.
-			if len(l) == 1 {
-				m[k] = l[0]
-			}
+			m[k] = l
 		}
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, queryPath, m)...)
 	}
