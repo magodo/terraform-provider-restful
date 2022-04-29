@@ -70,11 +70,16 @@ func TestResource_Azure_ResourceGroup(t *testing.T) {
 					resource.TestCheckResourceAttrSet(addr, "output"),
 				),
 			},
-			// {
-			// 	ResourceName:      addr,
-			// 	ImportState:       true,
-			// 	ImportStateIdFunc: func(s *terraform.State) (string, error) { return "", nil }, //TODO
-			// },
+			{
+				ResourceName: addr,
+				ImportState:  true,
+				ImportStateIdFunc: func(s *terraform.State) (string, error) {
+					return fmt.Sprintf("%s?%s",
+						s.RootModule().Resources[addr].Primary.Attributes["id"],
+						s.RootModule().Resources[addr].Primary.Attributes["query"],
+					), nil
+				},
+			},
 		},
 	})
 }
@@ -94,21 +99,16 @@ func (d azureData) CheckDestroy(addr string) func(*terraform.State) error {
 		if err != nil {
 			return err
 		}
-		for key, resource := range s.RootModule().Resources {
-			if key != addr {
-				continue
-			}
-			ver := resource.Primary.Attributes["query.api-version.0"]
-			resp, err := c.Read(context.TODO(), resource.Primary.ID, client.ReadOption{Query: map[string][]string{"api-version": {ver}}})
-			if err != nil {
-				return fmt.Errorf("reading %s: %v", addr, err)
-			}
-			if resp.StatusCode() != http.StatusNotFound {
-				return fmt.Errorf("%s: still exists", addr)
-			}
-			return nil
+		resource := s.RootModule().Resources[addr]
+		ver := resource.Primary.Attributes["query.api-version.0"]
+		resp, err := c.Read(context.TODO(), resource.Primary.ID, client.ReadOption{Query: map[string][]string{"api-version": {ver}}})
+		if err != nil {
+			return fmt.Errorf("reading %s: %v", addr, err)
 		}
-		panic("unreachable")
+		if resp.StatusCode() != http.StatusNotFound {
+			return fmt.Errorf("%s: still exists", addr)
+		}
+		return nil
 	}
 }
 

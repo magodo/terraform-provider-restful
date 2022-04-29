@@ -535,20 +535,7 @@ func (r resource) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, r
 
 func (resource) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
 	idPath := tftypes.NewAttributePath().WithAttributeName("id")
-	if idPath == nil || tftypes.NewAttributePath().Equal(idPath) {
-		resp.Diagnostics.AddError(
-			"Resource Import Error",
-			"The attribute path `id` is nil or empty",
-		)
-	}
 	queryPath := tftypes.NewAttributePath().WithAttributeName("query")
-	if queryPath == nil || tftypes.NewAttributePath().Equal(queryPath) {
-		resp.Diagnostics.AddError(
-			"Resource Import Error",
-			"The attribute path `query` is nil or empty",
-		)
-	}
-
 	u, err := url.Parse(req.ID)
 	if err != nil {
 		resp.Diagnostics.AddError(
