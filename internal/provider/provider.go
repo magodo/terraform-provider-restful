@@ -32,7 +32,7 @@ func (opt apiOption) ForResourceCreate(ctx context.Context, d resourceData) (*cl
 		Method: opt.CreateMethod,
 		Query:  opt.Query.Clone().MergeFromTFValue(ctx, d.Query),
 	}
-	if !d.CreateMethod.Null && d.CreateMethod.Value != "" {
+	if !d.CreateMethod.Unknown && !d.CreateMethod.Null {
 		out.Method = d.CreateMethod.Value
 	}
 	return &out, nil
