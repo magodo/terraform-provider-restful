@@ -1,0 +1,140 @@
+package provider
+
+import (
+	"context"
+	"fmt"
+	"regexp"
+	"time"
+
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/magodo/terraform-provider-restful/internal/client"
+)
+
+type apiOption struct {
+	CreateMethod string
+	Query        client.Query
+}
+
+func parseLocator(locator string) (client.ValueLocator, error) {
+	if locator == "code" {
+		return client.CodeLocator{}, nil
+	}
+	p := regexp.MustCompile(`^(.+)\[(.+)\]$`)
+	matches := p.FindAllStringSubmatch(locator, 1)
+	if len(matches) != 1 {
+		return nil, fmt.Errorf("invalid locator: %s", locator)
+	}
+	submatches := matches[0]
+	scope, path := submatches[1], submatches[2]
+	switch scope {
+	case "header":
+		return client.HeaderLocator(path), nil
+	case "body":
+		return client.BodyLocator(path), nil
+	default:
+		return nil, fmt.Errorf("unknown locator scope: %s", scope)
+	}
+}
+
+func convertPollObject(ctx context.Context, obj types.Object) (*client.PollOption, diag.Diagnostics) {
+	if obj.Null {
+		return nil, nil
+	}
+	popt := &client.PollOption{}
+
+	var pd pollDataGo
+	diags := obj.As(ctx, &pd, types.ObjectAsOptions{})
+	if diags != nil {
+		return nil, diags
+	}
+
+	loc, err := parseLocator(pd.StatusLocator)
+	if err != nil {
+		diags.AddError(
+			"Failed to parse status locator",
+			err.Error(),
+		)
+		return nil, diags
+	}
+	popt.StatusLocator = loc
+
+	popt.Status = client.PollingStatus{
+		Success: pd.Status.Success,
+		Failure: pd.Status.Failure,
+		Pending: pd.Status.Pending,
+	}
+
+	if pd.UrlLocator != nil {
+		loc, err := parseLocator(*pd.UrlLocator)
+		if err != nil {
+			diags.AddError(
+				"Failed to parse url locator",
+				err.Error(),
+			)
+			return nil, diags
+		}
+		popt.UrlLocator = loc
+	}
+
+	if pd.DefaultDelay != nil {
+		popt.DefaultDelay = time.Duration(*pd.DefaultDelay) * time.Second
+	}
+
+	return popt, nil
+}
+
+func (opt apiOption) ForDataSourceRead(ctx context.Context, d dataSourceData) (*client.ReadOption, diag.Diagnostics) {
+	out := client.ReadOption{
+		Query: opt.Query.Clone().MergeFromTFValue(ctx, d.Query),
+	}
+	return &out, nil
+}
+
+func (opt apiOption) ForResourceCreate(ctx context.Context, d resourceData) (*client.CreateOption, diag.Diagnostics) {
+	out := client.CreateOption{
+		CreateMethod: opt.CreateMethod,
+		Query:        opt.Query.Clone().MergeFromTFValue(ctx, d.Query),
+	}
+	if !d.CreateMethod.Unknown && !d.CreateMethod.Null {
+		out.CreateMethod = d.CreateMethod.Value
+	}
+	var diags diag.Diagnostics
+	out.PollOpt, diags = convertPollObject(ctx, d.PollCreate)
+	if diags.HasError() {
+		return nil, diags
+	}
+	return &out, nil
+}
+
+func (opt apiOption) ForResourceRead(ctx context.Context, d resourceData) (*client.ReadOption, diag.Diagnostics) {
+	out := client.ReadOption{
+		Query: opt.Query.Clone().MergeFromTFValue(ctx, d.Query),
+	}
+	return &out, nil
+}
+
+func (opt apiOption) ForResourceUpdate(ctx context.Context, d resourceData) (*client.UpdateOption, diag.Diagnostics) {
+	out := client.UpdateOption{
+		Query: opt.Query.Clone().MergeFromTFValue(ctx, d.Query),
+	}
+
+	var diags diag.Diagnostics
+	out.PollOpt, diags = convertPollObject(ctx, d.PollUpdate)
+	if diags.HasError() {
+		return nil, diags
+	}
+	return &out, nil
+}
+
+func (opt apiOption) ForResourceDelete(ctx context.Context, d resourceData) (*client.DeleteOption, diag.Diagnostics) {
+	out := client.DeleteOption{
+		Query: opt.Query.Clone().MergeFromTFValue(ctx, d.Query),
+	}
+	var diags diag.Diagnostics
+	out.PollOpt, diags = convertPollObject(ctx, d.PollDelete)
+	if diags.HasError() {
+		return nil, diags
+	}
+	return &out, nil
+}

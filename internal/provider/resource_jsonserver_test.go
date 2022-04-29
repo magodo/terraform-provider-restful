@@ -3,6 +3,7 @@ package provider_test
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"testing"
 
@@ -63,14 +64,14 @@ func (d jsonServerData) CheckDestroy(addr string) func(*terraform.State) error {
 			if key != addr {
 				continue
 			}
-			_, err := c.Read(context.TODO(), resource.Primary.ID, client.ReadOption{})
-			if err == nil {
+			resp, err := c.Read(context.TODO(), resource.Primary.ID, client.ReadOption{})
+			if err != nil {
+				return fmt.Errorf("reading %s: %v", addr, err)
+			}
+			if resp.StatusCode() != http.StatusNotFound {
 				return fmt.Errorf("%s: still exists", addr)
 			}
-			if err == client.ErrNotFound {
-				return nil
-			}
-			return fmt.Errorf("reading %s: %v", addr, err)
+			return nil
 		}
 		panic("unreachable")
 	}

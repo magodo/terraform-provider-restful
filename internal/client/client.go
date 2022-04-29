@@ -2,18 +2,13 @@ package client
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 
 	"github.com/go-resty/resty/v2"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
-
-// ErrNotFound is expected to be returned for `Read` when the resource with the specified id doesn't exist.
-var ErrNotFound = errors.New("resource not found")
 
 type Query url.Values
 
@@ -23,6 +18,15 @@ func (q Query) Clone() Query {
 		m[k] = v
 	}
 	return Query(m)
+}
+
+func (q Query) Merge(oq Query) Query {
+	if len(oq) != 0 {
+		for k, v := range oq {
+			q[k] = v
+		}
+	}
+	return q
 }
 
 // MergeFromTFValue merges TF value of type MapType{ElemType: ListType{ElemType: StringType}} to the receiver query. Other types will cause panic.
@@ -80,38 +84,23 @@ func New(baseURL string, opt *BuildOption) (*Client, error) {
 }
 
 type CreateOption struct {
-	Method string
-	Query  Query
+	CreateMethod string
+	Query        Query
+	PollOpt      *PollOption
 }
 
-func (c *Client) Create(ctx context.Context, path string, body interface{}, opt CreateOption) ([]byte, error) {
+func (c *Client) Create(ctx context.Context, path string, body interface{}, opt CreateOption) (*resty.Response, error) {
 	req := c.R().SetContext(ctx).SetBody(body)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 	req = req.SetHeader("Content-Type", "application/json")
 
-	switch opt.Method {
+	switch opt.CreateMethod {
 	case "POST":
-		resp, err := req.Post(path)
-		if err != nil {
-			return nil, err
-		}
-		// TODO: Support LRO
-		if resp.StatusCode()/100 != 2 {
-			return nil, fmt.Errorf("Unexpected response (%s - code: %d): %s", resp.Status(), resp.StatusCode(), string(resp.Body()))
-		}
-		return resp.Body(), nil
+		return req.Post(path)
 	case "PUT":
-		resp, err := req.Put(path)
-		if err != nil {
-			return nil, err
-		}
-		// TODO: Support LRO
-		if resp.StatusCode()/100 != 2 {
-			return nil, fmt.Errorf("Unexpected response (%s - code: %d): %s", resp.Status(), resp.StatusCode(), string(resp.Body()))
-		}
-		return resp.Body(), nil
+		return req.Put(path)
 	default:
-		return nil, fmt.Errorf("unknown create method: %s", opt.Method)
+		return nil, fmt.Errorf("unknown create method: %s", opt.CreateMethod)
 	}
 }
 
@@ -119,61 +108,34 @@ type ReadOption struct {
 	Query Query
 }
 
-func (c *Client) Read(ctx context.Context, path string, opt ReadOption) ([]byte, error) {
+func (c *Client) Read(ctx context.Context, path string, opt ReadOption) (*resty.Response, error) {
 	req := c.R().SetContext(ctx)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 
-	resp, err := req.Get(path)
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode() == http.StatusNotFound {
-		return nil, ErrNotFound
-	}
-	if resp.StatusCode()/100 != 2 {
-		return nil, fmt.Errorf("Unexpected response (%s - code: %d): %s", resp.Status(), resp.StatusCode(), string(resp.Body()))
-	}
-	return resp.Body(), nil
+	return req.Get(path)
 }
 
 type UpdateOption struct {
-	Query Query
+	Query   Query
+	PollOpt *PollOption
 }
 
-func (c *Client) Update(ctx context.Context, path string, body interface{}, opt UpdateOption) ([]byte, error) {
+func (c *Client) Update(ctx context.Context, path string, body interface{}, opt UpdateOption) (*resty.Response, error) {
 	req := c.R().SetContext(ctx).SetBody(body)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 	req = req.SetHeader("Content-Type", "application/json")
 
-	resp, err := req.Put(path)
-	if err != nil {
-		return nil, err
-	}
-	// TODO: Support LRO
-	if resp.StatusCode()/100 != 2 {
-		return nil, fmt.Errorf("Unexpected response (%s - code: %d): %s", resp.Status(), resp.StatusCode(), string(resp.Body()))
-	}
-	return resp.Body(), nil
+	return req.Put(path)
 }
 
 type DeleteOption struct {
-	Query Query
+	Query   Query
+	PollOpt *PollOption
 }
 
-func (c *Client) Delete(ctx context.Context, path string, opt DeleteOption) ([]byte, error) {
+func (c *Client) Delete(ctx context.Context, path string, opt DeleteOption) (*resty.Response, error) {
 	req := c.R().SetContext(ctx)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 
-	resp, err := req.Delete(path)
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode() == http.StatusNotFound {
-		return nil, ErrNotFound
-	}
-	// TODO: Support LRO
-	if resp.StatusCode()/100 != 2 {
-		return nil, fmt.Errorf("Unexpected response (%s - code: %d): %s", resp.Status(), resp.StatusCode(), string(resp.Body()))
-	}
-	return resp.Body(), nil
+	return req.Delete(path)
 }

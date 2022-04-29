@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/magodo/terraform-provider-restful/internal/client"
-	client2 "github.com/magodo/terraform-provider-restful/internal/client"
 	"github.com/magodo/terraform-provider-restful/internal/validator"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -15,52 +14,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-type apiOption struct {
-	CreateMethod string
-	Query        client.Query
-}
-
-func (opt apiOption) ForDataSourceRead(ctx context.Context, d dataSourceData) (*client.ReadOption, diag.Diagnostics) {
-	out := client.ReadOption{
-		Query: opt.Query.Clone().MergeFromTFValue(ctx, d.Query),
-	}
-	return &out, nil
-}
-
-func (opt apiOption) ForResourceCreate(ctx context.Context, d resourceData) (*client.CreateOption, diag.Diagnostics) {
-	out := client.CreateOption{
-		Method: opt.CreateMethod,
-		Query:  opt.Query.Clone().MergeFromTFValue(ctx, d.Query),
-	}
-	if !d.CreateMethod.Unknown && !d.CreateMethod.Null {
-		out.Method = d.CreateMethod.Value
-	}
-	return &out, nil
-}
-
-func (opt apiOption) ForResourceRead(ctx context.Context, d resourceData) (*client.ReadOption, diag.Diagnostics) {
-	out := client.ReadOption{
-		Query: opt.Query.Clone().MergeFromTFValue(ctx, d.Query),
-	}
-	return &out, nil
-}
-
-func (opt apiOption) ForResourceUpdate(ctx context.Context, d resourceData) (*client.UpdateOption, diag.Diagnostics) {
-	out := client.UpdateOption{
-		Query: opt.Query.Clone().MergeFromTFValue(ctx, d.Query),
-	}
-	return &out, nil
-}
-
-func (opt apiOption) ForResourceDelete(ctx context.Context, d resourceData) (*client.DeleteOption, diag.Diagnostics) {
-	out := client.DeleteOption{
-		Query: opt.Query.Clone().MergeFromTFValue(ctx, d.Query),
-	}
-	return &out, nil
-}
-
 type provider struct {
-	client *client2.Client
+	client *client.Client
 	apiOpt apiOption
 }
 
@@ -119,11 +74,11 @@ func (*provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 							Attributes: tfsdk.SingleNestedAttributes(
 								map[string]tfsdk.Attribute{
 									"type": {
-										Description:         fmt.Sprintf("The type of the authentication scheme. Possible values are `%s`", client2.HTTPAuthTypeBasic),
-										MarkdownDescription: fmt.Sprintf("The type of the authentication scheme. Possible values are `%s`", client2.HTTPAuthTypeBasic),
+										Description:         fmt.Sprintf("The type of the authentication scheme. Possible values are `%s`", client.HTTPAuthTypeBasic),
+										MarkdownDescription: fmt.Sprintf("The type of the authentication scheme. Possible values are `%s`", client.HTTPAuthTypeBasic),
 										Required:            true,
 										Type:                types.StringType,
-										Validators:          []tfsdk.AttributeValidator{validator.StringInSlice(string(client2.HTTPAuthTypeBasic))},
+										Validators:          []tfsdk.AttributeValidator{validator.StringInSlice(string(client.HTTPAuthTypeBasic))},
 									},
 									"username": {
 										Description:         "The username",
@@ -181,11 +136,11 @@ func (*provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 									"auth_style": {
 										Type: types.StringType,
 										Description: fmt.Sprintf("How the endpoint wants the client ID & secret sent. Possible values are `%s` and `%s`. If absent, the style used will be auto detected.",
-											client2.OAuth2AuthStyleInParams, client2.OAuth2AuthStyleInHeader),
+											client.OAuth2AuthStyleInParams, client.OAuth2AuthStyleInHeader),
 										MarkdownDescription: fmt.Sprintf("How the endpoint wants the client ID & secret sent. Possible values are `%s` and `%s`. If absent, the style used will be auto detected.",
-											client2.OAuth2AuthStyleInParams, client2.OAuth2AuthStyleInHeader),
+											client.OAuth2AuthStyleInParams, client.OAuth2AuthStyleInHeader),
 										Optional:   true,
-										Validators: []tfsdk.AttributeValidator{validator.StringInSlice(string(client2.OAuth2AuthStyleInParams), string(client2.OAuth2AuthStyleInHeader))},
+										Validators: []tfsdk.AttributeValidator{validator.StringInSlice(string(client.OAuth2AuthStyleInParams), string(client.OAuth2AuthStyleInHeader))},
 									},
 								},
 							),
@@ -277,12 +232,12 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 		return
 	}
 
-	clientOpt := client2.BuildOption{}
+	clientOpt := client.BuildOption{}
 	if sec := config.Security; sec != nil {
 		switch {
 		case sec.HTTP != nil:
-			sopt := client2.HTTPAuthOption{
-				Type: client2.HTTPAuthTypeBasic,
+			sopt := client.HTTPAuthOption{
+				Type: client.HTTPAuthTypeBasic,
 			}
 			if sec.HTTP.Username != nil {
 				sopt.Username = *sec.HTTP.Username
@@ -292,7 +247,7 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 			}
 			clientOpt.Security = sopt
 		case sec.OAuth2 != nil:
-			sopt := client2.OAuth2ClientCredentialOption{
+			sopt := client.OAuth2ClientCredentialOption{
 				ClientID:       sec.OAuth2.ClientID,
 				ClientSecret:   sec.OAuth2.ClientSecret,
 				TokenURL:       sec.OAuth2.TokenUrl,
@@ -300,7 +255,7 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 				EndpointParams: sec.OAuth2.EndpointParams,
 			}
 			if sec.OAuth2.AuthStyle != nil {
-				sopt.AuthStyle = client2.OAuth2AuthStyle(*sec.OAuth2.AuthStyle)
+				sopt.AuthStyle = client.OAuth2AuthStyle(*sec.OAuth2.AuthStyle)
 			}
 			clientOpt.Security = sopt
 		default:
@@ -313,7 +268,7 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 	}
 
 	var err error
-	p.client, err = client2.New(config.BaseURL, &clientOpt)
+	p.client, err = client.New(config.BaseURL, &clientOpt)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Failed to configure provider",

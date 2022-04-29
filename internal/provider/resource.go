@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"path"
 	"path/filepath"
@@ -24,6 +25,58 @@ import (
 type resourceType struct{}
 
 func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
+	pollAttribute := func(s string) tfsdk.Attribute {
+		return tfsdk.Attribute{
+			Description:         "The polling option for the %q operation",
+			MarkdownDescription: "The polling option for the %q operation",
+			Optional:            true,
+			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+				"status_locator": {
+					Description:         "Specifies how to discover the status property. The format is either `code` or `<scope>[<path>]` (where `<scope>` can be either `header` or `body`)",
+					MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `<scope>[<path>]` (where `<scope>` can be either `header` or `body`)",
+					Required:            true,
+					Type:                types.StringType,
+				},
+				"status": {
+					Description:         "The expected status sentinels for each polling state",
+					MarkdownDescription: "The expected status sentinels for each polling state",
+					Required:            true,
+					Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+						"success": {
+							Description:         "The expected status sentinel for suceess status",
+							MarkdownDescription: "The expected status sentinel for suceess status",
+							Required:            true,
+							Type:                types.StringType,
+						},
+						"failure": {
+							Description:         "The expected status sentinel for failure status",
+							MarkdownDescription: "The expected status sentinel for failure status",
+							Required:            true,
+							Type:                types.StringType,
+						},
+						"pending": {
+							Description:         "The expected status sentinels for pending status",
+							MarkdownDescription: "The expected status sentinels for pending status",
+							Optional:            true,
+							Type:                types.ListType{ElemType: types.StringType},
+						},
+					}),
+				},
+				"url_locator": {
+					Description:         "Specifies how to discover the polling location. The format is as `<scope>[path]`, where `<scope>` can be either `header` or `body`. When absent, the resource's path is used for polling",
+					MarkdownDescription: "Specifies how to discover the polling location. The format is as `<scope>[path]`, where `<scope>` can be either `header` or `body`. When absent, the resource's path is used for polling",
+					Optional:            true,
+					Type:                types.StringType,
+				},
+				"default_delay_sec": {
+					Description:         "The interval between two pollings if there is no `Retry-After` in the response header, in second",
+					MarkdownDescription: "The interval between two pollings if there is no `Retry-After` in the response header, in second",
+					Optional:            true,
+					Type:                types.Int64Type,
+				},
+			}),
+		}
+	}
 	return tfsdk.Schema{
 		Description:         "Restful resource",
 		MarkdownDescription: "Restful resource",
@@ -94,6 +147,9 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 				Optional:            true,
 				Computed:            true,
 			},
+			"poll_create": pollAttribute("Create"),
+			"poll_update": pollAttribute("Update"),
+			"poll_delete": pollAttribute("Delete"),
 			"output": {
 				Description:         "The response body after reading the resource",
 				MarkdownDescription: "The response body after reading the resource",
@@ -122,7 +178,21 @@ type resourceData struct {
 	IgnoreChanges types.List   `tfsdk:"ignore_changes"`
 	CreateMethod  types.String `tfsdk:"create_method"`
 	Query         types.Map    `tfsdk:"query"`
+	PollCreate    types.Object `tfsdk:"poll_create"`
+	PollUpdate    types.Object `tfsdk:"poll_update"`
+	PollDelete    types.Object `tfsdk:"poll_delete"`
 	Output        types.String `tfsdk:"output"`
+}
+
+type pollDataGo struct {
+	StatusLocator string `tfsdk:"status_locator"`
+	Status        struct {
+		Success string   `tfsdk:"success"`
+		Failure string   `tfsdk:"failure"`
+		Pending []string `tfsdk:"pending"`
+	} `tfsdk:"status"`
+	UrlLocator   *string `tfsdk:"url_locator"`
+	DefaultDelay *int64  `tfsdk:"default_delay_sec"`
 }
 
 func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
@@ -143,30 +213,31 @@ func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, r
 
 	// Existance check for resources whose create method is `PUT`, in which case the `path` is the same as its ID.
 	// It is not possible to query the resource prior creation for resources whose create method is `POST`, since the `path` in this case is not enough for a `GET`.
-	if opt.Method == "PUT" {
+	if opt.CreateMethod == "PUT" {
 		opt, diags := r.p.apiOpt.ForResourceRead(ctx, plan)
 		resp.Diagnostics.Append(diags...)
 		if diags.HasError() {
 			return
 		}
-		_, err := c.Read(ctx, plan.Path.Value, *opt)
-		if err == nil {
-			resp.Diagnostics.AddError(
-				"Resource already exists",
-				fmt.Sprintf("A resource with the ID %q already exists - to be managed via Terraform this resource needs to be imported into the State. Please see the resource documentation for %q for more information.", plan.Path.Value, `restful_resource`),
-			)
-			return
-		}
-		if err != nil && err != client.ErrNotFound {
+		response, err := c.Read(ctx, plan.Path.Value, *opt)
+		if err != nil {
 			resp.Diagnostics.AddError(
 				"Existance check failed",
 				err.Error(),
 			)
 			return
 		}
+		if response.StatusCode() != http.StatusNotFound {
+			resp.Diagnostics.AddError(
+				"Resource already exists",
+				fmt.Sprintf("A resource with the ID %q already exists - to be managed via Terraform this resource needs to be imported into the State. Please see the resource documentation for %q for more information.", plan.Path.Value, `restful_resource`),
+			)
+			return
+		}
 	}
 
-	b, err := c.Create(ctx, plan.Path.Value, plan.Body.Value, *opt)
+	// Create the resource
+	response, err := c.Create(ctx, plan.Path.Value, plan.Body.Value, *opt)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Creation failure",
@@ -174,9 +245,19 @@ func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, r
 		)
 		return
 	}
+	if response.StatusCode()/100 != 2 {
+		diags.AddError(
+			"Creation failure",
+			fmt.Sprintf("Unexpected response (%s - code: %d): %s", response.Status(), response.StatusCode(), string(response.Body())),
+		)
+		return
+	}
 
+	b := response.Body()
+
+	// For POST create method, generate the resource id by combining the path and the id in response.
 	var resourceId string
-	switch r.p.apiOpt.CreateMethod {
+	switch opt.CreateMethod {
 	case "POST":
 		// TODO: Is the response always guaranteed to be an object, maybe array?
 		var body map[string]interface{}
@@ -188,7 +269,7 @@ func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, r
 			return
 		}
 
-		result := gjson.Get(string(b), plan.IdPath.Value)
+		result := gjson.GetBytes(b, plan.IdPath.Value)
 		if !result.Exists() {
 			resp.Diagnostics.AddError(
 				"Creation failure",
@@ -202,9 +283,32 @@ func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, r
 		resourceId = plan.Path.Value
 	}
 
+	// For LRO, wait for completion
+	if opt.PollOpt != nil {
+		if opt.PollOpt.UrlLocator == nil {
+			// Update the request URL to pointing to the resource path, which is mainly for resources whose create method is POST.
+			// As it will be used to poll the resource status.
+			response.Request.URL = path.Join(c.BaseURL, resourceId)
+		}
+		p, err := client.NewPollable(*response, *opt.PollOpt)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Failed to build poller from the response of the initiated request",
+				err.Error(),
+			)
+		}
+		if err := p.PollUntilDone(ctx, c); err != nil {
+			resp.Diagnostics.AddError(
+				"Polling failure",
+				err.Error(),
+			)
+			return
+		}
+	}
+
 	// Set overridable attributes from option to state
 	plan.Query = opt.Query.ToTFValue()
-	plan.CreateMethod = types.String{Value: opt.Method}
+	plan.CreateMethod = types.String{Value: opt.CreateMethod}
 
 	// Set resource ID to state
 	plan.ID = types.String{Value: resourceId}
@@ -247,18 +351,20 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 		return
 	}
 
-	b, err := c.Read(ctx, state.ID.Value, *opt)
+	response, err := c.Read(ctx, state.ID.Value, *opt)
 	if err != nil {
-		if err == client.ErrNotFound {
-			resp.State.RemoveResource(ctx)
-			return
-		}
 		resp.Diagnostics.AddError(
 			"Read failure",
 			err.Error(),
 		)
 		return
 	}
+	if response.StatusCode() == http.StatusNotFound {
+		resp.State.RemoveResource(ctx)
+		return
+	}
+
+	b := response.Body()
 
 	var ignoreChanges []string
 	if !state.IgnoreChanges.Unknown && !state.IgnoreChanges.Null {
@@ -278,7 +384,11 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 		return
 	}
 
-	switch r.p.apiOpt.CreateMethod {
+	createMethod := r.p.apiOpt.CreateMethod
+	if state.CreateMethod.Value != "" {
+		createMethod = state.CreateMethod.Value
+	}
+	switch createMethod {
 	case "POST":
 		state.Path = types.String{Value: filepath.Dir(state.ID.Value)}
 	case "PUT":
@@ -287,6 +397,7 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 
 	// Set overridable attributes from option to state
 	state.Query = opt.Query.ToTFValue()
+	state.CreateMethod = types.String{Value: createMethod}
 
 	// Set computed attributes
 	state.Body = types.String{Value: string(body)}
@@ -322,7 +433,8 @@ func (r resource) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, r
 		return
 	}
 
-	if _, err := c.Update(ctx, state.ID.Value, plan.Body.Value, *opt); err != nil {
+	response, err := c.Update(ctx, state.ID.Value, plan.Body.Value, *opt)
+	if err != nil {
 		resp.Diagnostics.AddError(
 			"Update failure",
 			err.Error(),
@@ -330,8 +442,28 @@ func (r resource) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, r
 		return
 	}
 
+	// For LRO, wait for completion
+	if opt.PollOpt != nil {
+		p, err := client.NewPollable(*response, *opt.PollOpt)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Failed to build poller from the response of the initiated request",
+				err.Error(),
+			)
+		}
+		if err := p.PollUntilDone(ctx, c); err != nil {
+			resp.Diagnostics.AddError(
+				"Polling failure",
+				err.Error(),
+			)
+		}
+	}
+
 	// Set overridable attributes from option to state
 	plan.Query = opt.Query.ToTFValue()
+	if plan.CreateMethod.Unknown {
+		plan.CreateMethod = state.CreateMethod
+	}
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
@@ -371,17 +503,32 @@ func (r resource) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, r
 		return
 	}
 
-	if _, err := c.Delete(ctx, state.ID.Value, *opt); err != nil {
-		if err == client.ErrNotFound {
-			resp.State.RemoveResource(ctx)
-			return
-		}
+	response, err := c.Delete(ctx, state.ID.Value, *opt)
+	if err != nil {
 		resp.Diagnostics.AddError(
 			"Delete failure",
 			err.Error(),
 		)
 		return
 	}
+
+	// For LRO, wait for completion
+	if opt.PollOpt != nil {
+		p, err := client.NewPollable(*response, *opt.PollOpt)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Failed to build poller from the response of the initiated request",
+				err.Error(),
+			)
+		}
+		if err := p.PollUntilDone(ctx, c); err != nil {
+			resp.Diagnostics.AddError(
+				"Polling failure",
+				err.Error(),
+			)
+		}
+	}
+
 	resp.State.RemoveResource(ctx)
 	return
 }

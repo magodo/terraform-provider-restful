@@ -2,8 +2,7 @@ package provider
 
 import (
 	"context"
-
-	"github.com/magodo/terraform-provider-restful/internal/client"
+	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -71,18 +70,21 @@ func (d dataSource) Read(ctx context.Context, req tfsdk.ReadDataSourceRequest, r
 		return
 	}
 
-	b, err := c.Read(ctx, config.ID.Value, *opt)
+	response, err := c.Read(ctx, config.ID.Value, *opt)
 	if err != nil {
-		if err == client.ErrNotFound {
-			resp.State.RemoveResource(ctx)
-			return
-		}
 		resp.Diagnostics.AddError(
 			"Read failure",
 			err.Error(),
 		)
 		return
 	}
+
+	if response.StatusCode() == http.StatusNotFound {
+		resp.State.RemoveResource(ctx)
+		return
+	}
+
+	b := response.Body()
 
 	state := dataSourceData{
 		ID:    config.ID,

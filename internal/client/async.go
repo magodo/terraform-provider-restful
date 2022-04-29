@@ -3,7 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
-	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,116 +17,114 @@ type ValueLocator interface {
 	String() string
 }
 
-type headerKeyLocator string
+type HeaderLocator string
 
-func (loc headerKeyLocator) locateValueInResp(resp resty.Response) string {
+func (loc HeaderLocator) locateValueInResp(resp resty.Response) string {
 	return resp.Header().Get(string(loc))
 }
-func (loc headerKeyLocator) String() string {
+func (loc HeaderLocator) String() string {
 	return fmt.Sprintf(`header[%s]`, string(loc))
 }
 
-type bodyPathLocator string
+type BodyLocator string
 
-func (loc bodyPathLocator) locateValueInResp(resp resty.Response) string {
+func (loc BodyLocator) locateValueInResp(resp resty.Response) string {
 	result := gjson.GetBytes(resp.Body(), string(loc))
 	return result.String()
 }
-func (loc bodyPathLocator) String() string {
+func (loc BodyLocator) String() string {
 	return fmt.Sprintf(`body[%s]`, string(loc))
+}
+
+type CodeLocator struct{}
+
+func (loc CodeLocator) locateValueInResp(resp resty.Response) string {
+	return strconv.Itoa(resp.StatusCode())
+}
+func (loc CodeLocator) String() string {
+	return "code"
 }
 
 type PollingStatus struct {
 	Pending []string
-	Failed  string
+	Failure string
 	Success string
 }
 
-type FutureOption struct {
-	// LocationOption configures the how to discover and access the polling location.
-	// If it is nil, the original request URL is used for polling.
-	LocationOption *LocationOption
+type PollOption struct {
+	// StatusLocator indicates where the polling status is located in the response of the polling requests.
+	StatusLocator ValueLocator
 
 	// Status the status sentinels for polling.
 	Status PollingStatus
 
-	// StatusLocator indicates where the polling status is located in the response of the polling requests.
-	StatusLocator ValueLocator
-
-	// PollingDelay specifies the interval between two pollings. The `Retry-After` in the response header takes higher precedence than this.
-	PollingDelay time.Duration
-}
-
-type LocationOption struct {
-	// URLLocator indicates where the async polling URL is located in the response of the initiated request.
-	URLLocator ValueLocator
+	// UrlLocator configures the how to discover the polling location.
+	// If it is nil, the original request URL is used for polling.
+	UrlLocator ValueLocator
 
 	// Query is the query parameters used for polling requests against the polling URL.
-	Query url.Values
+	Query Query
+
+	// DefaultDelay specifies the interval between two pollings. The `Retry-After` in the response header takes higher precedence than this.
+	DefaultDelay time.Duration
 }
 
-func NewFuture(resp resty.Response, opt FutureOption) (*Future, error) {
-	f := Future{}
+func NewPollable(resp resty.Response, opt PollOption) (*Pollable, error) {
+	p := Pollable{}
 
-	if opt.PollingDelay == 0 {
-		opt.PollingDelay = 10 * time.Second
+	if opt.DefaultDelay == 0 {
+		opt.DefaultDelay = 10 * time.Second
 	}
-	f.Delay = opt.PollingDelay
+	p.DefaultDelay = opt.DefaultDelay
 
-	if opt.Status.Failed == "" {
+	if opt.Status.Failure == "" {
 		return nil, fmt.Errorf("Status.Failed is required but not set")
 	}
 	if opt.Status.Success == "" {
 		return nil, fmt.Errorf("Status.Success is required but not set")
 	}
-	f.Status = opt.Status
+	p.Status = opt.Status
 
 	if opt.StatusLocator == nil {
 		return nil, fmt.Errorf("StatusLocator is required but not set")
 	}
-	f.StatusLocator = opt.StatusLocator
+	p.StatusLocator = opt.StatusLocator
 
 	if dur := resp.Header().Get("Retry-After"); dur != "" {
 		d, err := time.ParseDuration(dur + "s")
 		if err != nil {
 			return nil, fmt.Errorf("invalid Retry-After value in the initiated response: %s", dur)
 		}
-		f.InitDelay = d
+		p.InitDelay = d
 	}
 
-	if lopt := opt.LocationOption; lopt != nil {
-		if lopt.URLLocator == nil {
-			return nil, fmt.Errorf("URLLocator is required but not set")
-		}
-		url := lopt.URLLocator.locateValueInResp(resp)
+	if loc := opt.UrlLocator; loc != nil {
+		url := loc.locateValueInResp(resp)
 		if url == "" {
-			return nil, fmt.Errorf("No polling URL found in %s", lopt.URLLocator)
+			return nil, fmt.Errorf("No polling URL found in %s", loc)
 		}
-		f.URL = url
-		f.Query = lopt.Query
+		p.URL = url
 	} else {
-		f.URL = resp.Request.URL
-		f.Query = resp.Request.QueryParam
+		p.URL = resp.Request.URL
 	}
 
-	return &f, nil
+	return &p, nil
 }
 
-type Future struct {
+type Pollable struct {
 	InitDelay     time.Duration
 	URL           string
-	Query         url.Values
 	Status        PollingStatus
 	StatusLocator ValueLocator
-	Delay         time.Duration
+	DefaultDelay  time.Duration
 }
 
-func (f *Future) WaitForComplete(ctx context.Context, client *Client) error {
+func (f *Pollable) PollUntilDone(ctx context.Context, client *Client) error {
 	time.Sleep(f.InitDelay)
 PollingLoop:
 	for {
 		// There is no need to retry here as resty client has embedded retry logic (by default 3 max retries).
-		req := client.R().SetContext(ctx).SetQueryParamsFromValues(f.Query)
+		req := client.R().SetContext(ctx)
 		resp, err := req.Get(f.URL)
 		if err != nil {
 			return fmt.Errorf("polling %s: %v", f.URL, err)
@@ -140,14 +138,14 @@ PollingLoop:
 		if strings.EqualFold(status, f.Status.Success) {
 			return nil
 		}
-		if strings.EqualFold(status, f.Status.Failed) {
+		if strings.EqualFold(status, f.Status.Failure) {
 			return fmt.Errorf("LRO failed: %s", string(resp.Body()))
 		}
 		for _, ps := range f.Status.Pending {
 			if strings.EqualFold(status, ps) {
 				dur := resp.Header().Get("Retry-After")
 				if dur == "" {
-					time.Sleep(f.Delay)
+					time.Sleep(f.DefaultDelay)
 					continue PollingLoop
 				}
 				d, err := time.ParseDuration(dur + "s")

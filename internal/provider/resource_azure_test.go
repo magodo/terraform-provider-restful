@@ -3,6 +3,7 @@ package provider_test
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"testing"
 
@@ -97,15 +98,15 @@ func (d azureData) CheckDestroy(addr string) func(*terraform.State) error {
 			if key != addr {
 				continue
 			}
-			ver := resource.Primary.Attributes["query.api-version"]
-			_, err := c.Read(context.TODO(), resource.Primary.ID, client.ReadOption{Query: map[string]string{"api-version": ver}})
-			if err == nil {
+			ver := resource.Primary.Attributes["query.api-version.0"]
+			resp, err := c.Read(context.TODO(), resource.Primary.ID, client.ReadOption{Query: map[string][]string{"api-version": {ver}}})
+			if err != nil {
+				return fmt.Errorf("reading %s: %v", addr, err)
+			}
+			if resp.StatusCode() != http.StatusNotFound {
 				return fmt.Errorf("%s: still exists", addr)
 			}
-			if err == client.ErrNotFound {
-				return nil
-			}
-			return fmt.Errorf("reading %s: %v", addr, err)
+			return nil
 		}
 		panic("unreachable")
 	}
@@ -123,17 +124,28 @@ provider "restful" {
       scopes        = ["https://management.azure.com/.default"]
     }
   }
-  create_method = "PUT"
 }
 
 resource "restful_resource" "test" {
   path = "/subscriptions/%s/resourceGroups/restful-test-%d"
   query = {
-    api-version = "2020-06-01"
+    api-version = ["2020-06-01"]
   }
   body = jsonencode({
     location = "westeurope"
   })
+
+  create_method = "PUT"
+
+  poll_delete = {
+    status_locator = "code"
+    status = {
+      success = "200"
+      failure = "400"
+      pending = ["202"]
+    }
+    url_locator = "header[location]"
+  }
 }
 `, d.url, d.clientId, d.clientSecret, d.tenantId, d.subscriptionId, d.rd.RandomIntOfLength(8))
 }
