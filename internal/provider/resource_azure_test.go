@@ -71,13 +71,19 @@ func TestResource_Azure_ResourceGroup(t *testing.T) {
 				),
 			},
 			{
-				ResourceName: addr,
-				ImportState:  true,
+				ResourceName:            addr,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"poll_delete"},
 				ImportStateIdFunc: func(s *terraform.State) (string, error) {
-					return fmt.Sprintf("%s?%s",
-						s.RootModule().Resources[addr].Primary.Attributes["id"],
-						s.RootModule().Resources[addr].Primary.Attributes["query"],
-					), nil
+					return fmt.Sprintf(`{
+"id": %q,
+"query": {
+  "api-version": ["2020-06-01"]
+},
+"create_method": "PUT",
+"body": {"location": null}
+}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
 				},
 			},
 		},

@@ -7,10 +7,10 @@ import (
 	"github.com/tidwall/sjson"
 )
 
-// ModifyBody modifies the body based on the base body, removing anyattribute
+// ModifyBody modifies the body based on the base body, removing any attribute
 // attribute that only exists in the body, or is specified to be ignored.
 func ModifyBody(base, body string, ignoreChanges []string) (string, error) {
-	// This happens when importing resource, where there is no corresponding state.
+	// This happens when importing resource without specifying the "body", where there is no state for "body".
 	if base == "" {
 		return body, nil
 	}

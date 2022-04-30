@@ -47,8 +47,12 @@ func TestResource_JSONServer_Basic(t *testing.T) {
 				),
 			},
 			{
-				ResourceName: addr,
-				ImportState:  true,
+				ResourceName:      addr,
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateIdFunc: func(s *terraform.State) (string, error) {
+					return fmt.Sprintf(`{"id": %q, "body": {"foo": null}}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
+				},
 			},
 		},
 	})

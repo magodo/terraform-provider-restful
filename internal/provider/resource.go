@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
+	"strings"
 
 	"github.com/magodo/terraform-provider-restful/internal/client"
 	"github.com/magodo/terraform-provider-restful/internal/planmodifier"
@@ -21,6 +22,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
+
+// Magic header used to indicate the value in the state is derived from import.
+const __IMPORT_HEADER__ = "__RESTFUL_PROVIDER__"
 
 type resourceType struct{}
 
@@ -366,16 +370,33 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 
 	b := response.Body()
 
-	var ignoreChanges []string
-	if !state.IgnoreChanges.Unknown && !state.IgnoreChanges.Null {
-		diags = state.IgnoreChanges.ElementsAs(ctx, &ignoreChanges, false)
-		resp.Diagnostics.Append(diags...)
-		if diags.HasError() {
-			return
-		}
+	// In case id is not set, set its default value as is defined in schema. This can avoid unnecessary plan diff after import.
+	if state.IdPath.Null || state.IdPath.Unknown {
+		state.IdPath = types.String{Value: "id"}
 	}
 
-	body, err := ModifyBody(state.Body.Value, string(b), ignoreChanges)
+	var ignoreChanges []string
+	// In case ignore_changes is not set, set its default value as is defined in schema. This can avoid unnecessary plan diff after import.
+	if state.IgnoreChanges.Null || state.IgnoreChanges.Unknown {
+		state.IgnoreChanges = types.List{
+			ElemType: types.StringType,
+			Elems:    []attr.Value{},
+		}
+	}
+	diags = state.IgnoreChanges.ElementsAs(ctx, &ignoreChanges, false)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
+
+	var stateBody string
+	if strings.HasPrefix(state.Body.Value, __IMPORT_HEADER__) {
+		// This branch is only invoked during `terraform import`.
+		stateBody = strings.TrimPrefix(state.Body.Value, __IMPORT_HEADER__)
+	} else {
+		stateBody = state.Body.Value
+	}
+	body, err := ModifyBody(stateBody, string(b), ignoreChanges)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Read failure",
@@ -389,7 +410,6 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 		createMethod = state.CreateMethod.Value
 	}
 
-	// Set force new attributes
 	switch createMethod {
 	case "POST":
 		state.Path = types.String{Value: filepath.Dir(state.ID.Value)}
@@ -397,9 +417,9 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 		state.Path = types.String{Value: state.ID.Value}
 	}
 
-	// // Set overridable attributes from option to state
-	// state.Query = opt.Query.ToTFValue()
-	// state.CreateMethod = types.String{Value: createMethod}
+	// Set overridable attributes from option to state
+	state.Query = opt.Query.ToTFValue()
+	state.CreateMethod = types.String{Value: createMethod}
 
 	// Set computed attributes
 	state.Body = types.String{Value: string(body)}
@@ -545,12 +565,17 @@ type importSpec struct {
 	// CreateMethod is necessarily for correctly setting the `path` (a force new attribute) during Read.
 	// However, it is optional for POST created resources, or the `create_method` is correctly set in the provider level.
 	CreateMethod string `json:"create_method"`
+
+	// Body represents the properties expected to be managed and tracked by Terraform. The value of these properties can be null as a place holder.
+	// When absent, all the response payload read wil be set to `body`.
+	Body map[string]interface{}
 }
 
 func (resource) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
 	idPath := tftypes.NewAttributePath().WithAttributeName("id")
 	queryPath := tftypes.NewAttributePath().WithAttributeName("query")
 	createMethodPath := tftypes.NewAttributePath().WithAttributeName("create_method")
+	bodyPath := tftypes.NewAttributePath().WithAttributeName("body")
 
 	var imp importSpec
 	if err := json.Unmarshal([]byte(req.ID), &imp); err != nil {
@@ -560,6 +585,20 @@ func (resource) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRe
 		)
 		return
 	}
+
+	if len(imp.Body) != 0 {
+		b, err := json.Marshal(imp.Body)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Resource Import Error",
+				fmt.Sprintf("failed to marshal id.body: %v", err),
+			)
+			return
+		}
+		body := __IMPORT_HEADER__ + string(b)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, bodyPath, body)...)
+	}
+
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, idPath, imp.Id)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, queryPath, imp.Query)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, createMethodPath, imp.CreateMethod)...)
