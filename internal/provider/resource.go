@@ -551,7 +551,6 @@ func (r resource) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, r
 		}
 	}
 
-	resp.State.RemoveResource(ctx)
 	return
 }
 

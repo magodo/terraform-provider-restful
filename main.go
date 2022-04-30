@@ -3,10 +3,11 @@ package main
 import (
 	"context"
 	"flag"
-	"github.com/magodo/terraform-provider-restful/internal/provider"
 	"log"
 
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/magodo/terraform-provider-restful/internal/provider"
+
+	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 )
 
 func main() {
@@ -16,12 +17,12 @@ func main() {
 	flag.Parse()
 
 	ctx := context.Background()
-	serveOpts := tfsdk.ServeOpts{
-		Debug: debug,
-		Name:  "registry.terraform.io/magodo/restful",
+	serveOpts := providerserver.ServeOpts{
+		Debug:   debug,
+		Address: "registry.terraform.io/magodo/restful",
 	}
 
-	err := tfsdk.Serve(ctx, provider.New, serveOpts)
+	err := providerserver.Serve(ctx, provider.New, serveOpts)
 
 	if err != nil {
 		log.Fatalf("Error serving provider: %s", err)
