@@ -388,6 +388,8 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 	if state.CreateMethod.Value != "" {
 		createMethod = state.CreateMethod.Value
 	}
+
+	// Set force new attributes
 	switch createMethod {
 	case "POST":
 		state.Path = types.String{Value: filepath.Dir(state.ID.Value)}
@@ -395,9 +397,9 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 		state.Path = types.String{Value: state.ID.Value}
 	}
 
-	// Set overridable attributes from option to state
-	state.Query = opt.Query.ToTFValue()
-	state.CreateMethod = types.String{Value: createMethod}
+	// // Set overridable attributes from option to state
+	// state.Query = opt.Query.ToTFValue()
+	// state.CreateMethod = types.String{Value: createMethod}
 
 	// Set computed attributes
 	state.Body = types.String{Value: string(body)}
@@ -533,23 +535,32 @@ func (r resource) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, r
 	return
 }
 
+type importSpec struct {
+	// Id is the resource id, which is always required.
+	Id string `json:"id"`
+
+	// Query is only required when it is mandatory for reading the resource.
+	Query url.Values `json:"query"`
+
+	// CreateMethod is necessarily for correctly setting the `path` (a force new attribute) during Read.
+	// However, it is optional for POST created resources, or the `create_method` is correctly set in the provider level.
+	CreateMethod string `json:"create_method"`
+}
+
 func (resource) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
 	idPath := tftypes.NewAttributePath().WithAttributeName("id")
 	queryPath := tftypes.NewAttributePath().WithAttributeName("query")
-	u, err := url.Parse(req.ID)
-	if err != nil {
+	createMethodPath := tftypes.NewAttributePath().WithAttributeName("create_method")
+
+	var imp importSpec
+	if err := json.Unmarshal([]byte(req.ID), &imp); err != nil {
 		resp.Diagnostics.AddError(
 			"Resource Import Error",
-			fmt.Sprintf("Invalid id format: %v", err),
+			fmt.Sprintf("failed to unmarshal ID: %v", err),
 		)
+		return
 	}
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, idPath, u.Path)...)
-
-	if len(u.Query()) != 0 {
-		m := map[string][]string{}
-		for k, l := range u.Query() {
-			m[k] = l
-		}
-		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, queryPath, m)...)
-	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, idPath, imp.Id)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, queryPath, imp.Query)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, createMethodPath, imp.CreateMethod)...)
 }

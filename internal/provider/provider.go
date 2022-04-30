@@ -153,7 +153,7 @@ func (*provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 				Description:         "The method used to create the resource. Possible values are `PUT` and `POST`. Defaults to `POST`.",
 				MarkdownDescription: "The method used to create the resource. Possible values are `PUT` and `POST`. Defaults to `POST`.",
 				Optional:            true,
-				// Need a way to set the default value, plan modifier doesn't work here.
+				// Need a way to set the default value, plan modifier doesn't work here even it is Optional+Computed.
 				Validators: []tfsdk.AttributeValidator{validator.StringInSlice("PUT", "POST")},
 			},
 			"query": {
