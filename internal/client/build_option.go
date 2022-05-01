@@ -19,13 +19,15 @@ type securityOption interface {
 type HTTPAuthType string
 
 const (
-	HTTPAuthTypeBasic HTTPAuthType = "Basic"
+	HTTPAuthTypeBasic  HTTPAuthType = "Basic"
+	HTTPAuthTypeBearer HTTPAuthType = "Bearer"
 )
 
 type HTTPAuthOption struct {
 	Type     HTTPAuthType
 	Username string
 	Password string
+	Token    string
 }
 
 func (opt HTTPAuthOption) newClient() *resty.Client {
@@ -33,6 +35,8 @@ func (opt HTTPAuthOption) newClient() *resty.Client {
 	switch opt.Type {
 	case HTTPAuthTypeBasic:
 		client.SetBasicAuth(opt.Username, opt.Password)
+	case HTTPAuthTypeBearer:
+		client.SetAuthToken(opt.Token)
 	}
 	return client
 }

@@ -35,6 +35,7 @@ type httpData struct {
 	Type     string  `tfsdk:"type"`
 	Username *string `tfsdk:"username"`
 	Password *string `tfsdk:"password"`
+	Token    *string `tfsdk:"token"`
 }
 
 type oauth2Data struct {
@@ -74,21 +75,31 @@ func (*provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 							Attributes: tfsdk.SingleNestedAttributes(
 								map[string]tfsdk.Attribute{
 									"type": {
-										Description:         fmt.Sprintf("The type of the authentication scheme. Possible values are `%s`", client.HTTPAuthTypeBasic),
-										MarkdownDescription: fmt.Sprintf("The type of the authentication scheme. Possible values are `%s`", client.HTTPAuthTypeBasic),
+										Description:         fmt.Sprintf("The type of the authentication scheme. Possible values are `%s`, `%s`", client.HTTPAuthTypeBasic, client.HTTPAuthTypeBearer),
+										MarkdownDescription: fmt.Sprintf("The type of the authentication scheme. Possible values are `%s`, `%s`", client.HTTPAuthTypeBasic, client.HTTPAuthTypeBearer),
 										Required:            true,
 										Type:                types.StringType,
-										Validators:          []tfsdk.AttributeValidator{validator.StringInSlice(string(client.HTTPAuthTypeBasic))},
+										Validators: []tfsdk.AttributeValidator{validator.StringInSlice(
+											string(client.HTTPAuthTypeBasic),
+											string(client.HTTPAuthTypeBearer),
+										)},
 									},
 									"username": {
-										Description:         "The username",
-										MarkdownDescription: "The username",
+										Description:         fmt.Sprintf("The username, required when `type` is `%s`", client.HTTPAuthTypeBasic),
+										MarkdownDescription: fmt.Sprintf("The username, required when `type` is `%s`", client.HTTPAuthTypeBasic),
 										Type:                types.StringType,
 										Optional:            true,
 									},
 									"password": {
-										Description:         "The user password",
-										MarkdownDescription: "The user password",
+										Description:         fmt.Sprintf("The password, required when `type` is `%s`", client.HTTPAuthTypeBasic),
+										MarkdownDescription: fmt.Sprintf("The password, required when `type` is `%s`", client.HTTPAuthTypeBasic),
+										Type:                types.StringType,
+										Optional:            true,
+										Sensitive:           true,
+									},
+									"token": {
+										Description:         fmt.Sprintf("The value of the token, required when `type` is `%s`", client.HTTPAuthTypeBearer),
+										MarkdownDescription: fmt.Sprintf("The value of the token, required when `type` is `%s`", client.HTTPAuthTypeBearer),
 										Type:                types.StringType,
 										Optional:            true,
 										Sensitive:           true,
@@ -237,13 +248,16 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 		switch {
 		case sec.HTTP != nil:
 			sopt := client.HTTPAuthOption{
-				Type: client.HTTPAuthTypeBasic,
+				Type: client.HTTPAuthType(sec.HTTP.Type),
 			}
 			if sec.HTTP.Username != nil {
 				sopt.Username = *sec.HTTP.Username
 			}
 			if sec.HTTP.Password != nil {
 				sopt.Password = *sec.HTTP.Password
+			}
+			if sec.HTTP.Token != nil {
+				sopt.Token = *sec.HTTP.Token
 			}
 			clientOpt.Security = sopt
 		case sec.OAuth2 != nil:

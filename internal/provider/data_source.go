@@ -2,7 +2,7 @@ package provider
 
 import (
 	"context"
-	"net/http"
+	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -73,14 +73,16 @@ func (d dataSource) Read(ctx context.Context, req tfsdk.ReadDataSourceRequest, r
 	response, err := c.Read(ctx, config.ID.Value, *opt)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Read failure",
+			"Error to call Read",
 			err.Error(),
 		)
 		return
 	}
-
-	if response.StatusCode() == http.StatusNotFound {
-		resp.State.RemoveResource(ctx)
+	if !response.IsSuccess() {
+		resp.Diagnostics.AddError(
+			fmt.Sprintf("Create API returns %d", response.StatusCode()),
+			string(response.Body()),
+		)
 		return
 	}
 

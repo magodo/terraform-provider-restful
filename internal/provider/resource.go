@@ -244,15 +244,15 @@ func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, r
 	response, err := c.Create(ctx, plan.Path.Value, plan.Body.Value, *opt)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Creation failure",
-			fmt.Sprintf("Creating: %v", err),
+			"Error to call create",
+			err.Error(),
 		)
 		return
 	}
-	if response.StatusCode()/100 != 2 {
-		diags.AddError(
-			"Creation failure",
-			fmt.Sprintf("Unexpected response (%s - code: %d): %s", response.Status(), response.StatusCode(), string(response.Body())),
+	if !response.IsSuccess() {
+		resp.Diagnostics.AddError(
+			fmt.Sprintf("Create API returns %d", response.StatusCode()),
+			string(response.Body()),
 		)
 		return
 	}
@@ -267,8 +267,8 @@ func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, r
 		var body map[string]interface{}
 		if err := json.Unmarshal(b, &body); err != nil {
 			resp.Diagnostics.AddError(
-				"Creation failure",
-				fmt.Sprintf("Unmarshalling create response: %v", err),
+				"Failed to unmarshal create response for identifying id",
+				err.Error(),
 			)
 			return
 		}
@@ -276,7 +276,7 @@ func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, r
 		result := gjson.GetBytes(b, plan.IdPath.Value)
 		if !result.Exists() {
 			resp.Diagnostics.AddError(
-				"Creation failure",
+				fmt.Sprintf("Failed to identify resource id"),
 				fmt.Sprintf("Can't find resource id in path %q", plan.IdPath.Value),
 			)
 			return
@@ -297,13 +297,13 @@ func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, r
 		p, err := client.NewPollable(*response, *opt.PollOpt)
 		if err != nil {
 			resp.Diagnostics.AddError(
-				"Failed to build poller from the response of the initiated request",
+				"Create: Failed to build poller from the response of the initiated request",
 				err.Error(),
 			)
 		}
 		if err := p.PollUntilDone(ctx, c); err != nil {
 			resp.Diagnostics.AddError(
-				"Polling failure",
+				"Create: Polling failure",
 				err.Error(),
 			)
 			return
@@ -358,13 +358,20 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 	response, err := c.Read(ctx, state.ID.Value, *opt)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Read failure",
+			"Error to call read",
 			err.Error(),
 		)
 		return
 	}
 	if response.StatusCode() == http.StatusNotFound {
 		resp.State.RemoveResource(ctx)
+		return
+	}
+	if !response.IsSuccess() {
+		resp.Diagnostics.AddError(
+			fmt.Sprintf("Read API returns %d", response.StatusCode()),
+			string(response.Body()),
+		)
 		return
 	}
 
@@ -398,8 +405,8 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 	}
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Read failure",
-			fmt.Sprintf("Modifing body: %v", err),
+			"Modifying `body` during Read",
+			err.Error(),
 		)
 		return
 	}
@@ -459,8 +466,15 @@ func (r resource) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, r
 	response, err := c.Update(ctx, state.ID.Value, plan.Body.Value, *opt)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Update failure",
+			"Error to call update",
 			err.Error(),
+		)
+		return
+	}
+	if !response.IsSuccess() {
+		resp.Diagnostics.AddError(
+			fmt.Sprintf("Update API returns %d", response.StatusCode()),
+			string(response.Body()),
 		)
 		return
 	}
@@ -470,13 +484,13 @@ func (r resource) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, r
 		p, err := client.NewPollable(*response, *opt.PollOpt)
 		if err != nil {
 			resp.Diagnostics.AddError(
-				"Failed to build poller from the response of the initiated request",
+				"Update: Failed to build poller from the response of the initiated request",
 				err.Error(),
 			)
 		}
 		if err := p.PollUntilDone(ctx, c); err != nil {
 			resp.Diagnostics.AddError(
-				"Polling failure",
+				"Update: Polling failure",
 				err.Error(),
 			)
 		}
@@ -529,8 +543,19 @@ func (r resource) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, r
 	response, err := c.Delete(ctx, state.ID.Value, *opt)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Delete failure",
+			"Error to call delete",
 			err.Error(),
+		)
+		return
+	}
+	if response.StatusCode() == http.StatusNotFound {
+		return
+	}
+
+	if !response.IsSuccess() {
+		resp.Diagnostics.AddError(
+			fmt.Sprintf("Delete API returns %d", response.StatusCode()),
+			string(response.Body()),
 		)
 		return
 	}
@@ -540,13 +565,13 @@ func (r resource) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, r
 		p, err := client.NewPollable(*response, *opt.PollOpt)
 		if err != nil {
 			resp.Diagnostics.AddError(
-				"Failed to build poller from the response of the initiated request",
+				"Delete: Failed to build poller from the response of the initiated request",
 				err.Error(),
 			)
 		}
 		if err := p.PollUntilDone(ctx, c); err != nil {
 			resp.Diagnostics.AddError(
-				"Polling failure",
+				"Delete: Polling failure",
 				err.Error(),
 			)
 		}
