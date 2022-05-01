@@ -389,14 +389,13 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 		return
 	}
 
-	var stateBody string
+	var body string
 	if strings.HasPrefix(state.Body.Value, __IMPORT_HEADER__) {
 		// This branch is only invoked during `terraform import`.
-		stateBody = strings.TrimPrefix(state.Body.Value, __IMPORT_HEADER__)
+		body, err = ModifyBodyForImport(strings.TrimPrefix(state.Body.Value, __IMPORT_HEADER__), string(b))
 	} else {
-		stateBody = state.Body.Value
+		body, err = ModifyBody(state.Body.Value, string(b), ignoreChanges)
 	}
-	body, err := ModifyBody(stateBody, string(b), ignoreChanges)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Read failure",
