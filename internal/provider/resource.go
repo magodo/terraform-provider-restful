@@ -109,6 +109,9 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 				Type:                types.StringType,
 				Required:            true,
 			},
+			"poll_create": pollAttribute("Create"),
+			"poll_update": pollAttribute("Update"),
+			"poll_delete": pollAttribute("Delete"),
 			"id_path": {
 				Description:         "The path to the id attribute in the response. This is ignored when `create_method` is `PUT`.",
 				MarkdownDescription: "The path to the id attribute in the response, which is only used during creation of the resource to construct the resource identifier. This is ignored when `create_method` is `PUT`.",
@@ -151,9 +154,6 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 				Optional:            true,
 				Computed:            true,
 			},
-			"poll_create": pollAttribute("Create"),
-			"poll_update": pollAttribute("Update"),
-			"poll_delete": pollAttribute("Delete"),
 			"output": {
 				Description:         "The response body after reading the resource",
 				MarkdownDescription: "The response body after reading the resource",
@@ -370,13 +370,13 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 
 	b := response.Body()
 
-	// In case id is not set, set its default value as is defined in schema. This can avoid unnecessary plan diff after import.
+	// In case id (O+C) is not set, set its default value as is defined in schema. This can avoid unnecessary plan diff after import.
 	if state.IdPath.Null || state.IdPath.Unknown {
 		state.IdPath = types.String{Value: "id"}
 	}
 
 	var ignoreChanges []string
-	// In case ignore_changes is not set, set its default value as is defined in schema. This can avoid unnecessary plan diff after import.
+	// In case ignore_changes (O+C) is not set, set its default value as is defined in schema. This can avoid unnecessary plan diff after import.
 	if state.IgnoreChanges.Null || state.IgnoreChanges.Unknown {
 		state.IgnoreChanges = types.List{
 			ElemType: types.StringType,
@@ -404,12 +404,15 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 		)
 		return
 	}
+	// Set body, which is modified during read.
+	state.Body = types.String{Value: string(body)}
 
 	createMethod := r.p.apiOpt.CreateMethod
 	if state.CreateMethod.Value != "" {
 		createMethod = state.CreateMethod.Value
 	}
 
+	// Set force new properties
 	switch createMethod {
 	case "POST":
 		state.Path = types.String{Value: filepath.Dir(state.ID.Value)}
@@ -417,12 +420,11 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 		state.Path = types.String{Value: state.ID.Value}
 	}
 
-	// Set overridable attributes from option to state
+	// Set overridable (O+C) attributes from option to state
 	state.Query = opt.Query.ToTFValue()
 	state.CreateMethod = types.String{Value: createMethod}
 
 	// Set computed attributes
-	state.Body = types.String{Value: string(body)}
 	state.Output = types.String{Value: string(b)}
 
 	diags = resp.State.Set(ctx, state)
