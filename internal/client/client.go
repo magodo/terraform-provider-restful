@@ -20,19 +20,20 @@ func (q Query) Clone() Query {
 	return Query(m)
 }
 
-// MergeFromTFValue merges TF value of type MapType{ElemType: ListType{ElemType: StringType}} to the receiver (also returns it back). Other types will cause panic.
-func (q Query) MergeFromTFValue(ctx context.Context, v types.Map) Query {
-	if len(v.Elems) != 0 {
-		for k, v := range v.Elems {
-			vs := []string{}
-			diags := v.(types.List).ElementsAs(ctx, &vs, false)
-			if diags.HasError() {
-				panic(diags)
-			}
-			q[k] = vs
-		}
+func (q Query) TakeOrSelf(ctx context.Context, v types.Map) Query {
+	if len(v.Elems) == 0 {
+		return q
 	}
-	return q
+	nq := Query{}
+	for k, v := range v.Elems {
+		vs := []string{}
+		diags := v.(types.List).ElementsAs(ctx, &vs, false)
+		if diags.HasError() {
+			panic(diags)
+		}
+		nq[k] = vs
+	}
+	return nq
 }
 
 func (q Query) ToTFValue() types.Map {
@@ -62,14 +63,15 @@ func (h Header) Clone() Header {
 	return nh
 }
 
-// MergeFromTFValue merges TF value of type MapType{ElemType: StringType} to the receiver (also returns it back). Other types will cause panic.
-func (h Header) MergeFromTFValue(ctx context.Context, v types.Map) Header {
-	if len(v.Elems) != 0 {
-		for k, v := range v.Elems {
-			h[k] = v.(types.String).Value
-		}
+func (h Header) TakeOrSelf(ctx context.Context, v types.Map) Header {
+	if len(v.Elems) == 0 {
+		return h
 	}
-	return h
+	nh := Header{}
+	for k, v := range v.Elems {
+		nh[k] = v.(types.String).Value
+	}
+	return nh
 }
 
 func (h Header) ToTFValue() types.Map {

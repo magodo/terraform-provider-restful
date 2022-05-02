@@ -87,8 +87,8 @@ func convertPollObject(ctx context.Context, obj types.Object) (*client.PollOptio
 
 func (opt apiOption) ForDataSourceRead(ctx context.Context, d dataSourceData) (*client.ReadOption, diag.Diagnostics) {
 	out := client.ReadOption{
-		Query:  opt.Query.Clone().MergeFromTFValue(ctx, d.Query),
-		Header: opt.Header.Clone().MergeFromTFValue(ctx, d.Header),
+		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
+		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
 	}
 	return &out, nil
 }
@@ -96,8 +96,8 @@ func (opt apiOption) ForDataSourceRead(ctx context.Context, d dataSourceData) (*
 func (opt apiOption) ForResourceCreate(ctx context.Context, d resourceData) (*client.CreateOption, diag.Diagnostics) {
 	out := client.CreateOption{
 		CreateMethod: opt.CreateMethod,
-		Query:        opt.Query.Clone().MergeFromTFValue(ctx, d.Query),
-		Header:       opt.Header.Clone().MergeFromTFValue(ctx, d.Header),
+		Query:        opt.Query.Clone().TakeOrSelf(ctx, d.Query),
+		Header:       opt.Header.Clone().TakeOrSelf(ctx, d.Header),
 	}
 	if !d.CreateMethod.Unknown && !d.CreateMethod.Null {
 		out.CreateMethod = d.CreateMethod.Value
@@ -112,16 +112,16 @@ func (opt apiOption) ForResourceCreate(ctx context.Context, d resourceData) (*cl
 
 func (opt apiOption) ForResourceRead(ctx context.Context, d resourceData) (*client.ReadOption, diag.Diagnostics) {
 	out := client.ReadOption{
-		Query:  opt.Query.Clone().MergeFromTFValue(ctx, d.Query),
-		Header: opt.Header.Clone().MergeFromTFValue(ctx, d.Header),
+		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
+		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
 	}
 	return &out, nil
 }
 
 func (opt apiOption) ForResourceUpdate(ctx context.Context, d resourceData) (*client.UpdateOption, diag.Diagnostics) {
 	out := client.UpdateOption{
-		Query:  opt.Query.Clone().MergeFromTFValue(ctx, d.Query),
-		Header: opt.Header.Clone().MergeFromTFValue(ctx, d.Header),
+		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
+		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
 	}
 
 	var diags diag.Diagnostics
@@ -134,8 +134,8 @@ func (opt apiOption) ForResourceUpdate(ctx context.Context, d resourceData) (*cl
 
 func (opt apiOption) ForResourceDelete(ctx context.Context, d resourceData) (*client.DeleteOption, diag.Diagnostics) {
 	out := client.DeleteOption{
-		Query:  opt.Query.Clone().MergeFromTFValue(ctx, d.Query),
-		Header: opt.Header.Clone().MergeFromTFValue(ctx, d.Header),
+		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
+		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
 	}
 	var diags diag.Diagnostics
 	out.PollOpt, diags = convertPollObject(ctx, d.PollDelete)
