@@ -20,15 +20,6 @@ func (q Query) Clone() Query {
 	return Query(m)
 }
 
-func (q Query) Merge(oq Query) Query {
-	if len(oq) != 0 {
-		for k, v := range oq {
-			q[k] = v
-		}
-	}
-	return q
-}
-
 // MergeFromTFValue merges TF value of type MapType{ElemType: ListType{ElemType: StringType}} to the receiver query. Other types will cause panic.
 func (q Query) MergeFromTFValue(ctx context.Context, v types.Map) Query {
 	if len(v.Elems) != 0 {

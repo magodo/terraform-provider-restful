@@ -27,8 +27,9 @@ type providerData struct {
 }
 
 type securityData struct {
-	HTTP   *httpData   `tfsdk:"http"`
-	OAuth2 *oauth2Data `tfsdk:"oauth2"`
+	HTTP   *httpData    `tfsdk:"http"`
+	OAuth2 *oauth2Data  `tfsdk:"oauth2"`
+	APIKey []apikeyData `tfsdk:"apikey"`
 }
 
 type httpData struct {
@@ -44,7 +45,13 @@ type oauth2Data struct {
 	TokenUrl       string              `tfsdk:"token_url"`
 	Scopes         []string            `tfsdk:"scopes"`
 	EndpointParams map[string][]string `tfsdk:"endpoint_params"`
-	AuthStyle      *string             `tfsdk:"auth_style"`
+	In             *string             `tfsdk:"in"`
+}
+
+type apikeyData struct {
+	Name  string `tfsdk:"name"`
+	In    string `tfsdk:"in"`
+	Value string `tfsdk:"value"`
 }
 
 func New() tfsdk.Provider {
@@ -107,6 +114,43 @@ func (*provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 								},
 							),
 						},
+						"apikey": {
+							Description:         "Configuration for the API Key authentication scheme",
+							MarkdownDescription: "Configuration for the API Key authentication scheme",
+							Optional:            true,
+							Attributes: tfsdk.SetNestedAttributes(
+								map[string]tfsdk.Attribute{
+									"name": {
+										Description:         "The API Key name",
+										MarkdownDescription: "The API Key name",
+										Required:            true,
+										Type:                types.StringType,
+									},
+									"in": {
+										Description: fmt.Sprintf("Specifies how is the API Key is sent. Possible values are `%s`, `%s` and `%s`",
+											client.APIKeyAuthInQuery, client.APIKeyAuthInHeader, client.APIKeyAuthInCookie),
+										MarkdownDescription: fmt.Sprintf("Specifies how is the API Key is sent. Possible values are `%s`, `%s` and `%s`",
+											client.APIKeyAuthInQuery, client.APIKeyAuthInHeader, client.APIKeyAuthInCookie),
+										Required: true,
+										Type:     types.StringType,
+										Validators: []tfsdk.AttributeValidator{
+											validator.StringInSlice(
+												string(client.APIKeyAuthInHeader),
+												string(client.APIKeyAuthInQuery),
+												string(client.APIKeyAuthInCookie),
+											),
+										},
+									},
+									"value": {
+										Description:         "The API Key value",
+										MarkdownDescription: "The API Key value",
+										Required:            true,
+										Type:                types.StringType,
+									},
+								},
+								tfsdk.SetNestedAttributesOptions{},
+							),
+						},
 						"oauth2": {
 							Description:         "Configuration for the OAuth Client Credentials flow",
 							MarkdownDescription: "Configuration for the OAuth Client Credentials flow",
@@ -144,11 +188,11 @@ func (*provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 										MarkdownDescription: "The additional parameters for requests to the token endpoint.",
 										Optional:            true,
 									},
-									"auth_style": {
+									"in": {
 										Type: types.StringType,
-										Description: fmt.Sprintf("How the endpoint wants the client ID & secret sent. Possible values are `%s` and `%s`. If absent, the style used will be auto detected.",
+										Description: fmt.Sprintf("Specifies how is the client ID & secret sent. Possible values are `%s` and `%s`. If absent, the style used will be auto detected.",
 											client.OAuth2AuthStyleInParams, client.OAuth2AuthStyleInHeader),
-										MarkdownDescription: fmt.Sprintf("How the endpoint wants the client ID & secret sent. Possible values are `%s` and `%s`. If absent, the style used will be auto detected.",
+										MarkdownDescription: fmt.Sprintf("Specifies how is th client ID & secret sent. Possible values are `%s` and `%s`. If absent, the style used will be auto detected.",
 											client.OAuth2AuthStyleInParams, client.OAuth2AuthStyleInHeader),
 										Optional:   true,
 										Validators: []tfsdk.AttributeValidator{validator.StringInSlice(string(client.OAuth2AuthStyleInParams), string(client.OAuth2AuthStyleInHeader))},
@@ -204,6 +248,7 @@ func (p *provider) ValidateConfig(ctx context.Context, req tfsdk.ValidateProvide
 
 	if !config.Security.Unknown && !config.Security.Null {
 		httpObj := config.Security.Attrs["http"].(types.Object)
+		apikeyObj := config.Security.Attrs["apikey"].(types.Set)
 		oauth2Obj := config.Security.Attrs["oauth2"].(types.Object)
 
 		l := []string{}
@@ -212,6 +257,9 @@ func (p *provider) ValidateConfig(ctx context.Context, req tfsdk.ValidateProvide
 		}
 		if !oauth2Obj.Null && !oauth2Obj.Unknown {
 			l = append(l, "oauth2")
+		}
+		if !apikeyObj.Null && !apikeyObj.Unknown {
+			l = append(l, "apikey")
 		}
 		if len(l) > 1 {
 			resp.Diagnostics.AddError(
@@ -223,7 +271,7 @@ func (p *provider) ValidateConfig(ctx context.Context, req tfsdk.ValidateProvide
 
 		// In case any of the block is unknown, we don't know whether it will evaluate into null or not.
 		// Here, we do best effort to ensure at least one of them is set.
-		if httpObj.Null && oauth2Obj.Null {
+		if httpObj.Null && oauth2Obj.Null && apikeyObj.Null {
 			if len(l) == 0 {
 				resp.Diagnostics.AddError(
 					"Invalid configuration",
@@ -260,6 +308,16 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 				sopt.Token = *sec.HTTP.Token
 			}
 			clientOpt.Security = sopt
+		case sec.APIKey != nil:
+			sopt := client.APIKeyAuthOption{}
+			for _, apikey := range sec.APIKey {
+				sopt = append(sopt, client.APIKeyAuthOpt{
+					Name:  apikey.Name,
+					In:    client.APIKeyAuthIn(apikey.In),
+					Value: apikey.Value,
+				})
+			}
+			clientOpt.Security = sopt
 		case sec.OAuth2 != nil:
 			sopt := client.OAuth2ClientCredentialOption{
 				ClientID:       sec.OAuth2.ClientID,
@@ -268,8 +326,8 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 				Scopes:         sec.OAuth2.Scopes,
 				EndpointParams: sec.OAuth2.EndpointParams,
 			}
-			if sec.OAuth2.AuthStyle != nil {
-				sopt.AuthStyle = client.OAuth2AuthStyle(*sec.OAuth2.AuthStyle)
+			if sec.OAuth2.In != nil {
+				sopt.AuthStyle = client.OAuth2AuthStyle(*sec.OAuth2.In)
 			}
 			clientOpt.Security = sopt
 		default:

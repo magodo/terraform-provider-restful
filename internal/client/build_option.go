@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/go-resty/resty/v2"
 	"golang.org/x/oauth2"
@@ -41,11 +42,45 @@ func (opt HTTPAuthOption) newClient() *resty.Client {
 	return client
 }
 
+type APIKeyAuthIn string
+
+const (
+	APIKeyAuthInHeader APIKeyAuthIn = "header"
+	APIKeyAuthInQuery  APIKeyAuthIn = "query"
+	APIKeyAuthInCookie APIKeyAuthIn = "cookie"
+)
+
+type APIKeyAuthOpt struct {
+	Name  string
+	In    APIKeyAuthIn
+	Value string
+}
+
+type APIKeyAuthOption []APIKeyAuthOpt
+
+func (opt APIKeyAuthOption) newClient() *resty.Client {
+	client := resty.New()
+	for _, key := range opt {
+		switch key.In {
+		case APIKeyAuthInHeader:
+			client.SetHeader(key.Name, key.Value)
+		case APIKeyAuthInQuery:
+			client.SetQueryParam(key.Name, key.Value)
+		case APIKeyAuthInCookie:
+			client.SetCookie(&http.Cookie{
+				Name:  key.Name,
+				Value: key.Value,
+			})
+		}
+	}
+	return client
+}
+
 type OAuth2AuthStyle string
 
 const (
-	OAuth2AuthStyleInParams OAuth2AuthStyle = "in_params"
-	OAuth2AuthStyleInHeader OAuth2AuthStyle = "in_header"
+	OAuth2AuthStyleInParams OAuth2AuthStyle = "params"
+	OAuth2AuthStyleInHeader OAuth2AuthStyle = "header"
 )
 
 type OAuth2ClientCredentialOption struct {
