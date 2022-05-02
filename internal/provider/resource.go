@@ -148,9 +148,16 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 				Validators:          []tfsdk.AttributeValidator{validator.StringInSlice("PUT", "POST")},
 			},
 			"query": {
-				Description:         "The query parameters that are applied to each request. This won't clean up the `query` set in the provider block, expcet the value with the same key.",
-				MarkdownDescription: "The query parameters that are applied to each request. This won't clean up the `query` set in the provider block, expcet the value with the same key.",
+				Description:         "The query parameters that are applied to each request. This won't clean up the `query` set in the provider block, except the value with the same key.",
+				MarkdownDescription: "The query parameters that are applied to each request. This won't clean up the `query` set in the provider block, except the value with the same key.",
 				Type:                types.MapType{ElemType: types.ListType{ElemType: types.StringType}},
+				Optional:            true,
+				Computed:            true,
+			},
+			"header": {
+				Description:         "The header parameters that are applied to each request. This won't clean up the `header` set in the provider block, except the value with the same key.",
+				MarkdownDescription: "The header parameters that are applied to each request. This won't clean up the `header` set in the provider block, except the value with the same key.",
+				Type:                types.MapType{ElemType: types.StringType},
 				Optional:            true,
 				Computed:            true,
 			},
@@ -180,11 +187,12 @@ type resourceData struct {
 	Body          types.String `tfsdk:"body"`
 	IdPath        types.String `tfsdk:"id_path"`
 	IgnoreChanges types.List   `tfsdk:"ignore_changes"`
-	CreateMethod  types.String `tfsdk:"create_method"`
-	Query         types.Map    `tfsdk:"query"`
 	PollCreate    types.Object `tfsdk:"poll_create"`
 	PollUpdate    types.Object `tfsdk:"poll_update"`
 	PollDelete    types.Object `tfsdk:"poll_delete"`
+	CreateMethod  types.String `tfsdk:"create_method"`
+	Query         types.Map    `tfsdk:"query"`
+	Header        types.Map    `tfsdk:"header"`
 	Output        types.String `tfsdk:"output"`
 }
 
@@ -312,6 +320,7 @@ func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, r
 
 	// Set overridable attributes from option to state
 	plan.Query = opt.Query.ToTFValue()
+	plan.Header = opt.Header.ToTFValue()
 	plan.CreateMethod = types.String{Value: opt.CreateMethod}
 
 	// Set resource ID to state
@@ -428,6 +437,7 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 
 	// Set overridable (O+C) attributes from option to state
 	state.Query = opt.Query.ToTFValue()
+	state.Header = opt.Header.ToTFValue()
 	state.CreateMethod = types.String{Value: createMethod}
 
 	// Set computed attributes
@@ -498,6 +508,7 @@ func (r resource) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, r
 
 	// Set overridable attributes from option to state
 	plan.Query = opt.Query.ToTFValue()
+	plan.Header = opt.Header.ToTFValue()
 	if plan.CreateMethod.Unknown {
 		plan.CreateMethod = state.CreateMethod
 	}
@@ -587,6 +598,9 @@ type importSpec struct {
 	// Query is only required when it is mandatory for reading the resource.
 	Query url.Values `json:"query"`
 
+	// Header is only required when it is mandatory for reading the resource.
+	Header url.Values `json:"header"`
+
 	// CreateMethod is necessarily for correctly setting the `path` (a force new attribute) during Read.
 	// However, it is optional for POST created resources, or the `create_method` is correctly set in the provider level.
 	CreateMethod string `json:"create_method"`
@@ -599,6 +613,7 @@ type importSpec struct {
 func (resource) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
 	idPath := tftypes.NewAttributePath().WithAttributeName("id")
 	queryPath := tftypes.NewAttributePath().WithAttributeName("query")
+	headerPath := tftypes.NewAttributePath().WithAttributeName("header")
 	createMethodPath := tftypes.NewAttributePath().WithAttributeName("create_method")
 	bodyPath := tftypes.NewAttributePath().WithAttributeName("body")
 
@@ -626,5 +641,6 @@ func (resource) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRe
 
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, idPath, imp.Id)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, queryPath, imp.Query)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, headerPath, imp.Header)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, createMethodPath, imp.CreateMethod)...)
 }

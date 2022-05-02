@@ -20,7 +20,7 @@ func (q Query) Clone() Query {
 	return Query(m)
 }
 
-// MergeFromTFValue merges TF value of type MapType{ElemType: ListType{ElemType: StringType}} to the receiver query. Other types will cause panic.
+// MergeFromTFValue merges TF value of type MapType{ElemType: ListType{ElemType: StringType}} to the receiver (also returns it back). Other types will cause panic.
 func (q Query) MergeFromTFValue(ctx context.Context, v types.Map) Query {
 	if len(v.Elems) != 0 {
 		for k, v := range v.Elems {
@@ -52,6 +52,37 @@ func (q Query) ToTFValue() types.Map {
 	return out
 }
 
+type Header map[string]string
+
+func (h Header) Clone() Header {
+	nh := Header{}
+	for k, v := range h {
+		nh[k] = v
+	}
+	return nh
+}
+
+// MergeFromTFValue merges TF value of type MapType{ElemType: StringType} to the receiver (also returns it back). Other types will cause panic.
+func (h Header) MergeFromTFValue(ctx context.Context, v types.Map) Header {
+	if len(v.Elems) != 0 {
+		for k, v := range v.Elems {
+			h[k] = v.(types.String).Value
+		}
+	}
+	return h
+}
+
+func (h Header) ToTFValue() types.Map {
+	out := types.Map{
+		ElemType: types.StringType,
+		Elems:    map[string]attr.Value{},
+	}
+	for k, v := range h {
+		out.Elems[k] = types.String{Value: v}
+	}
+	return out
+}
+
 type Client struct {
 	*resty.Client
 }
@@ -77,12 +108,14 @@ func New(baseURL string, opt *BuildOption) (*Client, error) {
 type CreateOption struct {
 	CreateMethod string
 	Query        Query
+	Header       Header
 	PollOpt      *PollOption
 }
 
 func (c *Client) Create(ctx context.Context, path string, body interface{}, opt CreateOption) (*resty.Response, error) {
 	req := c.R().SetContext(ctx).SetBody(body)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
+	req.SetHeaders(opt.Header)
 	req = req.SetHeader("Content-Type", "application/json")
 
 	switch opt.CreateMethod {
@@ -96,24 +129,28 @@ func (c *Client) Create(ctx context.Context, path string, body interface{}, opt 
 }
 
 type ReadOption struct {
-	Query Query
+	Query  Query
+	Header Header
 }
 
 func (c *Client) Read(ctx context.Context, path string, opt ReadOption) (*resty.Response, error) {
 	req := c.R().SetContext(ctx)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
+	req.SetHeaders(opt.Header)
 
 	return req.Get(path)
 }
 
 type UpdateOption struct {
 	Query   Query
+	Header  Header
 	PollOpt *PollOption
 }
 
 func (c *Client) Update(ctx context.Context, path string, body interface{}, opt UpdateOption) (*resty.Response, error) {
 	req := c.R().SetContext(ctx).SetBody(body)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
+	req.SetHeaders(opt.Header)
 	req = req.SetHeader("Content-Type", "application/json")
 
 	return req.Put(path)
@@ -121,12 +158,14 @@ func (c *Client) Update(ctx context.Context, path string, body interface{}, opt 
 
 type DeleteOption struct {
 	Query   Query
+	Header  Header
 	PollOpt *PollOption
 }
 
 func (c *Client) Delete(ctx context.Context, path string, opt DeleteOption) (*resty.Response, error) {
 	req := c.R().SetContext(ctx)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
+	req.SetHeaders(opt.Header)
 
 	return req.Delete(path)
 }

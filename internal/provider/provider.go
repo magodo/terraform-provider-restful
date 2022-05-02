@@ -24,6 +24,7 @@ type providerData struct {
 	Security     *securityData       `tfsdk:"security"`
 	CreateMethod *string             `tfsdk:"create_method"`
 	Query        map[string][]string `tfsdk:"query"`
+	Header       map[string]string   `tfsdk:"header"`
 }
 
 type securityData struct {
@@ -217,6 +218,12 @@ func (*provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 				Type:                types.MapType{ElemType: types.ListType{ElemType: types.StringType}},
 				Optional:            true,
 			},
+			"header": {
+				Description:         "The header parameters that are applied to each request",
+				MarkdownDescription: "The header parameters that are applied to each request",
+				Type:                types.MapType{ElemType: types.StringType},
+				Optional:            true,
+			},
 		},
 	}, nil
 }
@@ -227,6 +234,7 @@ func (p *provider) ValidateConfig(ctx context.Context, req tfsdk.ValidateProvide
 		Security     types.Object `tfsdk:"security"`
 		CreateMethod types.String `tfsdk:"create_method"`
 		Query        types.Map    `tfsdk:"query"`
+		Header       types.Map    `tfsdk:"header"`
 	}
 
 	var config pt
@@ -351,12 +359,16 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 	p.apiOpt = apiOption{
 		CreateMethod: "POST",
 		Query:        map[string][]string{},
+		Header:       map[string]string{},
 	}
 	if config.CreateMethod != nil {
 		p.apiOpt.CreateMethod = *config.CreateMethod
 	}
 	if config.Query != nil {
 		p.apiOpt.Query = config.Query
+	}
+	if config.Header != nil {
+		p.apiOpt.Header = config.Header
 	}
 
 	return
