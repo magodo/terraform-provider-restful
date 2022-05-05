@@ -52,12 +52,6 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 							Required:            true,
 							Type:                types.StringType,
 						},
-						"failure": {
-							Description:         "The expected status sentinel for failure status",
-							MarkdownDescription: "The expected status sentinel for failure status",
-							Required:            true,
-							Type:                types.StringType,
-						},
 						"pending": {
 							Description:         "The expected status sentinels for pending status",
 							MarkdownDescription: "The expected status sentinels for pending status",
@@ -200,7 +194,6 @@ type pollDataGo struct {
 	StatusLocator string `tfsdk:"status_locator"`
 	Status        struct {
 		Success string   `tfsdk:"success"`
-		Failure string   `tfsdk:"failure"`
 		Pending []string `tfsdk:"pending"`
 	} `tfsdk:"status"`
 	UrlLocator   *string `tfsdk:"url_locator"`

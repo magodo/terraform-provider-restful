@@ -59,7 +59,7 @@ func newAzureData() azureData {
 func TestResource_Azure_ResourceGroup(t *testing.T) {
 	addr := "restful_resource.test"
 	d := newAzureData()
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { d.precheck(t) },
 		CheckDestroy:             d.CheckDestroy(addr),
 		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
@@ -75,16 +75,20 @@ func TestResource_Azure_ResourceGroup(t *testing.T) {
 				ImportState:             true,
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"poll_delete"},
-				ImportStateIdFunc: func(s *terraform.State) (string, error) {
-					return fmt.Sprintf(`{
-"id": %q,
-"query": {
-  "api-version": ["2020-06-01"]
-},
-"create_method": "PUT",
-"body": {"location": null}
-}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
-				},
+				ImportStateIdFunc:       d.resourceGroupImportStateIdFunc(addr),
+			},
+			{
+				Config: d.resourceGroup_update(),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrSet(addr, "output"),
+				),
+			},
+			{
+				ResourceName:            addr,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"poll_delete"},
+				ImportStateIdFunc:       d.resourceGroupImportStateIdFunc(addr),
 			},
 		},
 	})
@@ -93,7 +97,7 @@ func TestResource_Azure_ResourceGroup(t *testing.T) {
 func TestResource_Azure_VirtualNetwork(t *testing.T) {
 	addr := "restful_resource.test"
 	d := newAzureData()
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:                 func() { d.precheck(t) },
 		CheckDestroy:             d.CheckDestroy(addr),
 		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
@@ -109,31 +113,58 @@ func TestResource_Azure_VirtualNetwork(t *testing.T) {
 				ImportState:             true,
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"poll_create", "poll_update", "poll_delete"},
-				ImportStateIdFunc: func(s *terraform.State) (string, error) {
-					return fmt.Sprintf(`{
-  "id": %q,
-  "query": {
-    "api-version": ["2021-05-01"]
-  },
-  "create_method": "PUT",
-  "body": {
-    "location": null,
-    "properties": {
-      "addressSpace": {
-        "addressPrefixes": null
-      },
-      "subnets": [
-        {
-          "name": null,
-          "properties": {
-            "addressPrefix": null
-          }
-        }
-      ]
-    }
-  }
-}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
-				},
+				ImportStateIdFunc:       d.vnetImportStateIdFunc(addr),
+			},
+			{
+				Config: d.vnet_update(),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrSet(addr, "output"),
+				),
+			},
+			{
+				ResourceName:            addr,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"poll_create", "poll_update", "poll_delete"},
+				ImportStateIdFunc:       d.vnetImportStateIdFunc(addr),
+			},
+		},
+	})
+}
+
+func TestResource_Azure_VirtualNetwork_SimplePoll(t *testing.T) {
+	addr := "restful_resource.test"
+	d := newAzureData()
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { d.precheck(t) },
+		CheckDestroy:             d.CheckDestroy(addr),
+		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+		Steps: []resource.TestStep{
+			{
+				Config: d.vnet_simple_poll(),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrSet(addr, "output"),
+				),
+			},
+			{
+				ResourceName:            addr,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"poll_create", "poll_update", "poll_delete"},
+				ImportStateIdFunc:       d.vnetImportStateIdFunc(addr),
+			},
+			{
+				Config: d.vnet_simple_poll_update(),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrSet(addr, "output"),
+				),
+			},
+			{
+				ResourceName:            addr,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"poll_create", "poll_update", "poll_delete"},
+				ImportStateIdFunc:       d.vnetImportStateIdFunc(addr),
 			},
 		},
 	})
@@ -155,13 +186,15 @@ func (d azureData) CheckDestroy(addr string) func(*terraform.State) error {
 			return err
 		}
 		resource := s.RootModule().Resources[addr]
-		ver := resource.Primary.Attributes["query.api-version.0"]
-		resp, err := c.Read(context.TODO(), resource.Primary.ID, client.ReadOption{Query: map[string][]string{"api-version": {ver}}})
-		if err != nil {
-			return fmt.Errorf("reading %s: %v", addr, err)
-		}
-		if resp.StatusCode() != http.StatusNotFound {
-			return fmt.Errorf("%s: still exists", addr)
+		if resource != nil {
+			ver := resource.Primary.Attributes["query.api-version.0"]
+			resp, err := c.Read(context.TODO(), resource.Primary.ID, client.ReadOption{Query: map[string][]string{"api-version": {ver}}})
+			if err != nil {
+				return fmt.Errorf("reading %s: %v", addr, err)
+			}
+			if resp.StatusCode() != http.StatusNotFound {
+				return fmt.Errorf("%s: still exists", addr)
+			}
 		}
 		return nil
 	}
@@ -196,16 +229,98 @@ resource "restful_resource" "test" {
     status_locator = "code"
     status = {
       success = "200"
-      failure = "400"
       pending = ["202"]
     }
     url_locator = "header[location]"
   }
 }
-`, d.url, d.clientId, d.clientSecret, d.tenantId, d.subscriptionId, d.rd.RandomIntOfLength(8))
+`, d.url, d.clientId, d.clientSecret, d.tenantId, d.subscriptionId, d.rd)
+}
+func (d azureData) resourceGroup_update() string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+  security = {
+    oauth2 = {
+      client_id     = %q
+      client_secret = %q
+      token_url     = "https://login.microsoftonline.com/%s/oauth2/v2.0/token"
+      scopes        = ["https://management.azure.com/.default"]
+    }
+  }
 }
 
-func (d azureData) vnet() string {
+resource "restful_resource" "test" {
+  path = "/subscriptions/%s/resourceGroups/restful-test-%d"
+  query = {
+    api-version = ["2020-06-01"]
+  }
+  body = jsonencode({
+    location = "westeurope"
+	tags = {
+	  foo = "bar"
+	}
+  })
+
+  create_method = "PUT"
+
+  poll_delete = {
+    status_locator = "code"
+    status = {
+      success = "200"
+      pending = ["202"]
+    }
+    url_locator = "header[location]"
+  }
+}
+`, d.url, d.clientId, d.clientSecret, d.tenantId, d.subscriptionId, d.rd)
+}
+
+func (d azureData) resourceGroupImportStateIdFunc(addr string) func(s *terraform.State) (string, error) {
+	return func(s *terraform.State) (string, error) {
+		return fmt.Sprintf(`{
+"id": %q,
+"query": {
+  "api-version": ["2020-06-01"]
+},
+"create_method": "PUT",
+"body": {
+  "location": null,
+  "tags": null
+}
+}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
+	}
+}
+
+func (d azureData) vnetImportStateIdFunc(addr string) func(s *terraform.State) (string, error) {
+	return func(s *terraform.State) (string, error) {
+		return fmt.Sprintf(`{
+  "id": %q,
+  "query": {
+    "api-version": ["2021-05-01"]
+  },
+  "create_method": "PUT",
+  "body": {
+    "location": null,
+    "properties": {
+      "addressSpace": {
+        "addressPrefixes": null
+      },
+      "subnets": [
+        {
+          "name": null,
+          "properties": {
+            "addressPrefix": null
+          }
+        }
+      ]
+    }
+  }
+}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
+	}
+}
+
+func (d azureData) vnet_template() string {
 	return fmt.Sprintf(`
 provider "restful" {
   base_url = %q
@@ -218,18 +333,6 @@ provider "restful" {
     }
   }
   create_method = "PUT"
-}
-
-locals {
-  vnet_poll = {
-    status_locator = "body[status]"
-    status = {
-      success = "Succeeded"
-      failure = "Failed"
-      pending = ["Pending"]
-    }
-    url_locator = "header[azure-asyncoperation]"
-  }
 }
 
 resource "restful_resource" "rg" {
@@ -245,10 +348,27 @@ resource "restful_resource" "rg" {
     status_locator = "code"
     status = {
       success = "200"
-      failure = "400"
       pending = ["202"]
     }
     url_locator = "header[location]"
+  }
+}
+
+`, d.url, d.clientId, d.clientSecret, d.tenantId, d.subscriptionId, d.rd)
+}
+
+func (d azureData) vnet() string {
+	return fmt.Sprintf(`
+%s
+
+locals {
+  vnet_poll = {
+    status_locator = "body[status]"
+    status = {
+      success = "Succeeded"
+      pending = ["Pending"]
+    }
+    url_locator = "header[azure-asyncoperation]"
   }
 }
 
@@ -285,5 +405,195 @@ resource "restful_resource" "test" {
     }
   })
 }
-`, d.url, d.clientId, d.clientSecret, d.tenantId, d.subscriptionId, d.rd.RandomIntOfLength(8), d.rd.RandomIntOfLength(8))
+`, d.vnet_template(), d.rd)
+}
+
+func (d azureData) vnet_update() string {
+	return fmt.Sprintf(`
+%s
+
+locals {
+  vnet_poll = {
+    status_locator = "body[status]"
+    status = {
+      success = "Succeeded"
+      pending = ["Pending"]
+    }
+    url_locator = "header[azure-asyncoperation]"
+  }
+}
+
+resource "restful_resource" "test" {
+  path = format("%%s/providers/Microsoft.Network/virtualNetworks/restful-test-%%d", restful_resource.rg.id, %d)
+  query = {
+    api-version = ["2021-05-01"]
+  }
+
+  poll_create = local.vnet_poll
+  poll_update = local.vnet_poll
+  poll_delete = local.vnet_poll
+
+  body = jsonencode({
+    location = "westus"
+    properties = {
+      addressSpace = {
+        addressPrefixes = ["10.1.0.0/16"]
+      }
+      subnets = [
+	    {
+          name = "subnet1"
+          properties = {
+              addressPrefix = "10.1.1.0/24"
+          }
+	    }
+      ]
+    }
+  })
+}
+`, d.vnet_template(), d.rd)
+}
+
+func (d azureData) vnet_simple_poll_template() string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+  security = {
+    oauth2 = {
+      client_id     = %q
+      client_secret = %q
+      token_url     = "https://login.microsoftonline.com/%s/oauth2/v2.0/token"
+      scopes        = ["https://management.azure.com/.default"]
+    }
+  }
+  create_method = "PUT"
+}
+
+resource "restful_resource" "rg" {
+  path = "/subscriptions/%s/resourceGroups/restful-test-%d"
+  query = {
+    api-version = ["2020-06-01"]
+  }
+  body = jsonencode({
+    location = "westeurope"
+  })
+
+  poll_delete = {
+    status_locator = "code"
+    status = {
+      success = "404"
+      pending = ["200"]
+    }
+  }
+}
+`, d.url, d.clientId, d.clientSecret, d.tenantId, d.subscriptionId, d.rd)
+}
+
+func (d azureData) vnet_simple_poll() string {
+	return fmt.Sprintf(`
+%s
+
+resource "restful_resource" "test" {
+  path = format("%%s/providers/Microsoft.Network/virtualNetworks/restful-test-%%d", restful_resource.rg.id, %d)
+  query = {
+    api-version = ["2021-05-01"]
+  }
+
+  poll_create = {
+    status_locator = "body[properties.provisioningState]"
+    status = {
+      success = "Succeeded"
+      pending = ["Updating"]
+    }
+  }
+  poll_update = {
+    status_locator = "body[properties.provisioningState]"
+    status = {
+      success = "Succeeded"
+      pending = ["Updating"]
+    }
+  }
+  poll_delete = {
+    status_locator = "code"
+    status = {
+      success = "404"
+      pending = ["200"]
+    }
+  }
+
+  body = jsonencode({
+    location = "westus"
+    properties = {
+      addressSpace = {
+        addressPrefixes = ["10.0.0.0/16"]
+      }
+      subnets = [
+	    {
+          name = "subnet1"
+          properties = {
+              addressPrefix = "10.0.1.0/24"
+          }
+	    },
+	    {
+          name = "subnet2"
+          properties = {
+              addressPrefix = "10.0.2.0/24"
+          }
+	    }
+      ]
+    }
+  })
+}
+`, d.vnet_simple_poll_template(), d.rd)
+}
+
+func (d azureData) vnet_simple_poll_update() string {
+	return fmt.Sprintf(`
+%s
+
+resource "restful_resource" "test" {
+  path = format("%%s/providers/Microsoft.Network/virtualNetworks/restful-test-%%d", restful_resource.rg.id, %d)
+  query = {
+    api-version = ["2021-05-01"]
+  }
+
+  poll_create = {
+    status_locator = "body[properties.provisioningState]"
+    status = {
+      success = "Succeeded"
+      pending = ["Updating"]
+    }
+  }
+  poll_update = {
+    status_locator = "body[properties.provisioningState]"
+    status = {
+      success = "Succeeded"
+      pending = ["Updating"]
+    }
+  }
+  poll_delete = {
+    status_locator = "code"
+    status = {
+      success = "404"
+      pending = ["200"]
+    }
+  }
+
+  body = jsonencode({
+    location = "westus"
+    properties = {
+      addressSpace = {
+        addressPrefixes = ["10.1.0.0/16"]
+      }
+      subnets = [
+	    {
+          name = "subnet1"
+          properties = {
+              addressPrefix = "10.1.1.0/24"
+          }
+	    }
+      ]
+    }
+  })
+}
+`, d.vnet_simple_poll_template(), d.rd)
 }

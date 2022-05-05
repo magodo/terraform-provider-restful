@@ -47,7 +47,6 @@ func (loc CodeLocator) String() string {
 
 type PollingStatus struct {
 	Pending []string
-	Failure string
 	Success string
 }
 
@@ -62,9 +61,6 @@ type PollOption struct {
 	// If it is nil, the original request URL is used for polling.
 	UrlLocator ValueLocator
 
-	// Query is the query parameters used for polling requests against the polling URL.
-	Query Query
-
 	// DefaultDelay specifies the interval between two pollings. The `Retry-After` in the response header takes higher precedence than this.
 	DefaultDelay time.Duration
 }
@@ -77,9 +73,6 @@ func NewPollable(resp resty.Response, opt PollOption) (*Pollable, error) {
 	}
 	p.DefaultDelay = opt.DefaultDelay
 
-	if opt.Status.Failure == "" {
-		return nil, fmt.Errorf("Status.Failed is required but not set")
-	}
 	if opt.Status.Success == "" {
 		return nil, fmt.Errorf("Status.Success is required but not set")
 	}
@@ -105,7 +98,7 @@ func NewPollable(resp resty.Response, opt PollOption) (*Pollable, error) {
 		}
 		p.URL = url
 	} else {
-		p.URL = resp.Request.URL
+		p.URL = resp.Request.RawRequest.URL.String()
 	}
 
 	return &p, nil
@@ -138,9 +131,6 @@ PollingLoop:
 		if strings.EqualFold(status, f.Status.Success) {
 			return nil
 		}
-		if strings.EqualFold(status, f.Status.Failure) {
-			return fmt.Errorf("LRO failed: %s", string(resp.Body()))
-		}
 		for _, ps := range f.Status.Pending {
 			if strings.EqualFold(status, ps) {
 				dur := resp.Header().Get("Retry-After")
@@ -156,6 +146,6 @@ PollingLoop:
 				continue PollingLoop
 			}
 		}
-		return fmt.Errorf("Unknown status %q. Full response: %v", status, string(resp.Body()))
+		return fmt.Errorf("Unexpected status %q. Full response: %v", status, string(resp.Body()))
 	}
 }

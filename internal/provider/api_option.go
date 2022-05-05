@@ -62,7 +62,6 @@ func convertPollObject(ctx context.Context, obj types.Object) (*client.PollOptio
 
 	popt.Status = client.PollingStatus{
 		Success: pd.Status.Success,
-		Failure: pd.Status.Failure,
 		Pending: pd.Status.Pending,
 	}
 
