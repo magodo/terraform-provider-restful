@@ -41,8 +41,10 @@ type httpData struct {
 }
 
 type oauth2Data struct {
-	ClientID       string              `tfsdk:"client_id"`
-	ClientSecret   string              `tfsdk:"client_secret"`
+	ClientID       *string             `tfsdk:"client_id"`
+	ClientSecret   *string             `tfsdk:"client_secret"`
+	Username       *string             `tfsdk:"username"`
+	Password       *string             `tfsdk:"password"`
 	TokenUrl       string              `tfsdk:"token_url"`
 	Scopes         []string            `tfsdk:"scopes"`
 	EndpointParams map[string][]string `tfsdk:"endpoint_params"`
@@ -153,23 +155,36 @@ func (*provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 							),
 						},
 						"oauth2": {
-							Description:         "Configuration for the OAuth Client Credentials flow",
-							MarkdownDescription: "Configuration for the OAuth Client Credentials flow",
+							Description:         "Configuration for the OAuth2 authentication scheme",
+							MarkdownDescription: "Configuration for the OAuth2 authentication scheme",
 							Optional:            true,
 							Attributes: tfsdk.SingleNestedAttributes(
 								map[string]tfsdk.Attribute{
 									"client_id": {
 										Type:                types.StringType,
-										Description:         "The application's ID",
-										MarkdownDescription: "The application's ID",
-										Required:            true,
+										Description:         "The application's ID (client credential flow only)",
+										MarkdownDescription: "The application's ID (client credential flow only)",
+										Optional:            true,
 									},
 									"client_secret": {
 										Type:                types.StringType,
 										Sensitive:           true,
-										Description:         "The application's secret",
-										MarkdownDescription: "The application's secret",
-										Required:            true,
+										Description:         "The application's secret (client credential flow only)",
+										MarkdownDescription: "The application's secret (client credential flow only)",
+										Optional:            true,
+									},
+									"username": {
+										Type:                types.StringType,
+										Description:         "The username (password credential flow only)",
+										MarkdownDescription: "The username (password credential flow only)",
+										Optional:            true,
+									},
+									"password": {
+										Type:                types.StringType,
+										Sensitive:           true,
+										Description:         "The password (password credential flow only)",
+										MarkdownDescription: "The password (password credential flow only)",
+										Optional:            true,
 									},
 									"token_url": {
 										Type:                types.StringType,
@@ -185,8 +200,8 @@ func (*provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 									},
 									"endpoint_params": {
 										Type:                types.MapType{ElemType: types.ListType{ElemType: types.StringType}},
-										Description:         "The additional parameters for requests to the token endpoint.",
-										MarkdownDescription: "The additional parameters for requests to the token endpoint.",
+										Description:         "The additional parameters for requests to the token endpoint (client credential flow only)",
+										MarkdownDescription: "The additional parameters for requests to the token endpoint (client credential flow only)",
 										Optional:            true,
 									},
 									"in": {
@@ -327,17 +342,30 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 			}
 			clientOpt.Security = sopt
 		case sec.OAuth2 != nil:
-			sopt := client.OAuth2ClientCredentialOption{
-				ClientID:       sec.OAuth2.ClientID,
-				ClientSecret:   sec.OAuth2.ClientSecret,
-				TokenURL:       sec.OAuth2.TokenUrl,
-				Scopes:         sec.OAuth2.Scopes,
-				EndpointParams: sec.OAuth2.EndpointParams,
+			if sec.OAuth2.Username == nil {
+				sopt := client.OAuth2ClientCredentialOption{
+					ClientID:       *sec.OAuth2.ClientID,
+					ClientSecret:   *sec.OAuth2.ClientSecret,
+					TokenURL:       sec.OAuth2.TokenUrl,
+					Scopes:         sec.OAuth2.Scopes,
+					EndpointParams: sec.OAuth2.EndpointParams,
+				}
+				if sec.OAuth2.In != nil {
+					sopt.AuthStyle = client.OAuth2AuthStyle(*sec.OAuth2.In)
+				}
+				clientOpt.Security = sopt
+			} else {
+				sopt := client.OAuth2PasswordOption{
+					Username: *sec.OAuth2.Username,
+					Password: *sec.OAuth2.Password,
+					TokenURL: sec.OAuth2.TokenUrl,
+					Scopes:   sec.OAuth2.Scopes,
+				}
+				if sec.OAuth2.In != nil {
+					sopt.AuthStyle = client.OAuth2AuthStyle(*sec.OAuth2.In)
+				}
+				clientOpt.Security = sopt
 			}
-			if sec.OAuth2.In != nil {
-				sopt.AuthStyle = client.OAuth2AuthStyle(*sec.OAuth2.In)
-			}
-			clientOpt.Security = sopt
 		default:
 			resp.Diagnostics.AddError(
 				"Failed to configure provider",

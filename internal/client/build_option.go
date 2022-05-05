@@ -83,6 +83,39 @@ const (
 	OAuth2AuthStyleInHeader OAuth2AuthStyle = "header"
 )
 
+type OAuth2PasswordOption struct {
+	Username  string
+	Password  string
+	TokenURL  string
+	Scopes    []string
+	AuthStyle OAuth2AuthStyle
+}
+
+func (opt OAuth2PasswordOption) Token() (*oauth2.Token, error) {
+	cfg := oauth2.Config{
+		Endpoint: oauth2.Endpoint{
+			TokenURL: opt.TokenURL,
+		},
+		Scopes: opt.Scopes,
+	}
+
+	switch opt.AuthStyle {
+	case OAuth2AuthStyleInHeader:
+		cfg.Endpoint.AuthStyle = oauth2.AuthStyleInHeader
+	case OAuth2AuthStyleInParams:
+		cfg.Endpoint.AuthStyle = oauth2.AuthStyleInParams
+	}
+	// We use background context here when constructing the client since we are building the client during the provider configuration, where the context is used only for that purpose.
+	// Especially, when we use this client, we will set the operation bound context for each request.
+	ctx := context.Background()
+	return cfg.PasswordCredentialsToken(ctx, opt.Username, opt.Password)
+}
+
+func (opt OAuth2PasswordOption) newClient() *resty.Client {
+	ctx := context.Background()
+	return resty.NewWithClient(oauth2.NewClient(ctx, opt))
+}
+
 type OAuth2ClientCredentialOption struct {
 	ClientID       string
 	ClientSecret   string
