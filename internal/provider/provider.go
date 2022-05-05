@@ -129,6 +129,12 @@ func (*provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 										Required:            true,
 										Type:                types.StringType,
 									},
+									"value": {
+										Description:         "The API Key value",
+										MarkdownDescription: "The API Key value",
+										Required:            true,
+										Type:                types.StringType,
+									},
 									"in": {
 										Description: fmt.Sprintf("Specifies how is the API Key is sent. Possible values are `%s`, `%s` and `%s`",
 											client.APIKeyAuthInQuery, client.APIKeyAuthInHeader, client.APIKeyAuthInCookie),
@@ -144,12 +150,6 @@ func (*provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 											),
 										},
 									},
-									"value": {
-										Description:         "The API Key value",
-										MarkdownDescription: "The API Key value",
-										Required:            true,
-										Type:                types.StringType,
-									},
 								},
 								tfsdk.SetNestedAttributesOptions{},
 							),
@@ -160,6 +160,12 @@ func (*provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 							Optional:            true,
 							Attributes: tfsdk.SingleNestedAttributes(
 								map[string]tfsdk.Attribute{
+									"token_url": {
+										Type:                types.StringType,
+										Description:         "The token URL to be used for this flow",
+										MarkdownDescription: "The token URL to be used for this flow",
+										Required:            true,
+									},
 									"client_id": {
 										Type:                types.StringType,
 										Description:         "The application's ID (client credential flow only)",
@@ -185,12 +191,6 @@ func (*provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 										Description:         "The password (password credential flow only)",
 										MarkdownDescription: "The password (password credential flow only)",
 										Optional:            true,
-									},
-									"token_url": {
-										Type:                types.StringType,
-										Description:         "The token URL to be used for this flow",
-										MarkdownDescription: "The token URL to be used for this flow",
-										Required:            true,
 									},
 									"scopes": {
 										Type:                types.ListType{ElemType: types.StringType},
@@ -277,17 +277,107 @@ func (p *provider) ValidateConfig(ctx context.Context, req tfsdk.ValidateProvide
 		l := []string{}
 		if !httpObj.Null && !httpObj.Unknown {
 			l = append(l, "http")
+			type httpData struct {
+				Type     types.String `tfsdk:"type"`
+				Username types.String `tfsdk:"username"`
+				Password types.String `tfsdk:"password"`
+				Token    types.String `tfsdk:"token"`
+			}
+			var d httpData
+			if diags := httpObj.As(ctx, &d, types.ObjectAsOptions{}); diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			}
+			if !d.Username.Unknown && !d.Password.Unknown && !d.Token.Unknown {
+				if !d.Type.Unknown {
+					switch d.Type.Value {
+					case string(client.HTTPAuthTypeBasic):
+						if d.Username.Null {
+							resp.Diagnostics.AddError(
+								"Invalid configuration: `security.http`",
+								fmt.Sprintf("`username` is required when `type` is %s", client.HTTPAuthTypeBasic),
+							)
+						}
+						if d.Password.Null {
+							resp.Diagnostics.AddError(
+								"Invalid configuration: `security.http`",
+								fmt.Sprintf("`password` is required when `type` is %s", client.HTTPAuthTypeBasic),
+							)
+						}
+						if !d.Token.Null {
+							resp.Diagnostics.AddError(
+								"Invalid configuration: `security.http`",
+								fmt.Sprintf("`token` can't be specified when `type` is %s", client.HTTPAuthTypeBasic),
+							)
+						}
+					case string(client.HTTPAuthTypeBearer):
+						if !d.Username.Null {
+							resp.Diagnostics.AddError(
+								"Invalid configuration: `security.http`",
+								fmt.Sprintf("`username` can't be specified when `type` is %s", client.HTTPAuthTypeBearer),
+							)
+						}
+						if !d.Password.Null {
+							resp.Diagnostics.AddError(
+								"Invalid configuration: `security.http`",
+								fmt.Sprintf("`password` can't be specified when `type` is %s", client.HTTPAuthTypeBearer),
+							)
+						}
+						if d.Token.Null {
+							resp.Diagnostics.AddError(
+								"Invalid configuration: `security.http`",
+								fmt.Sprintf("`token` is required when `type` is %s", client.HTTPAuthTypeBearer),
+							)
+						}
+					}
+					if resp.Diagnostics.HasError() {
+						return
+					}
+				}
+
+				if !(d.Username.Null && d.Password.Null && !d.Token.Null) && !(!d.Username.Null && !d.Password.Null && d.Token.Null) {
+					resp.Diagnostics.AddError(
+						"Invalid configuration: `security.http`",
+						"Either `username` & `password`, or `token` should be specified",
+					)
+					return
+				}
+			}
 		}
 		if !oauth2Obj.Null && !oauth2Obj.Unknown {
 			l = append(l, "oauth2")
+			type oauth2Data struct {
+				TokenUrl       types.String `tfsdk:"token_url"`
+				ClientId       types.String `tfsdk:"client_id"`
+				ClientSecret   types.String `tfsdk:"client_secret"`
+				Username       types.String `tfsdk:"username"`
+				Password       types.String `tfsdk:"password"`
+				Scopes         types.List   `tfsdk:"scopes"`
+				EndpointParams types.Map    `tfsdk:"endpoint_params"`
+				In             types.String `tfsdk:"in"`
+			}
+			var d oauth2Data
+			if diags := oauth2Obj.As(ctx, &d, types.ObjectAsOptions{}); diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			}
+			if !d.ClientId.Unknown && !d.ClientSecret.Unknown && !d.Username.Unknown && !d.Password.Unknown {
+				if !(d.ClientId.Null && d.ClientSecret.Null && !d.Username.Null && !d.Password.Null) && !(!d.ClientId.Null && !d.ClientSecret.Null && d.Username.Null && d.Password.Null) {
+					resp.Diagnostics.AddError(
+						"Invalid configuration: `security.oauth2`",
+						"Either `username` & `password`, or `client_id` & `client_secret` should be specified",
+					)
+					return
+				}
+			}
 		}
 		if !apikeyObj.Null && !apikeyObj.Unknown {
 			l = append(l, "apikey")
 		}
 		if len(l) > 1 {
 			resp.Diagnostics.AddError(
-				"Invalid configuration",
-				"More than one scheme is specified: "+strings.Join(l, ","),
+				"Invalid configuration: `security`",
+				"More than one scheme is specified: "+strings.Join(l, ", "),
 			)
 			return
 		}
@@ -297,7 +387,7 @@ func (p *provider) ValidateConfig(ctx context.Context, req tfsdk.ValidateProvide
 		if httpObj.Null && oauth2Obj.Null && apikeyObj.Null {
 			if len(l) == 0 {
 				resp.Diagnostics.AddError(
-					"Invalid configuration",
+					"Invalid configuration: `security`",
 					"There is no security scheme specified",
 				)
 				return
