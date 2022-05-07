@@ -47,9 +47,10 @@ func TestResource_JSONServer_Basic(t *testing.T) {
 				),
 			},
 			{
-				ResourceName:      addr,
-				ImportState:       true,
-				ImportStateVerify: true,
+				ResourceName:            addr,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"name_path"},
 				ImportStateIdFunc: func(s *terraform.State) (string, error) {
 					return fmt.Sprintf(`{"id": %q, "body": {"foo": null}}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
 				},
@@ -92,6 +93,7 @@ resource "restful_resource" "test" {
   body = jsonencode({
   	foo = "bar"
 })
+  name_path = "id"
 }
 `, d.url)
 

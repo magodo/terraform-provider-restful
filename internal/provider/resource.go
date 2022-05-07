@@ -106,17 +106,17 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 			"poll_create": pollAttribute("Create"),
 			"poll_update": pollAttribute("Update"),
 			"poll_delete": pollAttribute("Delete"),
-			"id_path": {
-				Description:         "The path to the id attribute in the response. This is ignored when `create_method` is `PUT`.",
-				MarkdownDescription: "The path to the id attribute in the response, which is only used during creation of the resource to construct the resource identifier. This is ignored when `create_method` is `PUT`.",
+			"name_path": {
+				Description:         "The path to the name attribute in the response. This is ignored when `create_method` is `PUT`. Either `name_path` or `url_path` needs to set when `create_method` is `POST`.",
+				MarkdownDescription: "The path to the name attribute in the response, which is only used during creation of the resource to construct the resource identifier. This is ignored when `create_method` is `PUT`. Either `name_path` or `url_path` needs to set when `create_method` is `POST`.",
 				Optional:            true,
-				Computed:            true,
 				Type:                types.StringType,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					planmodifier.DefaultAttributePlanModifier{
-						Default: types.String{Value: "id"},
-					},
-				},
+			},
+			"url_path": {
+				Description:         "The path to the id attribute in the response. This is ignored when `create_method` is `PUT`. Either `name_path` or `url_path` needs to set when `create_method` is `POST`.",
+				MarkdownDescription: "The path to the id attribute in the response, which is only used during creation of the resource to be as the resource identifier. This is ignored when `create_method` is `PUT`. Either `name_path` or `url_path` needs to set when `create_method` is `POST`.",
+				Optional:            true,
+				Type:                types.StringType,
 			},
 			"ignore_changes": {
 				Description:         "A list of paths to the attributes that should not affect the resource after its creation",
@@ -134,8 +134,8 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 				},
 			},
 			"create_method": {
-				Description:         "The method used to create the resource. Possible values are `PUT` and `POST`. Defaults to `POST`. This overrides the `create_method` set in the provider block",
-				MarkdownDescription: "The method used to create the resource. Possible values are `PUT` and `POST`. Defaults to `POST`. This overrides the `create_method` set in the provider block",
+				Description:         "The method used to create the resource. Possible values are `PUT` and `POST`. This overrides the `create_method` set in the provider block (defaults to POST)",
+				MarkdownDescription: "The method used to create the resource. Possible values are `PUT` and `POST`. This overrides the `create_method` set in the provider block (defaults to POST)",
 				Type:                types.StringType,
 				Optional:            true,
 				Computed:            true,
@@ -165,6 +165,64 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 	}, nil
 }
 
+func (r resource) ValidateConfig(ctx context.Context, req tfsdk.ValidateResourceConfigRequest, resp *tfsdk.ValidateResourceConfigResponse) {
+	type rt struct {
+		Id            types.String `tfsdk:"id"`
+		Path          types.String `tfsdk:"path"`
+		Body          types.String `tfsdk:"body"`
+		PollCreate    types.Object `tfsdk:"poll_create"`
+		PollUpdate    types.Object `tfsdk:"poll_update"`
+		PollDelete    types.Object `tfsdk:"poll_delete"`
+		NamePath      types.String `tfsdk:"name_path"`
+		UrlPath       types.String `tfsdk:"url_path"`
+		IgnoreChanges types.List   `tfsdk:"ignore_changes"`
+		CreateMethod  types.String `tfsdk:"create_method"`
+		Query         types.Map    `tfsdk:"query"`
+		Header        types.Map    `tfsdk:"header"`
+		Output        types.String `tfsdk:"output"`
+	}
+
+	var config rt
+	diags := req.Config.Get(ctx, &config)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
+
+	createMethod := r.p.apiOpt.CreateMethod
+	if !config.CreateMethod.Unknown {
+		if !config.CreateMethod.Null {
+			createMethod = config.CreateMethod.Value
+		}
+		if !config.NamePath.Unknown && !config.UrlPath.Unknown {
+			if createMethod == "PUT" {
+				if !config.NamePath.Null {
+					resp.Diagnostics.AddError(
+						"Invalid configuration",
+						"The `name_path` can not be specified when `create_method` is `PUT`",
+					)
+				}
+				if !config.UrlPath.Null {
+					resp.Diagnostics.AddError(
+						"Invalid configuration",
+						"The `url_path` can not be specified when `create_method` is `PUT`",
+					)
+				}
+			} else if createMethod == "POST" {
+				if config.NamePath.Null && config.UrlPath.Null || !config.NamePath.Null && !config.UrlPath.Null {
+					resp.Diagnostics.AddError(
+						"Invalid configuration",
+						"Exactly one of `name_path` and `url_path` should be specified when `create_method` is `POST`",
+					)
+				}
+			}
+		}
+	}
+	if resp.Diagnostics.HasError() {
+		return
+	}
+}
+
 func (r resourceType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
 	return resource{p: *p.(*provider)}, nil
 }
@@ -179,7 +237,8 @@ type resourceData struct {
 	ID            types.String `tfsdk:"id"`
 	Path          types.String `tfsdk:"path"`
 	Body          types.String `tfsdk:"body"`
-	IdPath        types.String `tfsdk:"id_path"`
+	NamePath      types.String `tfsdk:"name_path"`
+	UrlPath       types.String `tfsdk:"url_path"`
 	IgnoreChanges types.List   `tfsdk:"ignore_changes"`
 	PollCreate    types.Object `tfsdk:"poll_create"`
 	PollUpdate    types.Object `tfsdk:"poll_update"`
@@ -274,16 +333,28 @@ func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, r
 			return
 		}
 
-		result := gjson.GetBytes(b, plan.IdPath.Value)
-		if !result.Exists() {
-			resp.Diagnostics.AddError(
-				fmt.Sprintf("Failed to identify resource id"),
-				fmt.Sprintf("Can't find resource id in path %q", plan.IdPath.Value),
-			)
-			return
+		switch {
+		case !plan.NamePath.Null:
+			result := gjson.GetBytes(b, plan.NamePath.Value)
+			if !result.Exists() {
+				resp.Diagnostics.AddError(
+					fmt.Sprintf("Failed to identify resource name"),
+					fmt.Sprintf("Can't find resource name in path %q", plan.NamePath.Value),
+				)
+				return
+			}
+			resourceId = path.Join(plan.Path.Value, result.String())
+		case !plan.UrlPath.Null:
+			result := gjson.GetBytes(b, plan.UrlPath.Value)
+			if !result.Exists() {
+				resp.Diagnostics.AddError(
+					fmt.Sprintf("Failed to identify resource id"),
+					fmt.Sprintf("Can't find resource id in path %q", plan.UrlPath.Value),
+				)
+				return
+			}
+			resourceId = strings.TrimPrefix(result.String(), c.BaseURL)
 		}
-		id := result.String()
-		resourceId = path.Join(plan.Path.Value, id)
 	case "PUT":
 		resourceId = plan.Path.Value
 	}
@@ -378,11 +449,6 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 	}
 
 	b := response.Body()
-
-	// In case id (O+C) is not set, set its default value as is defined in schema. This can avoid unnecessary plan diff after import.
-	if state.IdPath.Null || state.IdPath.Unknown {
-		state.IdPath = types.String{Value: "id"}
-	}
 
 	var ignoreChanges []string
 	// In case ignore_changes (O+C) is not set, set its default value as is defined in schema. This can avoid unnecessary plan diff after import.
