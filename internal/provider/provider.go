@@ -225,6 +225,7 @@ func (*provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 				MarkdownDescription: "The method used to create the resource. Possible values are `PUT` and `POST`. Defaults to `POST`.",
 				Optional:            true,
 				// Need a way to set the default value, plan modifier doesn't work here even it is Optional+Computed, because it is at provider level?
+				// Currently, we are setting the default value during the provider configuration.
 				Validators: []tfsdk.AttributeValidator{validator.StringInSlice("PUT", "POST")},
 			},
 			"query": {
@@ -374,24 +375,23 @@ func (p *provider) ValidateConfig(ctx context.Context, req tfsdk.ValidateProvide
 		if !apikeyObj.Null && !apikeyObj.Unknown {
 			l = append(l, "apikey")
 		}
+
+		// In case any of the block is unknown, we don't know whether it will evaluate into null or not.
+		// Here, we do best effort to ensure at least one of them is set.
+		if httpObj.Null && oauth2Obj.Null && apikeyObj.Null {
+			resp.Diagnostics.AddError(
+				"Invalid configuration: `security`",
+				"There is no security scheme specified",
+			)
+			return
+		}
+
 		if len(l) > 1 {
 			resp.Diagnostics.AddError(
 				"Invalid configuration: `security`",
 				"More than one scheme is specified: "+strings.Join(l, ", "),
 			)
 			return
-		}
-
-		// In case any of the block is unknown, we don't know whether it will evaluate into null or not.
-		// Here, we do best effort to ensure at least one of them is set.
-		if httpObj.Null && oauth2Obj.Null && apikeyObj.Null {
-			if len(l) == 0 {
-				resp.Diagnostics.AddError(
-					"Invalid configuration: `security`",
-					"There is no security scheme specified",
-				)
-				return
-			}
 		}
 	}
 }

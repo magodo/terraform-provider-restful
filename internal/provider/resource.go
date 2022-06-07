@@ -166,23 +166,7 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 }
 
 func (r resource) ValidateConfig(ctx context.Context, req tfsdk.ValidateResourceConfigRequest, resp *tfsdk.ValidateResourceConfigResponse) {
-	type rt struct {
-		Id            types.String `tfsdk:"id"`
-		Path          types.String `tfsdk:"path"`
-		Body          types.String `tfsdk:"body"`
-		PollCreate    types.Object `tfsdk:"poll_create"`
-		PollUpdate    types.Object `tfsdk:"poll_update"`
-		PollDelete    types.Object `tfsdk:"poll_delete"`
-		NamePath      types.String `tfsdk:"name_path"`
-		UrlPath       types.String `tfsdk:"url_path"`
-		IgnoreChanges types.List   `tfsdk:"ignore_changes"`
-		CreateMethod  types.String `tfsdk:"create_method"`
-		Query         types.Map    `tfsdk:"query"`
-		Header        types.Map    `tfsdk:"header"`
-		Output        types.String `tfsdk:"output"`
-	}
-
-	var config rt
+	var config resourceData
 	diags := req.Config.Get(ctx, &config)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
@@ -218,6 +202,39 @@ func (r resource) ValidateConfig(ctx context.Context, req tfsdk.ValidateResource
 			}
 		}
 	}
+
+	validatePoll := func(pollObj types.Object, attrName string) {
+		if pollObj.Null || pollObj.Unknown {
+			return
+		}
+		var pd pollDataGo
+		diags := pollObj.As(ctx, &pd, types.ObjectAsOptions{})
+		if diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
+
+		if _, err := parseLocator(pd.StatusLocator); err != nil {
+			resp.Diagnostics.AddError(
+				"Invalid configuration",
+				fmt.Sprintf("Failed to parse status locator for %q: %s", attrName, err.Error()),
+			)
+		}
+
+		if pd.UrlLocator != nil {
+			if _, err := parseLocator(*pd.UrlLocator); err != nil {
+				resp.Diagnostics.AddError(
+					"Invalid configuration",
+					fmt.Sprintf("Failed to parse url locator for %q: %s", attrName, err.Error()),
+				)
+			}
+		}
+	}
+
+	validatePoll(config.PollCreate, "poll_create")
+	validatePoll(config.PollUpdate, "poll_update")
+	validatePoll(config.PollDelete, "poll_delete")
+
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -323,16 +340,6 @@ func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, r
 	var resourceId string
 	switch opt.CreateMethod {
 	case "POST":
-		// TODO: Is the response always guaranteed to be an object, maybe array?
-		var body map[string]interface{}
-		if err := json.Unmarshal(b, &body); err != nil {
-			resp.Diagnostics.AddError(
-				"Failed to unmarshal create response for identifying id",
-				err.Error(),
-			)
-			return
-		}
-
 		switch {
 		case !plan.NamePath.Null:
 			result := gjson.GetBytes(b, plan.NamePath.Value)
@@ -452,7 +459,7 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 
 	var ignoreChanges []string
 	// In case ignore_changes (O+C) is not set, set its default value as is defined in schema. This can avoid unnecessary plan diff after import.
-	if state.IgnoreChanges.Null || state.IgnoreChanges.Unknown {
+	if state.IgnoreChanges.Null {
 		state.IgnoreChanges = types.List{
 			ElemType: types.StringType,
 			Elems:    []attr.Value{},
