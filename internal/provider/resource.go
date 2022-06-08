@@ -36,8 +36,8 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 			Optional:            true,
 			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 				"status_locator": {
-					Description:         "Specifies how to discover the status property. The format is either `code` or `<scope>[<path>]` (where `<scope>` can be either `header` or `body`).",
-					MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `<scope>[<path>]` (where `<scope>` can be either `header` or `body`).",
+					Description:         "Specifies how to discover the status property. The format is either `code` or `<scope>[<path>]`, where `<scope>` can be either `header` or `body`, and the `<path>` is using the gjson syntax.",
+					MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `<scope>[<path>]`, where `<scope>` can be either `header` or `body`, and the `<path>` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).",
 					Required:            true,
 					Type:                types.StringType,
 				},
@@ -61,8 +61,8 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 					}),
 				},
 				"url_locator": {
-					Description:         "Specifies how to discover the polling location. The format is as `<scope>[path]`, where `<scope>` can be either `header` or `body`. When absent, the resource's path is used for polling.",
-					MarkdownDescription: "Specifies how to discover the polling location. The format is as `<scope>[path]`, where `<scope>` can be either `header` or `body`. When absent, the resource's path is used for polling.",
+					Description:         "Specifies how to discover the polling location. The format is as `<scope>[<path>]`, where `<scope>` can be either `header` or `body`, and the `<path>` is using the gjson syntax. When absent, the resource's path is used for polling.",
+					MarkdownDescription: "Specifies how to discover the polling location. The format is as `<scope>[<path>]`, where `<scope>` can be either `header` or `body`, and the `<path>` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md). When absent, the resource's path is used for polling.",
 					Optional:            true,
 					Type:                types.StringType,
 				},
@@ -119,8 +119,8 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 				Type:                types.StringType,
 			},
 			"ignore_changes": {
-				Description:         "A list of paths to the attributes that should not affect the resource after its creation.",
-				MarkdownDescription: "A list of paths to the attributes that should not affect the resource after its creation.",
+				Description:         "A list of paths (in gjson syntax) to the attributes that should not affect the resource after its creation.",
+				MarkdownDescription: "A list of paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attributes that should not affect the resource after its creation.",
 				Optional:            true,
 				Computed:            true,
 				Type:                types.ListType{ElemType: types.StringType},
