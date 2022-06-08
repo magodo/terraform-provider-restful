@@ -47,7 +47,7 @@ resource "restful_resource" "rg" {
 
 - `create_method` (String) The method used to create the resource. Possible values are `PUT` and `POST`. This overrides the `create_method` set in the provider block (defaults to POST).
 - `header` (Map of String) The header parameters that are applied to each request. This overrides the `header` set in the provider block.
-- `ignore_changes` (List of String) A list of paths to the attributes that should not affect the resource after its creation.
+- `ignore_changes` (List of String) A list of paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attributes that should not affect the resource after its creation.
 - `name_path` (String) The path to the name attribute in the response, which is only used during creation of the resource to construct the resource identifier. This is ignored when `create_method` is `PUT`. Either `name_path` or `url_path` needs to set when `create_method` is `POST`.
 - `poll_create` (Attributes) The polling option for the "Create" operation (see [below for nested schema](#nestedatt--poll_create))
 - `poll_delete` (Attributes) The polling option for the "Delete" operation (see [below for nested schema](#nestedatt--poll_delete))
@@ -67,8 +67,8 @@ Optional:
 
 - `default_delay_sec` (Number) The interval between two pollings if there is no `Retry-After` in the response header, in second.
 - `status` (Attributes) The expected status sentinels for each polling state. (see [below for nested schema](#nestedatt--poll_create--status))
-- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `<scope>[<path>]` (where `<scope>` can be either `header` or `body`).
-- `url_locator` (String) Specifies how to discover the polling location. The format is as `<scope>[path]`, where `<scope>` can be either `header` or `body`. When absent, the resource's path is used for polling.
+- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `<scope>[<path>]`, where `<scope>` can be either `header` or `body`, and the `<path>` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).
+- `url_locator` (String) Specifies how to discover the polling location. The format is as `<scope>[<path>]`, where `<scope>` can be either `header` or `body`, and the `<path>` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md). When absent, the resource's path is used for polling.
 
 <a id="nestedatt--poll_create--status"></a>
 ### Nested Schema for `poll_create.status`
@@ -87,8 +87,8 @@ Optional:
 
 - `default_delay_sec` (Number) The interval between two pollings if there is no `Retry-After` in the response header, in second.
 - `status` (Attributes) The expected status sentinels for each polling state. (see [below for nested schema](#nestedatt--poll_delete--status))
-- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `<scope>[<path>]` (where `<scope>` can be either `header` or `body`).
-- `url_locator` (String) Specifies how to discover the polling location. The format is as `<scope>[path]`, where `<scope>` can be either `header` or `body`. When absent, the resource's path is used for polling.
+- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `<scope>[<path>]`, where `<scope>` can be either `header` or `body`, and the `<path>` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).
+- `url_locator` (String) Specifies how to discover the polling location. The format is as `<scope>[<path>]`, where `<scope>` can be either `header` or `body`, and the `<path>` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md). When absent, the resource's path is used for polling.
 
 <a id="nestedatt--poll_delete--status"></a>
 ### Nested Schema for `poll_delete.status`
@@ -107,8 +107,8 @@ Optional:
 
 - `default_delay_sec` (Number) The interval between two pollings if there is no `Retry-After` in the response header, in second.
 - `status` (Attributes) The expected status sentinels for each polling state. (see [below for nested schema](#nestedatt--poll_update--status))
-- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `<scope>[<path>]` (where `<scope>` can be either `header` or `body`).
-- `url_locator` (String) Specifies how to discover the polling location. The format is as `<scope>[path]`, where `<scope>` can be either `header` or `body`. When absent, the resource's path is used for polling.
+- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `<scope>[<path>]`, where `<scope>` can be either `header` or `body`, and the `<path>` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).
+- `url_locator` (String) Specifies how to discover the polling location. The format is as `<scope>[<path>]`, where `<scope>` can be either `header` or `body`, and the `<path>` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md). When absent, the resource's path is used for polling.
 
 <a id="nestedatt--poll_update--status"></a>
 ### Nested Schema for `poll_update.status`
@@ -118,4 +118,28 @@ Optional:
 - `pending` (List of String) The expected status sentinels for pending status.
 - `success` (String) The expected status sentinel for suceess status.
 
+## Import
 
+Import is supported using the following syntax:
+
+```shell
+# The import spec consists of following keys:
+#
+# - id (Required)               : The resource id.
+# - query (Optional)            : The query parameters.
+# - create_method (Optional)    : The import process needs to determine the resource's `path`, which is derived from manipulation on the `id`, based on whether `create_method` is `PUT` or `POST`.
+#                                 This is only needed when current configured `create_method` is not as expected, i.e. if you have configured the `create_method` in the provider block, then this is
+#                                 not needed to set here.
+# - body (Optional)             : The interested properties in the response body that you want to manage via this resource. If you omit this, then all the properties will be keeping track, which in 
+#                                 most cases is not what you want (e.g. the read only attributes shouldn't be managed).
+#                                 The value of each property is not important here, hence leave them as `null`.
+terraform import restful_resource.example '{
+  "id": "/subscriptions/0-0-0-0/resourceGroups/example",
+  "query": {"api-version": ["2020-06-01"]},
+  "create_method": "PUT",
+  "body": {
+    "location": null,
+    "tags": null
+  }
+}'
+```
