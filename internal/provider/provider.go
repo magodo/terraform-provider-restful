@@ -63,30 +63,30 @@ func New() tfsdk.Provider {
 
 func (*provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
-		Description:         "The schema of magodo/terraform-provider-restful provider",
-		MarkdownDescription: "The schema of magodo/terraform-provider-restful provider",
+		Description:         "The restful provider provides resource and data source to interact with a platform that exposes a restful API.",
+		MarkdownDescription: "The restful provider provides resource and data source to interact with a platform that exposes a restful API.",
 		Attributes: map[string]tfsdk.Attribute{
 			"base_url": {
 				Type:                types.StringType,
-				Description:         "The base URL of the API provider",
-				MarkdownDescription: "The base URL of the API provider",
+				Description:         "The base URL of the API provider.",
+				MarkdownDescription: "The base URL of the API provider.",
 				Required:            true,
 			},
 			"security": {
-				Description:         "The OpenAPI security scheme that is be used by the operations",
-				MarkdownDescription: "The OpenAPI security scheme that is be used by the operations",
+				Description:         "The OpenAPI security scheme that is be used for auth.",
+				MarkdownDescription: "The OpenAPI security scheme that is be used for auth.",
 				Optional:            true,
 				Attributes: tfsdk.SingleNestedAttributes(
 					map[string]tfsdk.Attribute{
 						"http": {
-							Description:         "Configuration for the HTTP authentication scheme",
-							MarkdownDescription: "Configuration for the HTTP authentication scheme",
+							Description:         "Configuration for the HTTP authentication scheme.",
+							MarkdownDescription: "Configuration for the HTTP authentication scheme.",
 							Optional:            true,
 							Attributes: tfsdk.SingleNestedAttributes(
 								map[string]tfsdk.Attribute{
 									"type": {
-										Description:         fmt.Sprintf("The type of the authentication scheme. Possible values are `%s`, `%s`", client.HTTPAuthTypeBasic, client.HTTPAuthTypeBearer),
-										MarkdownDescription: fmt.Sprintf("The type of the authentication scheme. Possible values are `%s`, `%s`", client.HTTPAuthTypeBasic, client.HTTPAuthTypeBearer),
+										Description:         fmt.Sprintf("The type of the authentication scheme. Possible values are `%s`, `%s`.", client.HTTPAuthTypeBasic, client.HTTPAuthTypeBearer),
+										MarkdownDescription: fmt.Sprintf("The type of the authentication scheme. Possible values are `%s`, `%s`.", client.HTTPAuthTypeBasic, client.HTTPAuthTypeBearer),
 										Required:            true,
 										Type:                types.StringType,
 										Validators: []tfsdk.AttributeValidator{validator.StringInSlice(
@@ -95,21 +95,21 @@ func (*provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 										)},
 									},
 									"username": {
-										Description:         fmt.Sprintf("The username, required when `type` is `%s`", client.HTTPAuthTypeBasic),
-										MarkdownDescription: fmt.Sprintf("The username, required when `type` is `%s`", client.HTTPAuthTypeBasic),
+										Description:         fmt.Sprintf("The username, required when `type` is `%s`.", client.HTTPAuthTypeBasic),
+										MarkdownDescription: fmt.Sprintf("The username, required when `type` is `%s`.", client.HTTPAuthTypeBasic),
 										Type:                types.StringType,
 										Optional:            true,
 									},
 									"password": {
-										Description:         fmt.Sprintf("The password, required when `type` is `%s`", client.HTTPAuthTypeBasic),
-										MarkdownDescription: fmt.Sprintf("The password, required when `type` is `%s`", client.HTTPAuthTypeBasic),
+										Description:         fmt.Sprintf("The password, required when `type` is `%s`.", client.HTTPAuthTypeBasic),
+										MarkdownDescription: fmt.Sprintf("The password, required when `type` is `%s`.", client.HTTPAuthTypeBasic),
 										Type:                types.StringType,
 										Optional:            true,
 										Sensitive:           true,
 									},
 									"token": {
-										Description:         fmt.Sprintf("The value of the token, required when `type` is `%s`", client.HTTPAuthTypeBearer),
-										MarkdownDescription: fmt.Sprintf("The value of the token, required when `type` is `%s`", client.HTTPAuthTypeBearer),
+										Description:         fmt.Sprintf("The value of the token, required when `type` is `%s`.", client.HTTPAuthTypeBearer),
+										MarkdownDescription: fmt.Sprintf("The value of the token, required when `type` is `%s`.", client.HTTPAuthTypeBearer),
 										Type:                types.StringType,
 										Optional:            true,
 										Sensitive:           true,
@@ -118,8 +118,8 @@ func (*provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 							),
 						},
 						"apikey": {
-							Description:         "Configuration for the API Key authentication scheme",
-							MarkdownDescription: "Configuration for the API Key authentication scheme",
+							Description:         "Configuration for the API Key authentication scheme.",
+							MarkdownDescription: "Configuration for the API Key authentication scheme.",
 							Optional:            true,
 							Attributes: tfsdk.SetNestedAttributes(
 								map[string]tfsdk.Attribute{
@@ -136,9 +136,9 @@ func (*provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 										Type:                types.StringType,
 									},
 									"in": {
-										Description: fmt.Sprintf("Specifies how is the API Key is sent. Possible values are `%s`, `%s` and `%s`",
+										Description: fmt.Sprintf("Specifies how is the API Key is sent. Possible values are `%s`, `%s` and `%s`.",
 											client.APIKeyAuthInQuery, client.APIKeyAuthInHeader, client.APIKeyAuthInCookie),
-										MarkdownDescription: fmt.Sprintf("Specifies how is the API Key is sent. Possible values are `%s`, `%s` and `%s`",
+										MarkdownDescription: fmt.Sprintf("Specifies how is the API Key is sent. Possible values are `%s`, `%s` and `%s`.",
 											client.APIKeyAuthInQuery, client.APIKeyAuthInHeader, client.APIKeyAuthInCookie),
 										Required: true,
 										Type:     types.StringType,
@@ -155,53 +155,53 @@ func (*provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 							),
 						},
 						"oauth2": {
-							Description:         "Configuration for the OAuth2 authentication scheme",
-							MarkdownDescription: "Configuration for the OAuth2 authentication scheme",
+							Description:         "Configuration for the OAuth2 authentication scheme.",
+							MarkdownDescription: "Configuration for the OAuth2 authentication scheme.",
 							Optional:            true,
 							Attributes: tfsdk.SingleNestedAttributes(
 								map[string]tfsdk.Attribute{
 									"token_url": {
 										Type:                types.StringType,
-										Description:         "The token URL to be used for this flow",
-										MarkdownDescription: "The token URL to be used for this flow",
+										Description:         "The token URL to be used for this flow.",
+										MarkdownDescription: "The token URL to be used for this flow.",
 										Required:            true,
 									},
 									"client_id": {
 										Type:                types.StringType,
-										Description:         "The application's ID (client credential flow only)",
-										MarkdownDescription: "The application's ID (client credential flow only)",
+										Description:         "The application's ID (client credential flow only).",
+										MarkdownDescription: "The application's ID (client credential flow only).",
 										Optional:            true,
 									},
 									"client_secret": {
 										Type:                types.StringType,
 										Sensitive:           true,
-										Description:         "The application's secret (client credential flow only)",
-										MarkdownDescription: "The application's secret (client credential flow only)",
+										Description:         "The application's secret (client credential flow only).",
+										MarkdownDescription: "The application's secret (client credential flow only).",
 										Optional:            true,
 									},
 									"username": {
 										Type:                types.StringType,
-										Description:         "The username (password credential flow only)",
-										MarkdownDescription: "The username (password credential flow only)",
+										Description:         "The username (password credential flow only).",
+										MarkdownDescription: "The username (password credential flow only).",
 										Optional:            true,
 									},
 									"password": {
 										Type:                types.StringType,
 										Sensitive:           true,
-										Description:         "The password (password credential flow only)",
-										MarkdownDescription: "The password (password credential flow only)",
+										Description:         "The password (password credential flow only).",
+										MarkdownDescription: "The password (password credential flow only).",
 										Optional:            true,
 									},
 									"scopes": {
 										Type:                types.ListType{ElemType: types.StringType},
-										Description:         "The optional requested permissions",
-										MarkdownDescription: "The optional requested permissions",
+										Description:         "The optional requested permissions.",
+										MarkdownDescription: "The optional requested permissions.",
 										Optional:            true,
 									},
 									"endpoint_params": {
 										Type:                types.MapType{ElemType: types.ListType{ElemType: types.StringType}},
-										Description:         "The additional parameters for requests to the token endpoint (client credential flow only)",
-										MarkdownDescription: "The additional parameters for requests to the token endpoint (client credential flow only)",
+										Description:         "The additional parameters for requests to the token endpoint (client credential flow only).",
+										MarkdownDescription: "The additional parameters for requests to the token endpoint (client credential flow only).",
 										Optional:            true,
 									},
 									"in": {
@@ -229,14 +229,14 @@ func (*provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 				Validators: []tfsdk.AttributeValidator{validator.StringInSlice("PUT", "POST")},
 			},
 			"query": {
-				Description:         "The query parameters that are applied to each request",
-				MarkdownDescription: "The query parameters that are applied to each request",
+				Description:         "The query parameters that are applied to each request.",
+				MarkdownDescription: "The query parameters that are applied to each request.",
 				Type:                types.MapType{ElemType: types.ListType{ElemType: types.StringType}},
 				Optional:            true,
 			},
 			"header": {
-				Description:         "The header parameters that are applied to each request",
-				MarkdownDescription: "The header parameters that are applied to each request",
+				Description:         "The header parameters that are applied to each request.",
+				MarkdownDescription: "The header parameters that are applied to each request.",
 				Type:                types.MapType{ElemType: types.StringType},
 				Optional:            true,
 			},

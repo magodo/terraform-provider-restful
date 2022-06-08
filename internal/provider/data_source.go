@@ -13,32 +13,32 @@ type dataSourceType struct{}
 
 func (d dataSourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
-		Description:         "Restful data source",
-		MarkdownDescription: "Restful data source",
+		Description:         "`restful_resource` data source can be used to retrieve the model of a restful resource by ID.",
+		MarkdownDescription: "`restful_resource` data source can be used to retrieve the model of a restful resource by ID.",
 		Attributes: map[string]tfsdk.Attribute{
 			"id": {
-				Description:         "The ID of the Resource, i.e. The path of the data source, relative to the `base_url` of the provider",
-				MarkdownDescription: "The ID of the Resource, i.e. The path of the data source, relative to the `base_url` of the provider",
+				Description:         "The ID of the Resource, i.e. The path of the data source, relative to the `base_url` of the provider.",
+				MarkdownDescription: "The ID of the Resource, i.e. The path of the data source, relative to the `base_url` of the provider.",
 				Type:                types.StringType,
 				Required:            true,
 			},
 			"query": {
-				Description:         "The query parameters that are applied to each request. This overrides the `query` set in the provider block",
-				MarkdownDescription: "The query parameters that are applied to each request. This overrides the `query` set in the provider block",
+				Description:         "The query parameters that are applied to each request. This overrides the `query` set in the provider block.",
+				MarkdownDescription: "The query parameters that are applied to each request. This overrides the `query` set in the provider block.",
 				Type:                types.MapType{ElemType: types.ListType{ElemType: types.StringType}},
 				Optional:            true,
 				Computed:            true,
 			},
 			"header": {
-				Description:         "The header parameters that are applied to each request. This overrides the `header` set in the provider block",
-				MarkdownDescription: "The header parameters that are applied to each request. This overrides the `header` set in the provider block",
+				Description:         "The header parameters that are applied to each request. This overrides the `header` set in the provider block.",
+				MarkdownDescription: "The header parameters that are applied to each request. This overrides the `header` set in the provider block.",
 				Type:                types.MapType{ElemType: types.StringType},
 				Optional:            true,
 				Computed:            true,
 			},
 			"output": {
-				Description:         "The response body after reading the resource",
-				MarkdownDescription: "The response body after reading the resource",
+				Description:         "The response body after reading the resource.",
+				MarkdownDescription: "The response body after reading the resource.",
 				Type:                types.StringType,
 				Computed:            true,
 			},

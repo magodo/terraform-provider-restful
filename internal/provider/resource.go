@@ -31,44 +31,44 @@ type resourceType struct{}
 func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	pollAttribute := func(s string) tfsdk.Attribute {
 		return tfsdk.Attribute{
-			Description:         "The polling option for the %q operation",
-			MarkdownDescription: "The polling option for the %q operation",
+			Description:         fmt.Sprintf("The polling option for the %q operation", s),
+			MarkdownDescription: fmt.Sprintf("The polling option for the %q operation", s),
 			Optional:            true,
 			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 				"status_locator": {
-					Description:         "Specifies how to discover the status property. The format is either `code` or `<scope>[<path>]` (where `<scope>` can be either `header` or `body`)",
-					MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `<scope>[<path>]` (where `<scope>` can be either `header` or `body`)",
+					Description:         "Specifies how to discover the status property. The format is either `code` or `<scope>[<path>]` (where `<scope>` can be either `header` or `body`).",
+					MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `<scope>[<path>]` (where `<scope>` can be either `header` or `body`).",
 					Required:            true,
 					Type:                types.StringType,
 				},
 				"status": {
-					Description:         "The expected status sentinels for each polling state",
-					MarkdownDescription: "The expected status sentinels for each polling state",
+					Description:         "The expected status sentinels for each polling state.",
+					MarkdownDescription: "The expected status sentinels for each polling state.",
 					Required:            true,
 					Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 						"success": {
-							Description:         "The expected status sentinel for suceess status",
-							MarkdownDescription: "The expected status sentinel for suceess status",
+							Description:         "The expected status sentinel for suceess status.",
+							MarkdownDescription: "The expected status sentinel for suceess status.",
 							Required:            true,
 							Type:                types.StringType,
 						},
 						"pending": {
-							Description:         "The expected status sentinels for pending status",
-							MarkdownDescription: "The expected status sentinels for pending status",
+							Description:         "The expected status sentinels for pending status.",
+							MarkdownDescription: "The expected status sentinels for pending status.",
 							Optional:            true,
 							Type:                types.ListType{ElemType: types.StringType},
 						},
 					}),
 				},
 				"url_locator": {
-					Description:         "Specifies how to discover the polling location. The format is as `<scope>[path]`, where `<scope>` can be either `header` or `body`. When absent, the resource's path is used for polling",
-					MarkdownDescription: "Specifies how to discover the polling location. The format is as `<scope>[path]`, where `<scope>` can be either `header` or `body`. When absent, the resource's path is used for polling",
+					Description:         "Specifies how to discover the polling location. The format is as `<scope>[path]`, where `<scope>` can be either `header` or `body`. When absent, the resource's path is used for polling.",
+					MarkdownDescription: "Specifies how to discover the polling location. The format is as `<scope>[path]`, where `<scope>` can be either `header` or `body`. When absent, the resource's path is used for polling.",
 					Optional:            true,
 					Type:                types.StringType,
 				},
 				"default_delay_sec": {
-					Description:         "The interval between two pollings if there is no `Retry-After` in the response header, in second",
-					MarkdownDescription: "The interval between two pollings if there is no `Retry-After` in the response header, in second",
+					Description:         "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
+					MarkdownDescription: "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
 					Optional:            true,
 					Type:                types.Int64Type,
 				},
@@ -76,12 +76,12 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 		}
 	}
 	return tfsdk.Schema{
-		Description:         "Restful resource",
-		MarkdownDescription: "Restful resource",
+		Description:         "`restful_resource` manages a restful resource.",
+		MarkdownDescription: "`restful_resource` manages a restful resource.",
 		Attributes: map[string]tfsdk.Attribute{
 			"id": {
-				Description:         "The ID of the Resource. Same as the `path` when the `create_method` is `PUT`",
-				MarkdownDescription: "The ID of the Resource. Same as the `path` when the `create_method` is `PUT`",
+				Description:         "The ID of the Resource. Same as the `path` when the `create_method` is `PUT`.",
+				MarkdownDescription: "The ID of the Resource. Same as the `path` when the `create_method` is `PUT`.",
 				Type:                types.StringType,
 				Computed:            true,
 				PlanModifiers: []tfsdk.AttributePlanModifier{
@@ -89,8 +89,8 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 				},
 			},
 			"path": {
-				Description:         "The path of the resource, relative to the `base_url` of the provider. It differs when `create_method` is `PUT` and `POST`",
-				MarkdownDescription: "The path of the resource, relative to the `base_url` of the provider. It differs when `create_method` is `PUT` and `POST`",
+				Description:         "The path of the resource, relative to the `base_url` of the provider. It differs when `create_method` is `PUT` and `POST`.",
+				MarkdownDescription: "The path of the resource, relative to the `base_url` of the provider. It differs when `create_method` is `PUT` and `POST`.",
 				Type:                types.StringType,
 				Required:            true,
 				PlanModifiers: []tfsdk.AttributePlanModifier{
@@ -98,8 +98,8 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 				},
 			},
 			"body": {
-				Description:         "The properties of the resource",
-				MarkdownDescription: "The properties of the resource",
+				Description:         "The properties of the resource.",
+				MarkdownDescription: "The properties of the resource.",
 				Type:                types.StringType,
 				Required:            true,
 			},
@@ -107,20 +107,20 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 			"poll_update": pollAttribute("Update"),
 			"poll_delete": pollAttribute("Delete"),
 			"name_path": {
-				Description:         "The path to the name attribute in the response. This is ignored when `create_method` is `PUT`. Either `name_path` or `url_path` needs to set when `create_method` is `POST`.",
+				Description:         "The path to the name attribute in the response, which is only used during creation of the resource to construct the resource identifier. This is ignored when `create_method` is `PUT`. Either `name_path` or `url_path` needs to set when `create_method` is `POST`.",
 				MarkdownDescription: "The path to the name attribute in the response, which is only used during creation of the resource to construct the resource identifier. This is ignored when `create_method` is `PUT`. Either `name_path` or `url_path` needs to set when `create_method` is `POST`.",
 				Optional:            true,
 				Type:                types.StringType,
 			},
 			"url_path": {
-				Description:         "The path to the id attribute in the response. This is ignored when `create_method` is `PUT`. Either `name_path` or `url_path` needs to set when `create_method` is `POST`.",
+				Description:         "The path to the id attribute in the response, which is only used during creation of the resource to be as the resource identifier. This is ignored when `create_method` is `PUT`. Either `name_path` or `url_path` needs to set when `create_method` is `POST`.",
 				MarkdownDescription: "The path to the id attribute in the response, which is only used during creation of the resource to be as the resource identifier. This is ignored when `create_method` is `PUT`. Either `name_path` or `url_path` needs to set when `create_method` is `POST`.",
 				Optional:            true,
 				Type:                types.StringType,
 			},
 			"ignore_changes": {
-				Description:         "A list of paths to the attributes that should not affect the resource after its creation",
-				MarkdownDescription: "A list of paths to the attributes that should not affect the resource after its creation",
+				Description:         "A list of paths to the attributes that should not affect the resource after its creation.",
+				MarkdownDescription: "A list of paths to the attributes that should not affect the resource after its creation.",
 				Optional:            true,
 				Computed:            true,
 				Type:                types.ListType{ElemType: types.StringType},
@@ -134,30 +134,30 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 				},
 			},
 			"create_method": {
-				Description:         "The method used to create the resource. Possible values are `PUT` and `POST`. This overrides the `create_method` set in the provider block (defaults to POST)",
-				MarkdownDescription: "The method used to create the resource. Possible values are `PUT` and `POST`. This overrides the `create_method` set in the provider block (defaults to POST)",
+				Description:         "The method used to create the resource. Possible values are `PUT` and `POST`. This overrides the `create_method` set in the provider block (defaults to POST).",
+				MarkdownDescription: "The method used to create the resource. Possible values are `PUT` and `POST`. This overrides the `create_method` set in the provider block (defaults to POST).",
 				Type:                types.StringType,
 				Optional:            true,
 				Computed:            true,
 				Validators:          []tfsdk.AttributeValidator{validator.StringInSlice("PUT", "POST")},
 			},
 			"query": {
-				Description:         "The query parameters that are applied to each request. This overrides the `query` set in the provider block",
-				MarkdownDescription: "The query parameters that are applied to each request. This overrides the `query` set in the provider block",
+				Description:         "The query parameters that are applied to each request. This overrides the `query` set in the provider block.",
+				MarkdownDescription: "The query parameters that are applied to each request. This overrides the `query` set in the provider block.",
 				Type:                types.MapType{ElemType: types.ListType{ElemType: types.StringType}},
 				Optional:            true,
 				Computed:            true,
 			},
 			"header": {
-				Description:         "The header parameters that are applied to each request. This overrides the `header` set in the provider block",
-				MarkdownDescription: "The header parameters that are applied to each request. This overrides the `header` set in the provider block",
+				Description:         "The header parameters that are applied to each request. This overrides the `header` set in the provider block.",
+				MarkdownDescription: "The header parameters that are applied to each request. This overrides the `header` set in the provider block.",
 				Type:                types.MapType{ElemType: types.StringType},
 				Optional:            true,
 				Computed:            true,
 			},
 			"output": {
-				Description:         "The response body after reading the resource",
-				MarkdownDescription: "The response body after reading the resource",
+				Description:         "The response body after reading the resource.",
+				MarkdownDescription: "The response body after reading the resource.",
 				Type:                types.StringType,
 				Computed:            true,
 			},
