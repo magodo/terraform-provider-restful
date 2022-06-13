@@ -107,14 +107,14 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 			"poll_update": pollAttribute("Update"),
 			"poll_delete": pollAttribute("Delete"),
 			"name_path": {
-				Description:         "The path to the name attribute in the response, which is only used during creation of the resource to construct the resource identifier. This is ignored when `create_method` is `PUT`. Either `name_path` or `url_path` needs to set when `create_method` is `POST`.",
-				MarkdownDescription: "The path to the name attribute in the response, which is only used during creation of the resource to construct the resource identifier. This is ignored when `create_method` is `PUT`. Either `name_path` or `url_path` needs to set when `create_method` is `POST`.",
+				Description:         "The path (in gjson syntax) to the name attribute in the response, which is only used during creation of the resource to construct the resource identifier. This is ignored when `create_method` is `PUT`. Either `name_path` or `url_path` needs to set when `create_method` is `POST`.",
+				MarkdownDescription: "The path (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the name attribute in the response, which is only used during creation of the resource to construct the resource identifier. This is ignored when `create_method` is `PUT`. Either `name_path` or `url_path` needs to set when `create_method` is `POST`.",
 				Optional:            true,
 				Type:                types.StringType,
 			},
 			"url_path": {
-				Description:         "The path to the id attribute in the response, which is only used during creation of the resource to be as the resource identifier. This is ignored when `create_method` is `PUT`. Either `name_path` or `url_path` needs to set when `create_method` is `POST`.",
-				MarkdownDescription: "The path to the id attribute in the response, which is only used during creation of the resource to be as the resource identifier. This is ignored when `create_method` is `PUT`. Either `name_path` or `url_path` needs to set when `create_method` is `POST`.",
+				Description:         "The path (in gjson syntax) to the id attribute in the response, which is only used during creation of the resource to be as the resource identifier. This is ignored when `create_method` is `PUT`. Either `name_path` or `url_path` needs to set when `create_method` is `POST`.",
+				MarkdownDescription: "The path (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the id attribute in the response, which is only used during creation of the resource to be as the resource identifier. This is ignored when `create_method` is `PUT`. Either `name_path` or `url_path` needs to set when `create_method` is `POST`.",
 				Optional:            true,
 				Type:                types.StringType,
 			},

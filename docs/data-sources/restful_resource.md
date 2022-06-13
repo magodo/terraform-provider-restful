@@ -29,6 +29,7 @@ data "restful_resource" "test" {
 
 - `header` (Map of String) The header parameters that are applied to each request. This overrides the `header` set in the provider block.
 - `query` (Map of List of String) The query parameters that are applied to each request. This overrides the `query` set in the provider block.
+- `selector` (String) A selector in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries), that is used when `id` represents a collection of resources, to select exactly one member resource of from it
 
 ### Read-Only
 
