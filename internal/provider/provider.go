@@ -151,7 +151,6 @@ func (*provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 										},
 									},
 								},
-								tfsdk.SetNestedAttributesOptions{},
 							),
 						},
 						"oauth2": {

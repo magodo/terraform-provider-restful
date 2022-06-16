@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
@@ -157,7 +157,7 @@ func TestValidateResourceConfig(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			testServer := tfsdk.NewProtocol6Server(New())
+			testServer := providerserver.NewProtocol6(New())()
 			dv, err := tfprotov6.NewDynamicValue(resourceType, tc.config)
 			if err != nil {
 				t.Errorf("Unexpected error: %s", err)

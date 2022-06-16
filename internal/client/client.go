@@ -6,7 +6,7 @@ import (
 	"net/url"
 
 	"github.com/go-resty/resty/v2"
-	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -37,20 +37,9 @@ func (q Query) TakeOrSelf(ctx context.Context, v types.Map) Query {
 }
 
 func (q Query) ToTFValue() types.Map {
-	out := types.Map{
-		ElemType: types.ListType{ElemType: types.StringType},
-		Elems:    map[string]attr.Value{},
-	}
-	for k, vs := range q {
-		l := types.List{
-			ElemType: types.StringType,
-		}
-		for _, v := range vs {
-			l.Elems = append(l.Elems, types.String{Value: v})
-		}
-		out.Elems[k] = l
-	}
-	return out
+	var result types.Map
+	tfsdk.ValueFrom(context.Background(), q, types.MapType{ElemType: types.ListType{ElemType: types.StringType}}, &result)
+	return result
 }
 
 type Header map[string]string
@@ -75,14 +64,9 @@ func (h Header) TakeOrSelf(ctx context.Context, v types.Map) Header {
 }
 
 func (h Header) ToTFValue() types.Map {
-	out := types.Map{
-		ElemType: types.StringType,
-		Elems:    map[string]attr.Value{},
-	}
-	for k, v := range h {
-		out.Elems[k] = types.String{Value: v}
-	}
-	return out
+	var result types.Map
+	tfsdk.ValueFrom(context.Background(), h, types.MapType{ElemType: types.StringType}, &result)
+	return result
 }
 
 type Client struct {
