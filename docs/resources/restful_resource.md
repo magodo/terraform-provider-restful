@@ -47,13 +47,13 @@ resource "restful_resource" "rg" {
 
 - `create_method` (String) The method used to create the resource. Possible values are `PUT` and `POST`. This overrides the `create_method` set in the provider block (defaults to POST).
 - `header` (Map of String) The header parameters that are applied to each request. This overrides the `header` set in the provider block.
-- `ignore_changes` (List of String) A list of paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attributes that should not affect the resource after its creation.
 - `name_path` (String) The path (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the name attribute in the response, which is only used during creation of the resource to construct the resource identifier. This is ignored when `create_method` is `PUT`. Either `name_path` or `url_path` needs to set when `create_method` is `POST`.
 - `poll_create` (Attributes) The polling option for the "Create" operation (see [below for nested schema](#nestedatt--poll_create))
 - `poll_delete` (Attributes) The polling option for the "Delete" operation (see [below for nested schema](#nestedatt--poll_delete))
 - `poll_update` (Attributes) The polling option for the "Update" operation (see [below for nested schema](#nestedatt--poll_update))
 - `query` (Map of List of String) The query parameters that are applied to each request. This overrides the `query` set in the provider block.
 - `url_path` (String) The path (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the id attribute in the response, which is only used during creation of the resource to be as the resource identifier. This is ignored when `create_method` is `PUT`. Either `name_path` or `url_path` needs to set when `create_method` is `POST`.
+- `write_only_attrs` (List of String) A list of paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attributes that are only settable, but won't be read in GET response.
 
 ### Read-Only
 

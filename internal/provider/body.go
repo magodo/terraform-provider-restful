@@ -4,28 +4,46 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
 
-// ModifyBody modifies the body based on the base body, removing any attribute
-// attribute that only exists in the body, or is specified to be ignored.
-func ModifyBody(base, body string, ignoreChanges []string) (string, error) {
+// ModifyBody modifies the body based on the base body, only keeps attributes that exist on both sides.
+// If compensateBaseAttrs is set, then any attribute path element only found in the base body will
+// be added up to the result body.
+func ModifyBody(base, body string, compensateBaseAttrs []string) (string, error) {
 	var baseJSON map[string]interface{}
 	if err := json.Unmarshal([]byte(base), &baseJSON); err != nil {
 		return "", fmt.Errorf("unmarshal the base %q: %v", base, err)
 	}
-	for _, path := range ignoreChanges {
-		var err error
-		body, err = sjson.Delete(body, path)
-		if err != nil {
-			return "", fmt.Errorf("deleting attribute in path %q: %v", path, err)
-		}
-	}
+
 	var bodyJSON map[string]interface{}
 	if err := json.Unmarshal([]byte(body), &bodyJSON); err != nil {
 		return "", fmt.Errorf("unmarshal the body %q: %v", body, err)
 	}
+
 	b, err := json.Marshal(getUpdatedJSON(baseJSON, bodyJSON))
+	if err != nil {
+		return "", err
+	}
+	result := string(b)
+
+	for _, path := range compensateBaseAttrs {
+		if gjson.Get(base, path).Exists() && !gjson.Get(body, path).Exists() {
+			var err error
+			result, err = sjson.Set(result, path, gjson.Get(base, path).Value())
+			if err != nil {
+				return "", err
+			}
+		}
+	}
+
+	// Remarshal to keep order.
+	var m interface{}
+	if err := json.Unmarshal([]byte(result), &m); err != nil {
+		return "", err
+	}
+	b, err = json.Marshal(m)
 	return string(b), err
 }
 

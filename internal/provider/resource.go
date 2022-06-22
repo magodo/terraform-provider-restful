@@ -118,9 +118,9 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 				Optional:            true,
 				Type:                types.StringType,
 			},
-			"ignore_changes": {
-				Description:         "A list of paths (in gjson syntax) to the attributes that should not affect the resource after its creation.",
-				MarkdownDescription: "A list of paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attributes that should not affect the resource after its creation.",
+			"write_only_attrs": {
+				Description:         "A list of paths (in gjson syntax) to the attributes that are only settable, but won't be read in GET response.",
+				MarkdownDescription: "A list of paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attributes that are only settable, but won't be read in GET response.",
 				Optional:            true,
 				Computed:            true,
 				Type:                types.ListType{ElemType: types.StringType},
@@ -235,8 +235,28 @@ func (r resource) ValidateConfig(ctx context.Context, req tfsdk.ValidateResource
 	validatePoll(config.PollUpdate, "poll_update")
 	validatePoll(config.PollDelete, "poll_delete")
 
-	if resp.Diagnostics.HasError() {
-		return
+	if !config.Body.IsUnknown() {
+		var body map[string]interface{}
+		if err := json.Unmarshal([]byte(config.Body.Value), &body); err != nil {
+			resp.Diagnostics.AddError(
+				"Invalid configuration",
+				fmt.Sprintf(`Failed to unmarshal "body": %s: %s`, err.Error(), config.Body.String()),
+			)
+		}
+
+		if !config.WriteOnlyAttributes.IsUnknown() && !config.WriteOnlyAttributes.IsNull() {
+			for _, ie := range config.WriteOnlyAttributes.Elems {
+				ie := ie.(types.String)
+				if !ie.IsUnknown() && !ie.IsNull() {
+					if !gjson.Get(config.Body.Value, ie.Value).Exists() {
+						resp.Diagnostics.AddError(
+							"Invalid configuration",
+							fmt.Sprintf(`Invalid path in "write_only_attrs": %s`, ie.String()),
+						)
+					}
+				}
+			}
+		}
 	}
 }
 
@@ -251,19 +271,19 @@ type resource struct {
 var _ tfsdk.Resource = resource{}
 
 type resourceData struct {
-	ID            types.String `tfsdk:"id"`
-	Path          types.String `tfsdk:"path"`
-	Body          types.String `tfsdk:"body"`
-	NamePath      types.String `tfsdk:"name_path"`
-	UrlPath       types.String `tfsdk:"url_path"`
-	IgnoreChanges types.List   `tfsdk:"ignore_changes"`
-	PollCreate    types.Object `tfsdk:"poll_create"`
-	PollUpdate    types.Object `tfsdk:"poll_update"`
-	PollDelete    types.Object `tfsdk:"poll_delete"`
-	CreateMethod  types.String `tfsdk:"create_method"`
-	Query         types.Map    `tfsdk:"query"`
-	Header        types.Map    `tfsdk:"header"`
-	Output        types.String `tfsdk:"output"`
+	ID                  types.String `tfsdk:"id"`
+	Path                types.String `tfsdk:"path"`
+	Body                types.String `tfsdk:"body"`
+	NamePath            types.String `tfsdk:"name_path"`
+	UrlPath             types.String `tfsdk:"url_path"`
+	WriteOnlyAttributes types.List   `tfsdk:"write_only_attrs"`
+	PollCreate          types.Object `tfsdk:"poll_create"`
+	PollUpdate          types.Object `tfsdk:"poll_update"`
+	PollDelete          types.Object `tfsdk:"poll_delete"`
+	CreateMethod        types.String `tfsdk:"create_method"`
+	Query               types.Map    `tfsdk:"query"`
+	Header              types.Map    `tfsdk:"header"`
+	Output              types.String `tfsdk:"output"`
 }
 
 type pollDataGo struct {
@@ -457,15 +477,15 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 
 	b := response.Body()
 
-	var ignoreChanges []string
-	// In case ignore_changes (O+C) is not set, set its default value as is defined in schema. This can avoid unnecessary plan diff after import.
-	if state.IgnoreChanges.Null {
-		state.IgnoreChanges = types.List{
+	var writeOnlyAttributes []string
+	// In case write_only_attrs (O+C) is not set, set its default value as is defined in schema. This can avoid unnecessary plan diff after import.
+	if state.WriteOnlyAttributes.Null {
+		state.WriteOnlyAttributes = types.List{
 			ElemType: types.StringType,
 			Elems:    []attr.Value{},
 		}
 	}
-	diags = state.IgnoreChanges.ElementsAs(ctx, &ignoreChanges, false)
+	diags = state.WriteOnlyAttributes.ElementsAs(ctx, &writeOnlyAttributes, false)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
@@ -476,7 +496,7 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 		// This branch is only invoked during `terraform import`.
 		body, err = ModifyBodyForImport(strings.TrimPrefix(state.Body.Value, __IMPORT_HEADER__), string(b))
 	} else {
-		body, err = ModifyBody(state.Body.Value, string(b), ignoreChanges)
+		body, err = ModifyBody(state.Body.Value, string(b), writeOnlyAttributes)
 	}
 	if err != nil {
 		resp.Diagnostics.AddError(
