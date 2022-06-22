@@ -559,36 +559,39 @@ func (r resource) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, r
 		return
 	}
 
-	response, err := c.Update(ctx, state.ID.Value, plan.Body.Value, *opt)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error to call update",
-			err.Error(),
-		)
-		return
-	}
-	if !response.IsSuccess() {
-		resp.Diagnostics.AddError(
-			fmt.Sprintf("Update API returns %d", response.StatusCode()),
-			string(response.Body()),
-		)
-		return
-	}
-
-	// For LRO, wait for completion
-	if opt.PollOpt != nil {
-		p, err := client.NewPollable(*response, *opt.PollOpt)
+	// Invoke API to Update the resource only when there are changes in the body.
+	if state.Body.Value != plan.Body.Value {
+		response, err := c.Update(ctx, state.ID.Value, plan.Body.Value, *opt)
 		if err != nil {
 			resp.Diagnostics.AddError(
-				"Update: Failed to build poller from the response of the initiated request",
+				"Error to call update",
 				err.Error(),
 			)
+			return
 		}
-		if err := p.PollUntilDone(ctx, c); err != nil {
+		if !response.IsSuccess() {
 			resp.Diagnostics.AddError(
-				"Update: Polling failure",
-				err.Error(),
+				fmt.Sprintf("Update API returns %d", response.StatusCode()),
+				string(response.Body()),
 			)
+			return
+		}
+
+		// For LRO, wait for completion
+		if opt.PollOpt != nil {
+			p, err := client.NewPollable(*response, *opt.PollOpt)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Update: Failed to build poller from the response of the initiated request",
+					err.Error(),
+				)
+			}
+			if err := p.PollUntilDone(ctx, c); err != nil {
+				resp.Diagnostics.AddError(
+					"Update: Polling failure",
+					err.Error(),
+				)
+			}
 		}
 	}
 

@@ -9,7 +9,6 @@ The document of this provider is available on [Terraform Provider Registry](http
 - Different authentication choices: HTTP auth (Basic, Bearer), API Key auth and OAuth2 (client credential, password credential).
 - Support resources created via either `PUT` or `POST`
 - Support polling asynchronous operations
-- Support `ignore_changes` to ignore changes for the the specified properties
 - Partial `body` tracking: only the specified properties of the resource in the `body` attribute is tracked for diffs
 
 ## Why
