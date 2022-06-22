@@ -28,6 +28,7 @@ provider "restful" {
       scopes        = ["https://graph.microsoft.com/.default"]
     }
   }
+  update_method = "PATCH"
 }
 
 resource "restful_resource" "group" {

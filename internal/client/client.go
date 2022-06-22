@@ -128,9 +128,10 @@ func (c *Client) Read(ctx context.Context, path string, opt ReadOption) (*resty.
 }
 
 type UpdateOption struct {
-	Query   Query
-	Header  Header
-	PollOpt *PollOption
+	UpdateMethod string
+	Query        Query
+	Header       Header
+	PollOpt      *PollOption
 }
 
 func (c *Client) Update(ctx context.Context, path string, body interface{}, opt UpdateOption) (*resty.Response, error) {
@@ -139,7 +140,14 @@ func (c *Client) Update(ctx context.Context, path string, body interface{}, opt 
 	req.SetHeaders(opt.Header)
 	req = req.SetHeader("Content-Type", "application/json")
 
-	return req.Put(path)
+	switch opt.UpdateMethod {
+	case "PATCH":
+		return req.Patch(path)
+	case "PUT":
+		return req.Put(path)
+	default:
+		return nil, fmt.Errorf("unknown create method: %s", opt.UpdateMethod)
+	}
 }
 
 type DeleteOption struct {

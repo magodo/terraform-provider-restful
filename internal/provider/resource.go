@@ -17,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/tidwall/gjson"
 
+	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -140,6 +141,14 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 				Optional:            true,
 				Computed:            true,
 				Validators:          []tfsdk.AttributeValidator{validator.StringInSlice("PUT", "POST")},
+			},
+			"update_method": {
+				Description:         "The method used to update the resource. Possible values are `PUT` and `PATCH`. This overrides the `update_method` set in the provider block (defaults to PUT). When set to `PATCH`, only the changed part in the `body` will be used as the request body.",
+				MarkdownDescription: "The method used to update the resource. Possible values are `PUT` and `PATCH`. This overrides the `update_method` set in the provider block (defaults to PUT). When set to `PATCH`, only the changed part in the `body` will be used as the request body.",
+				Type:                types.StringType,
+				Optional:            true,
+				Computed:            true,
+				Validators:          []tfsdk.AttributeValidator{validator.StringInSlice("PUT", "PATCH")},
 			},
 			"query": {
 				Description:         "The query parameters that are applied to each request. This overrides the `query` set in the provider block.",
@@ -281,6 +290,7 @@ type resourceData struct {
 	PollUpdate          types.Object `tfsdk:"poll_update"`
 	PollDelete          types.Object `tfsdk:"poll_delete"`
 	CreateMethod        types.String `tfsdk:"create_method"`
+	UpdateMethod        types.String `tfsdk:"update_method"`
 	Query               types.Map    `tfsdk:"query"`
 	Header              types.Map    `tfsdk:"header"`
 	Output              types.String `tfsdk:"output"`
@@ -413,6 +423,9 @@ func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, r
 	plan.Query = opt.Query.ToTFValue()
 	plan.Header = opt.Header.ToTFValue()
 	plan.CreateMethod = types.String{Value: opt.CreateMethod}
+	if plan.UpdateMethod.IsUnknown() {
+		plan.UpdateMethod = types.String{Value: r.p.apiOpt.UpdateMethod}
+	}
 
 	// Set resource ID to state
 	plan.ID = types.String{Value: resourceId}
@@ -505,12 +518,18 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 		)
 		return
 	}
+
 	// Set body, which is modified during read.
 	state.Body = types.String{Value: string(body)}
 
 	createMethod := r.p.apiOpt.CreateMethod
 	if state.CreateMethod.Value != "" {
 		createMethod = state.CreateMethod.Value
+	}
+
+	updateMethod := r.p.apiOpt.UpdateMethod
+	if state.UpdateMethod.Value != "" {
+		updateMethod = state.UpdateMethod.Value
 	}
 
 	// Set force new properties
@@ -525,6 +544,7 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 	state.Query = opt.Query.ToTFValue()
 	state.Header = opt.Header.ToTFValue()
 	state.CreateMethod = types.String{Value: createMethod}
+	state.UpdateMethod = types.String{Value: updateMethod}
 
 	// Set computed attributes
 	state.Output = types.String{Value: string(b)}
@@ -561,7 +581,20 @@ func (r resource) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, r
 
 	// Invoke API to Update the resource only when there are changes in the body.
 	if state.Body.Value != plan.Body.Value {
-		response, err := c.Update(ctx, state.ID.Value, plan.Body.Value, *opt)
+		body := plan.Body.Value
+		if opt.UpdateMethod == "PATCH" {
+			b, err := jsonpatch.CreateMergePatch([]byte(state.Body.Value), []byte(plan.Body.Value))
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Update failure",
+					fmt.Sprintf("failed to create a merge patch: %s", err.Error()),
+				)
+				return
+			}
+			body = string(b)
+		}
+
+		response, err := c.Update(ctx, state.ID.Value, body, *opt)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error to call update",
@@ -595,12 +628,13 @@ func (r resource) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, r
 		}
 	}
 
-	// Set overridable attributes from option to state
+	// Set overridable attributes from option to state that might affect the read
 	plan.Query = opt.Query.ToTFValue()
 	plan.Header = opt.Header.ToTFValue()
-	if plan.CreateMethod.Unknown {
-		plan.CreateMethod = state.CreateMethod
+	if plan.CreateMethod.IsUnknown() {
+		plan.CreateMethod = types.String{Value: r.p.apiOpt.CreateMethod}
 	}
+	plan.UpdateMethod = types.String{Value: opt.UpdateMethod}
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)

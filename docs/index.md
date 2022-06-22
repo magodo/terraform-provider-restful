@@ -39,6 +39,7 @@ provider "restful" {
 - `header` (Map of String) The header parameters that are applied to each request.
 - `query` (Map of List of String) The query parameters that are applied to each request.
 - `security` (Attributes) The OpenAPI security scheme that is be used for auth. (see [below for nested schema](#nestedatt--security))
+- `update_method` (String) The method used to update the resource. Possible values are `PUT` and `PATCH`. When set to `PATCH`, only the changed part in the `body` will be used as the request body. Defaults to `PUT`.
 
 <a id="nestedatt--security"></a>
 ### Nested Schema for `security`

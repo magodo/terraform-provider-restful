@@ -76,6 +76,18 @@ func TestResource_MsGraph_User(t *testing.T) {
 				ImportStateVerify: false,
 				ImportStateIdFunc: d.userImportStateIdFunc(addr),
 			},
+			{
+				Config: d.userUpdate(),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrSet(addr, "output"),
+				),
+			},
+			{
+				ResourceName:      addr,
+				ImportState:       true,
+				ImportStateVerify: false,
+				ImportStateIdFunc: d.userImportStateIdFunc(addr),
+			},
 		},
 	})
 }
@@ -121,6 +133,7 @@ provider "restful" {
       scopes        = ["https://graph.microsoft.com/.default"]
     }
   }
+  update_method = "PATCH"
 }
 
 resource "restful_resource" "test" {
@@ -129,6 +142,42 @@ resource "restful_resource" "test" {
   body = jsonencode({
     accountEnabled    = true
     mailNickname      = "AdeleV"
+    displayName       = "J.Doe"
+    userPrincipalName = "%d@%s"
+    passwordProfile = {
+      password = "SecretP@sswd99!"
+    }
+  })
+  write_only_attrs = [
+    "mailNickname",
+    "accountEnabled",
+    "passwordProfile",
+  ]
+}
+`, d.url, d.clientId, d.clientSecret, d.tenantId, d.rd, d.orgDomain)
+}
+
+func (d msgraphData) userUpdate() string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+  security = {
+    oauth2 = {
+      client_id     = %q
+      client_secret = %q
+      token_url     = "https://login.microsoftonline.com/%s/oauth2/v2.0/token"
+      scopes        = ["https://graph.microsoft.com/.default"]
+    }
+  }
+  update_method = "PATCH"
+}
+
+resource "restful_resource" "test" {
+  path = "/users"
+  name_path = "id"
+  body = jsonencode({
+    accountEnabled    = false
+    mailNickname      = "AdeleV2"
     displayName       = "J.Doe"
     userPrincipalName = "%d@%s"
     passwordProfile = {

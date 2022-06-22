@@ -13,6 +13,7 @@ import (
 
 type apiOption struct {
 	CreateMethod string
+	UpdateMethod string
 	Query        client.Query
 	Header       client.Header
 }
@@ -119,8 +120,12 @@ func (opt apiOption) ForResourceRead(ctx context.Context, d resourceData) (*clie
 
 func (opt apiOption) ForResourceUpdate(ctx context.Context, d resourceData) (*client.UpdateOption, diag.Diagnostics) {
 	out := client.UpdateOption{
-		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
-		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
+		UpdateMethod: opt.UpdateMethod,
+		Query:        opt.Query.Clone().TakeOrSelf(ctx, d.Query),
+		Header:       opt.Header.Clone().TakeOrSelf(ctx, d.Header),
+	}
+	if !d.UpdateMethod.Unknown && !d.UpdateMethod.Null {
+		out.UpdateMethod = d.UpdateMethod.Value
 	}
 
 	var diags diag.Diagnostics

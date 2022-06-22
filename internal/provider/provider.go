@@ -23,6 +23,7 @@ type providerData struct {
 	BaseURL      string              `tfsdk:"base_url"`
 	Security     *securityData       `tfsdk:"security"`
 	CreateMethod *string             `tfsdk:"create_method"`
+	UpdateMethod *string             `tfsdk:"update_method"`
 	Query        map[string][]string `tfsdk:"query"`
 	Header       map[string]string   `tfsdk:"header"`
 }
@@ -227,6 +228,15 @@ func (*provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 				// Currently, we are setting the default value during the provider configuration.
 				Validators: []tfsdk.AttributeValidator{validator.StringInSlice("PUT", "POST")},
 			},
+			"update_method": {
+				Type:                types.StringType,
+				Description:         "The method used to update the resource. Possible values are `PUT` and `PATCH`. When set to `PATCH`, only the changed part in the `body` will be used as the request body. Defaults to `PUT`.",
+				MarkdownDescription: "The method used to update the resource. Possible values are `PUT` and `PATCH`. When set to `PATCH`, only the changed part in the `body` will be used as the request body. Defaults to `PUT`.",
+				Optional:            true,
+				// Need a way to set the default value, plan modifier doesn't work here even it is Optional+Computed, because it is at provider level?
+				// Currently, we are setting the default value during the provider configuration.
+				Validators: []tfsdk.AttributeValidator{validator.StringInSlice("PUT", "PATCH")},
+			},
 			"query": {
 				Description:         "The query parameters that are applied to each request.",
 				MarkdownDescription: "The query parameters that are applied to each request.",
@@ -248,6 +258,7 @@ func (p *provider) ValidateConfig(ctx context.Context, req tfsdk.ValidateProvide
 		BaseURL      types.String `tfsdk:"base_url"`
 		Security     types.Object `tfsdk:"security"`
 		CreateMethod types.String `tfsdk:"create_method"`
+		UpdateMethod types.String `tfsdk:"update_method"`
 		Query        types.Map    `tfsdk:"query"`
 		Header       types.Map    `tfsdk:"header"`
 	}
@@ -475,11 +486,15 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 
 	p.apiOpt = apiOption{
 		CreateMethod: "POST",
+		UpdateMethod: "PUT",
 		Query:        map[string][]string{},
 		Header:       map[string]string{},
 	}
 	if config.CreateMethod != nil {
 		p.apiOpt.CreateMethod = *config.CreateMethod
+	}
+	if config.UpdateMethod != nil {
+		p.apiOpt.UpdateMethod = *config.UpdateMethod
 	}
 	if config.Query != nil {
 		p.apiOpt.Query = config.Query
