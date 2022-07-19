@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	tfpath "github.com/hashicorp/terraform-plugin-framework/path"
+
 	"github.com/magodo/terraform-provider-restful/internal/client"
 	"github.com/magodo/terraform-provider-restful/internal/planmodifier"
 	"github.com/magodo/terraform-provider-restful/internal/validator"
@@ -21,7 +23,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
 // Magic header used to indicate the value in the state is derived from import.
@@ -734,11 +735,11 @@ type importSpec struct {
 }
 
 func (resource) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
-	idPath := tftypes.NewAttributePath().WithAttributeName("id")
-	queryPath := tftypes.NewAttributePath().WithAttributeName("query")
-	headerPath := tftypes.NewAttributePath().WithAttributeName("header")
-	createMethodPath := tftypes.NewAttributePath().WithAttributeName("create_method")
-	bodyPath := tftypes.NewAttributePath().WithAttributeName("body")
+	idPath := tfpath.Root("id")
+	queryPath := tfpath.Root("query")
+	headerPath := tfpath.Root("header")
+	createMethodPath := tfpath.Root("create_method")
+	bodyPath := tfpath.Root("body")
 
 	var imp importSpec
 	if err := json.Unmarshal([]byte(req.ID), &imp); err != nil {
