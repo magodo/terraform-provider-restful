@@ -10,11 +10,12 @@ import (
 	"github.com/magodo/terraform-provider-restful/internal/validator"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-type provider struct {
+type Provider struct {
 	client *client.Client
 	apiOpt apiOption
 }
@@ -58,11 +59,11 @@ type apikeyData struct {
 	Value string `tfsdk:"value"`
 }
 
-func New() tfsdk.Provider {
-	return &provider{}
+func New() provider.Provider {
+	return &Provider{}
 }
 
-func (*provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
+func (*Provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
 		Description:         "The restful provider provides resource and data source to interact with a platform that exposes a restful API.",
 		MarkdownDescription: "The restful provider provides resource and data source to interact with a platform that exposes a restful API.",
@@ -253,7 +254,7 @@ func (*provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	}, nil
 }
 
-func (p *provider) ValidateConfig(ctx context.Context, req tfsdk.ValidateProviderConfigRequest, resp *tfsdk.ValidateProviderConfigResponse) {
+func (p *Provider) ValidateConfig(ctx context.Context, req provider.ValidateConfigRequest, resp *provider.ValidateConfigResponse) {
 	type pt struct {
 		BaseURL      types.String `tfsdk:"base_url"`
 		Security     types.Object `tfsdk:"security"`
@@ -406,7 +407,7 @@ func (p *provider) ValidateConfig(ctx context.Context, req tfsdk.ValidateProvide
 	}
 }
 
-func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderRequest, resp *tfsdk.ConfigureProviderResponse) {
+func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	var config providerData
 	diags := req.Config.Get(ctx, &config)
 	resp.Diagnostics.Append(diags...)
@@ -506,14 +507,14 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 	return
 }
 
-func (*provider) GetResources(context.Context) (map[string]tfsdk.ResourceType, diag.Diagnostics) {
-	return map[string]tfsdk.ResourceType{
+func (*Provider) GetResources(context.Context) (map[string]provider.ResourceType, diag.Diagnostics) {
+	return map[string]provider.ResourceType{
 		"restful_resource": resourceType{},
 	}, nil
 }
 
-func (*provider) GetDataSources(context.Context) (map[string]tfsdk.DataSourceType, diag.Diagnostics) {
-	return map[string]tfsdk.DataSourceType{
+func (*Provider) GetDataSources(context.Context) (map[string]provider.DataSourceType, diag.Diagnostics) {
+	return map[string]provider.DataSourceType{
 		"restful_resource": dataSourceType{},
 	}, nil
 }

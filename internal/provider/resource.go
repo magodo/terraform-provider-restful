@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	tfpath "github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/provider"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 
 	"github.com/magodo/terraform-provider-restful/internal/client"
 	"github.com/magodo/terraform-provider-restful/internal/planmodifier"
@@ -87,7 +89,7 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 				Type:                types.StringType,
 				Computed:            true,
 				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.UseStateForUnknown(),
+					resource.UseStateForUnknown(),
 				},
 			},
 			"path": {
@@ -96,7 +98,7 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 				Type:                types.StringType,
 				Required:            true,
 				PlanModifiers: []tfsdk.AttributePlanModifier{
-					tfsdk.RequiresReplace(),
+					resource.RequiresReplace(),
 				},
 			},
 			"body": {
@@ -175,7 +177,7 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 	}, nil
 }
 
-func (r resource) ValidateConfig(ctx context.Context, req tfsdk.ValidateResourceConfigRequest, resp *tfsdk.ValidateResourceConfigResponse) {
+func (r Resource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
 	var config resourceData
 	diags := req.Config.Get(ctx, &config)
 	resp.Diagnostics.Append(diags...)
@@ -270,15 +272,15 @@ func (r resource) ValidateConfig(ctx context.Context, req tfsdk.ValidateResource
 	}
 }
 
-func (r resourceType) NewResource(_ context.Context, p tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	return resource{p: *p.(*provider)}, nil
+func (r resourceType) NewResource(_ context.Context, p provider.Provider) (resource.Resource, diag.Diagnostics) {
+	return Resource{p: *p.(*Provider)}, nil
 }
 
-type resource struct {
-	p provider
+type Resource struct {
+	p Provider
 }
 
-var _ tfsdk.Resource = resource{}
+var _ resource.Resource = Resource{}
 
 type resourceData struct {
 	ID                  types.String `tfsdk:"id"`
@@ -307,7 +309,7 @@ type pollDataGo struct {
 	DefaultDelay *int64  `tfsdk:"default_delay_sec"`
 }
 
-func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
+func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan resourceData
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
@@ -437,23 +439,23 @@ func (r resource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, r
 		return
 	}
 
-	rreq := tfsdk.ReadResourceRequest{
+	rreq := resource.ReadRequest{
 		State:        resp.State,
 		ProviderMeta: req.ProviderMeta,
 	}
-	rresp := tfsdk.ReadResourceResponse{
+	rresp := resource.ReadResponse{
 		State:       resp.State,
 		Diagnostics: resp.Diagnostics,
 	}
 	r.Read(ctx, rreq, &rresp)
 
-	*resp = tfsdk.CreateResourceResponse{
+	*resp = resource.CreateResponse{
 		State:       rresp.State,
 		Diagnostics: rresp.Diagnostics,
 	}
 }
 
-func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
+func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var state resourceData
 	diags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
@@ -557,7 +559,7 @@ func (r resource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp 
 	}
 }
 
-func (r resource) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
+func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var state resourceData
 	diags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
@@ -643,23 +645,23 @@ func (r resource) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, r
 		return
 	}
 
-	rreq := tfsdk.ReadResourceRequest{
+	rreq := resource.ReadRequest{
 		State:        resp.State,
 		ProviderMeta: req.ProviderMeta,
 	}
-	rresp := tfsdk.ReadResourceResponse{
+	rresp := resource.ReadResponse{
 		State:       resp.State,
 		Diagnostics: resp.Diagnostics,
 	}
 	r.Read(ctx, rreq, &rresp)
 
-	*resp = tfsdk.UpdateResourceResponse{
+	*resp = resource.UpdateResponse{
 		State:       rresp.State,
 		Diagnostics: rresp.Diagnostics,
 	}
 }
 
-func (r resource) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
+func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state resourceData
 	diags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
@@ -734,7 +736,7 @@ type importSpec struct {
 	Body map[string]interface{}
 }
 
-func (resource) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
+func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	idPath := tfpath.Root("id")
 	queryPath := tfpath.Root("query")
 	headerPath := tfpath.Root("header")

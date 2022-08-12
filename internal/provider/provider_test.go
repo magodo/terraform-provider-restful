@@ -20,22 +20,19 @@ func TestValidateProviderConfig(t *testing.T) {
 	providerType := providerSchema.TerraformType(ctx)
 
 	typ := func(paths ...string) tftypes.Type {
-		attr := providerSchema.Attributes[paths[0]]
+		attr := providerSchema.GetAttributes()[paths[0]]
 		for _, path := range paths[1:] {
-			attr = attr.Attributes.GetAttributes()[path]
+			attr = attr.GetAttributes().GetAttributes()[path]
 		}
-		if attr.Attributes == nil {
-			return attr.Type.TerraformType(ctx)
-		}
-		return attr.Attributes.AttributeType().TerraformType(ctx)
+		return attr.FrameworkType().TerraformType(ctx)
 	}
 
 	etyp := func(paths ...string) tftypes.Type {
-		attr := providerSchema.Attributes[paths[0]]
+		attr := providerSchema.GetAttributes()[paths[0]]
 		for _, path := range paths[1:] {
-			attr = attr.Attributes.GetAttributes()[path]
+			attr = attr.GetAttributes().GetAttributes()[path]
 		}
-		switch enclosed := attr.Attributes.AttributeType().(type) {
+		switch enclosed := attr.GetAttributes().Type().(type) {
 		case types.ListType:
 			return enclosed.ElementType().TerraformType(ctx)
 		case types.SetType:
@@ -43,7 +40,7 @@ func TestValidateProviderConfig(t *testing.T) {
 		case types.MapType:
 			return enclosed.ElementType().TerraformType(ctx)
 		}
-		panic(fmt.Sprintf("unsupported supported type: %T", attr.Attributes.AttributeType()))
+		panic(fmt.Sprintf("unsupported supported type: %T", attr.GetAttributes().Type()))
 	}
 
 	type testCase struct {
@@ -57,6 +54,7 @@ func TestValidateProviderConfig(t *testing.T) {
 				"base_url":      tftypes.NewValue(typ("base_url"), "http://localhost:8080"),
 				"security":      tftypes.NewValue(typ("security"), nil),
 				"create_method": tftypes.NewValue(typ("create_method"), nil),
+				"update_method": tftypes.NewValue(typ("update_method"), nil),
 				"query":         tftypes.NewValue(typ("query"), nil),
 				"header":        tftypes.NewValue(typ("header"), nil),
 			}),
@@ -76,6 +74,7 @@ func TestValidateProviderConfig(t *testing.T) {
 					"apikey": tftypes.NewValue(typ("security", "apikey"), nil),
 				}),
 				"create_method": tftypes.NewValue(typ("create_method"), nil),
+				"update_method": tftypes.NewValue(typ("update_method"), nil),
 				"query":         tftypes.NewValue(typ("query"), nil),
 				"header":        tftypes.NewValue(typ("header"), nil),
 			}),
@@ -101,6 +100,7 @@ func TestValidateProviderConfig(t *testing.T) {
 					"apikey": tftypes.NewValue(typ("security", "apikey"), nil),
 				}),
 				"create_method": tftypes.NewValue(typ("create_method"), nil),
+				"update_method": tftypes.NewValue(typ("update_method"), nil),
 				"query":         tftypes.NewValue(typ("query"), nil),
 				"header":        tftypes.NewValue(typ("header"), nil),
 			}),
@@ -126,6 +126,7 @@ func TestValidateProviderConfig(t *testing.T) {
 					"apikey": tftypes.NewValue(typ("security", "apikey"), nil),
 				}),
 				"create_method": tftypes.NewValue(typ("create_method"), nil),
+				"update_method": tftypes.NewValue(typ("update_method"), nil),
 				"query":         tftypes.NewValue(typ("query"), nil),
 				"header":        tftypes.NewValue(typ("header"), nil),
 			}),
@@ -161,6 +162,7 @@ func TestValidateProviderConfig(t *testing.T) {
 					"apikey": tftypes.NewValue(typ("security", "apikey"), nil),
 				}),
 				"create_method": tftypes.NewValue(typ("create_method"), nil),
+				"update_method": tftypes.NewValue(typ("update_method"), nil),
 				"query":         tftypes.NewValue(typ("query"), nil),
 				"header":        tftypes.NewValue(typ("header"), nil),
 			}),
@@ -196,6 +198,7 @@ func TestValidateProviderConfig(t *testing.T) {
 					"apikey": tftypes.NewValue(typ("security", "apikey"), nil),
 				}),
 				"create_method": tftypes.NewValue(typ("create_method"), nil),
+				"update_method": tftypes.NewValue(typ("update_method"), nil),
 				"query":         tftypes.NewValue(typ("query"), nil),
 				"header":        tftypes.NewValue(typ("header"), nil),
 			}),
@@ -215,6 +218,7 @@ func TestValidateProviderConfig(t *testing.T) {
 					"apikey": tftypes.NewValue(typ("security", "apikey"), nil),
 				}),
 				"create_method": tftypes.NewValue(typ("create_method"), nil),
+				"update_method": tftypes.NewValue(typ("update_method"), nil),
 				"query":         tftypes.NewValue(typ("query"), nil),
 				"header":        tftypes.NewValue(typ("header"), nil),
 			}),
@@ -238,6 +242,7 @@ func TestValidateProviderConfig(t *testing.T) {
 					"apikey": tftypes.NewValue(typ("security", "apikey"), nil),
 				}),
 				"create_method": tftypes.NewValue(typ("create_method"), nil),
+				"update_method": tftypes.NewValue(typ("update_method"), nil),
 				"query":         tftypes.NewValue(typ("query"), nil),
 				"header":        tftypes.NewValue(typ("header"), nil),
 			}),
@@ -267,6 +272,7 @@ func TestValidateProviderConfig(t *testing.T) {
 					"apikey": tftypes.NewValue(typ("security", "apikey"), nil),
 				}),
 				"create_method": tftypes.NewValue(typ("create_method"), nil),
+				"update_method": tftypes.NewValue(typ("update_method"), nil),
 				"query":         tftypes.NewValue(typ("query"), nil),
 				"header":        tftypes.NewValue(typ("header"), nil),
 			}),
@@ -296,6 +302,7 @@ func TestValidateProviderConfig(t *testing.T) {
 					"apikey": tftypes.NewValue(typ("security", "apikey"), nil),
 				}),
 				"create_method": tftypes.NewValue(typ("create_method"), nil),
+				"update_method": tftypes.NewValue(typ("update_method"), nil),
 				"query":         tftypes.NewValue(typ("query"), nil),
 				"header":        tftypes.NewValue(typ("header"), nil),
 			}),
@@ -319,6 +326,7 @@ func TestValidateProviderConfig(t *testing.T) {
 					"apikey": tftypes.NewValue(typ("security", "apikey"), nil),
 				}),
 				"create_method": tftypes.NewValue(typ("create_method"), nil),
+				"update_method": tftypes.NewValue(typ("update_method"), nil),
 				"query":         tftypes.NewValue(typ("query"), nil),
 				"header":        tftypes.NewValue(typ("header"), nil),
 			}),
@@ -339,6 +347,7 @@ func TestValidateProviderConfig(t *testing.T) {
 					}),
 				}),
 				"create_method": tftypes.NewValue(typ("create_method"), nil),
+				"update_method": tftypes.NewValue(typ("update_method"), nil),
 				"query":         tftypes.NewValue(typ("query"), nil),
 				"header":        tftypes.NewValue(typ("header"), nil),
 			}),
@@ -373,6 +382,7 @@ func TestValidateProviderConfig(t *testing.T) {
 					}),
 				}),
 				"create_method": tftypes.NewValue(typ("create_method"), nil),
+				"update_method": tftypes.NewValue(typ("update_method"), nil),
 				"query":         tftypes.NewValue(typ("query"), nil),
 				"header":        tftypes.NewValue(typ("header"), nil),
 			}),
@@ -393,6 +403,7 @@ func TestValidateProviderConfig(t *testing.T) {
 					"apikey": tftypes.NewValue(typ("security", "apikey"), nil),
 				}),
 				"create_method": tftypes.NewValue(typ("create_method"), nil),
+				"update_method": tftypes.NewValue(typ("update_method"), nil),
 				"query":         tftypes.NewValue(typ("query"), nil),
 				"header":        tftypes.NewValue(typ("header"), nil),
 			}),

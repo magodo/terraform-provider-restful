@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/tidwall/gjson"
@@ -54,15 +56,15 @@ func (d dataSourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnos
 	}, nil
 }
 
-func (d dataSourceType) NewDataSource(_ context.Context, p tfsdk.Provider) (tfsdk.DataSource, diag.Diagnostics) {
-	return dataSource{p: *p.(*provider)}, nil
+func (d dataSourceType) NewDataSource(_ context.Context, p provider.Provider) (datasource.DataSource, diag.Diagnostics) {
+	return dataSource{p: *p.(*Provider)}, nil
 }
 
 type dataSource struct {
-	p provider
+	p Provider
 }
 
-var _ tfsdk.DataSource = dataSource{}
+var _ datasource.DataSource = dataSource{}
 
 type dataSourceData struct {
 	ID       types.String `tfsdk:"id"`
@@ -72,7 +74,7 @@ type dataSourceData struct {
 	Output   types.String `tfsdk:"output"`
 }
 
-func (d dataSource) Read(ctx context.Context, req tfsdk.ReadDataSourceRequest, resp *tfsdk.ReadDataSourceResponse) {
+func (d dataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var config dataSourceData
 	diags := req.Config.Get(ctx, &config)
 	resp.Diagnostics.Append(diags...)

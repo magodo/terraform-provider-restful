@@ -9,11 +9,11 @@ import (
 
 func TestModifyJSON(t *testing.T) {
 	cases := []struct {
-		name          string
-		base          string
-		body          string
-		ignoreChanges []string
-		expect        interface{}
+		name           string
+		base           string
+		body           string
+		writeOnlyAttrs []string
+		expect         interface{}
 	}{
 		{
 			name:   "invalid base",
@@ -27,17 +27,17 @@ func TestModifyJSON(t *testing.T) {
 			expect: errors.New(`unmarshal the body "": unexpected end of JSON input`),
 		},
 		{
-			name:          "with ignore_changes",
-			base:          `{"obj":{"a":1,"b":2,"c":3}, "z":2}`,
-			body:          `{"obj":{"a":3,"b":4,"d":"5"}, "new":4}`,
-			ignoreChanges: []string{"obj.b"},
-			expect:        `{"obj":{"a":3}}`,
+			name:           "with write_only_attrs",
+			base:           `{"obj":{"a":1,"b":2}, "z":2}`,
+			body:           `{"obj":{"a":3,"d":"5"}, "new":4}`,
+			writeOnlyAttrs: []string{"obj.b"},
+			expect:         `{"obj":{"a":3,"b":2}}`,
 		},
 	}
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			actual, err := ModifyBody(tt.base, tt.body, tt.ignoreChanges)
+			actual, err := ModifyBody(tt.base, tt.body, tt.writeOnlyAttrs)
 			switch expect := tt.expect.(type) {
 			case error:
 				require.EqualError(t, err, expect.Error())

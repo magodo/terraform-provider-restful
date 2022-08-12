@@ -2,12 +2,10 @@ package provider
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
-	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
@@ -21,32 +19,12 @@ func TestValidateResourceConfig(t *testing.T) {
 	resourceType := resourceSchema.TerraformType(ctx)
 
 	typ := func(paths ...string) tftypes.Type {
-		attr := resourceSchema.Attributes[paths[0]]
+		attr := resourceSchema.GetAttributes()[paths[0]]
 		for _, path := range paths[1:] {
-			attr = attr.Attributes.GetAttributes()[path]
+			attr = attr.GetAttributes().GetAttributes()[path]
 		}
-		if attr.Attributes == nil {
-			return attr.Type.TerraformType(ctx)
-		}
-		return attr.Attributes.AttributeType().TerraformType(ctx)
+		return attr.FrameworkType().TerraformType(ctx)
 	}
-
-	etyp := func(paths ...string) tftypes.Type {
-		attr := resourceSchema.Attributes[paths[0]]
-		for _, path := range paths[1:] {
-			attr = attr.Attributes.GetAttributes()[path]
-		}
-		switch enclosed := attr.Attributes.AttributeType().(type) {
-		case types.ListType:
-			return enclosed.ElementType().TerraformType(ctx)
-		case types.SetType:
-			return enclosed.ElementType().TerraformType(ctx)
-		case types.MapType:
-			return enclosed.ElementType().TerraformType(ctx)
-		}
-		panic(fmt.Sprintf("unsupported supported type: %T", attr.Attributes.AttributeType()))
-	}
-	_ = etyp
 
 	type testCase struct {
 		config        tftypes.Value
@@ -56,37 +34,39 @@ func TestValidateResourceConfig(t *testing.T) {
 	tests := map[string]testCase{
 		"minimal config": {
 			config: tftypes.NewValue(resourceType, map[string]tftypes.Value{
-				"id":             tftypes.NewValue(typ("id"), nil),
-				"path":           tftypes.NewValue(typ("path"), "/foos"),
-				"body":           tftypes.NewValue(typ("body"), "{}"),
-				"poll_create":    tftypes.NewValue(typ("poll_create"), nil),
-				"poll_update":    tftypes.NewValue(typ("poll_update"), nil),
-				"poll_delete":    tftypes.NewValue(typ("poll_delete"), nil),
-				"name_path":      tftypes.NewValue(typ("name_path"), nil),
-				"url_path":       tftypes.NewValue(typ("url_path"), nil),
-				"ignore_changes": tftypes.NewValue(typ("ignore_changes"), nil),
-				"create_method":  tftypes.NewValue(typ("create_method"), nil),
-				"query":          tftypes.NewValue(typ("query"), nil),
-				"header":         tftypes.NewValue(typ("header"), nil),
-				"output":         tftypes.NewValue(typ("output"), nil),
+				"id":               tftypes.NewValue(typ("id"), nil),
+				"path":             tftypes.NewValue(typ("path"), "/foos"),
+				"body":             tftypes.NewValue(typ("body"), "{}"),
+				"poll_create":      tftypes.NewValue(typ("poll_create"), nil),
+				"poll_update":      tftypes.NewValue(typ("poll_update"), nil),
+				"poll_delete":      tftypes.NewValue(typ("poll_delete"), nil),
+				"name_path":        tftypes.NewValue(typ("name_path"), nil),
+				"url_path":         tftypes.NewValue(typ("url_path"), nil),
+				"write_only_attrs": tftypes.NewValue(typ("write_only_attrs"), nil),
+				"create_method":    tftypes.NewValue(typ("create_method"), nil),
+				"update_method":    tftypes.NewValue(typ("update_method"), nil),
+				"query":            tftypes.NewValue(typ("query"), nil),
+				"header":           tftypes.NewValue(typ("header"), nil),
+				"output":           tftypes.NewValue(typ("output"), nil),
 			}),
 			expectedDiags: nil,
 		},
 		"create_method is PUT, but set name_path and url_path": {
 			config: tftypes.NewValue(resourceType, map[string]tftypes.Value{
-				"id":             tftypes.NewValue(typ("id"), nil),
-				"path":           tftypes.NewValue(typ("path"), "/foos"),
-				"body":           tftypes.NewValue(typ("body"), "{}"),
-				"poll_create":    tftypes.NewValue(typ("poll_create"), nil),
-				"poll_update":    tftypes.NewValue(typ("poll_update"), nil),
-				"poll_delete":    tftypes.NewValue(typ("poll_delete"), nil),
-				"name_path":      tftypes.NewValue(typ("name_path"), "foo"),
-				"url_path":       tftypes.NewValue(typ("url_path"), "bar"),
-				"ignore_changes": tftypes.NewValue(typ("ignore_changes"), nil),
-				"create_method":  tftypes.NewValue(typ("create_method"), "PUT"),
-				"query":          tftypes.NewValue(typ("query"), nil),
-				"header":         tftypes.NewValue(typ("header"), nil),
-				"output":         tftypes.NewValue(typ("output"), nil),
+				"id":               tftypes.NewValue(typ("id"), nil),
+				"path":             tftypes.NewValue(typ("path"), "/foos"),
+				"body":             tftypes.NewValue(typ("body"), "{}"),
+				"poll_create":      tftypes.NewValue(typ("poll_create"), nil),
+				"poll_update":      tftypes.NewValue(typ("poll_update"), nil),
+				"poll_delete":      tftypes.NewValue(typ("poll_delete"), nil),
+				"name_path":        tftypes.NewValue(typ("name_path"), "foo"),
+				"url_path":         tftypes.NewValue(typ("url_path"), "bar"),
+				"write_only_attrs": tftypes.NewValue(typ("write_only_attrs"), nil),
+				"create_method":    tftypes.NewValue(typ("create_method"), "PUT"),
+				"update_method":    tftypes.NewValue(typ("update_method"), nil),
+				"query":            tftypes.NewValue(typ("query"), nil),
+				"header":           tftypes.NewValue(typ("header"), nil),
+				"output":           tftypes.NewValue(typ("output"), nil),
 			}),
 			expectedDiags: []*tfprotov6.Diagnostic{
 				{
@@ -103,19 +83,20 @@ func TestValidateResourceConfig(t *testing.T) {
 		},
 		"create_method is POST, but set both name_path and url_path": {
 			config: tftypes.NewValue(resourceType, map[string]tftypes.Value{
-				"id":             tftypes.NewValue(typ("id"), nil),
-				"path":           tftypes.NewValue(typ("path"), "/foos"),
-				"body":           tftypes.NewValue(typ("body"), "{}"),
-				"poll_create":    tftypes.NewValue(typ("poll_create"), nil),
-				"poll_update":    tftypes.NewValue(typ("poll_update"), nil),
-				"poll_delete":    tftypes.NewValue(typ("poll_delete"), nil),
-				"name_path":      tftypes.NewValue(typ("name_path"), "foo"),
-				"url_path":       tftypes.NewValue(typ("url_path"), "bar"),
-				"ignore_changes": tftypes.NewValue(typ("ignore_changes"), nil),
-				"create_method":  tftypes.NewValue(typ("create_method"), "POST"),
-				"query":          tftypes.NewValue(typ("query"), nil),
-				"header":         tftypes.NewValue(typ("header"), nil),
-				"output":         tftypes.NewValue(typ("output"), nil),
+				"id":               tftypes.NewValue(typ("id"), nil),
+				"path":             tftypes.NewValue(typ("path"), "/foos"),
+				"body":             tftypes.NewValue(typ("body"), "{}"),
+				"poll_create":      tftypes.NewValue(typ("poll_create"), nil),
+				"poll_update":      tftypes.NewValue(typ("poll_update"), nil),
+				"poll_delete":      tftypes.NewValue(typ("poll_delete"), nil),
+				"name_path":        tftypes.NewValue(typ("name_path"), "foo"),
+				"url_path":         tftypes.NewValue(typ("url_path"), "bar"),
+				"write_only_attrs": tftypes.NewValue(typ("write_only_attrs"), nil),
+				"create_method":    tftypes.NewValue(typ("create_method"), "POST"),
+				"update_method":    tftypes.NewValue(typ("update_method"), nil),
+				"query":            tftypes.NewValue(typ("query"), nil),
+				"header":           tftypes.NewValue(typ("header"), nil),
+				"output":           tftypes.NewValue(typ("output"), nil),
 			}),
 			expectedDiags: []*tfprotov6.Diagnostic{
 				{
@@ -127,19 +108,20 @@ func TestValidateResourceConfig(t *testing.T) {
 		},
 		"create_method is POST, but not set both name_path or url_path": {
 			config: tftypes.NewValue(resourceType, map[string]tftypes.Value{
-				"id":             tftypes.NewValue(typ("id"), nil),
-				"path":           tftypes.NewValue(typ("path"), "/foos"),
-				"body":           tftypes.NewValue(typ("body"), "{}"),
-				"poll_create":    tftypes.NewValue(typ("poll_create"), nil),
-				"poll_update":    tftypes.NewValue(typ("poll_update"), nil),
-				"poll_delete":    tftypes.NewValue(typ("poll_delete"), nil),
-				"name_path":      tftypes.NewValue(typ("name_path"), nil),
-				"url_path":       tftypes.NewValue(typ("url_path"), nil),
-				"ignore_changes": tftypes.NewValue(typ("ignore_changes"), nil),
-				"create_method":  tftypes.NewValue(typ("create_method"), "POST"),
-				"query":          tftypes.NewValue(typ("query"), nil),
-				"header":         tftypes.NewValue(typ("header"), nil),
-				"output":         tftypes.NewValue(typ("output"), nil),
+				"id":               tftypes.NewValue(typ("id"), nil),
+				"path":             tftypes.NewValue(typ("path"), "/foos"),
+				"body":             tftypes.NewValue(typ("body"), "{}"),
+				"poll_create":      tftypes.NewValue(typ("poll_create"), nil),
+				"poll_update":      tftypes.NewValue(typ("poll_update"), nil),
+				"poll_delete":      tftypes.NewValue(typ("poll_delete"), nil),
+				"name_path":        tftypes.NewValue(typ("name_path"), nil),
+				"url_path":         tftypes.NewValue(typ("url_path"), nil),
+				"write_only_attrs": tftypes.NewValue(typ("write_only_attrs"), nil),
+				"create_method":    tftypes.NewValue(typ("create_method"), "POST"),
+				"update_method":    tftypes.NewValue(typ("update_method"), nil),
+				"query":            tftypes.NewValue(typ("query"), nil),
+				"header":           tftypes.NewValue(typ("header"), nil),
+				"output":           tftypes.NewValue(typ("output"), nil),
 			}),
 			expectedDiags: []*tfprotov6.Diagnostic{
 				{
