@@ -146,12 +146,19 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 				Validators:          []tfsdk.AttributeValidator{validator.StringInSlice("PUT", "POST")},
 			},
 			"update_method": {
-				Description:         "The method used to update the resource. Possible values are `PUT` and `PATCH`. This overrides the `update_method` set in the provider block (defaults to PUT). When set to `PATCH`, only the changed part in the `body` will be used as the request body.",
-				MarkdownDescription: "The method used to update the resource. Possible values are `PUT` and `PATCH`. This overrides the `update_method` set in the provider block (defaults to PUT). When set to `PATCH`, only the changed part in the `body` will be used as the request body.",
+				Description:         "The method used to update the resource. Possible values are `PUT` and `PATCH`. This overrides the `update_method` set in the provider block (defaults to PUT).",
+				MarkdownDescription: "The method used to update the resource. Possible values are `PUT` and `PATCH`. This overrides the `update_method` set in the provider block (defaults to PUT).",
 				Type:                types.StringType,
 				Optional:            true,
 				Computed:            true,
 				Validators:          []tfsdk.AttributeValidator{validator.StringInSlice("PUT", "PATCH")},
+			},
+			"merge_patch_disabled": {
+				Description:         "Whether to use a JSON Merge Patch as the request body in the PATCH update? This is only effective when `update_method` is set to `PATCH`. This overrides the `merge_patch_disabled` set in the provider block (defaults to `false`).",
+				MarkdownDescription: "Whether to use a JSON Merge Patch as the request body in the PATCH update? This is only effective when `update_method` is set to `PATCH`. This overrides the `merge_patch_disabled` set in the provider block (defaults to `false`).",
+				Type:                types.BoolType,
+				Optional:            true,
+				Computed:            true,
 			},
 			"query": {
 				Description:         "The query parameters that are applied to each request. This overrides the `query` set in the provider block.",
@@ -294,6 +301,7 @@ type resourceData struct {
 	PollDelete          types.Object `tfsdk:"poll_delete"`
 	CreateMethod        types.String `tfsdk:"create_method"`
 	UpdateMethod        types.String `tfsdk:"update_method"`
+	MergePatchDisabled  types.Bool   `tfsdk:"merge_patch_disabled"`
 	Query               types.Map    `tfsdk:"query"`
 	Header              types.Map    `tfsdk:"header"`
 	Output              types.String `tfsdk:"output"`
@@ -425,9 +433,15 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	// Set overridable attributes from option to state
 	plan.Query = opt.Query.ToTFValue()
 	plan.Header = opt.Header.ToTFValue()
+	// create_method is already resolved in the create opt here
 	plan.CreateMethod = types.String{Value: opt.CreateMethod}
 	if plan.UpdateMethod.IsUnknown() {
+		// Since the update_method is O+C, it is unknown in the plan when not specified.
 		plan.UpdateMethod = types.String{Value: r.p.apiOpt.UpdateMethod}
+	}
+	if plan.MergePatchDisabled.IsUnknown() {
+		// Since the merge_patch_disabled is O+C, it is unknown in the plan when not specified.
+		plan.MergePatchDisabled = types.Bool{Value: r.p.apiOpt.MergePatchDisabled}
 	}
 
 	// Set resource ID to state
@@ -535,6 +549,11 @@ func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *reso
 		updateMethod = state.UpdateMethod.Value
 	}
 
+	mergePatchDisabled := r.p.apiOpt.MergePatchDisabled
+	if !state.MergePatchDisabled.Null {
+		mergePatchDisabled = state.MergePatchDisabled.Value
+	}
+
 	// Set force new properties
 	switch createMethod {
 	case "POST":
@@ -548,6 +567,7 @@ func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *reso
 	state.Header = opt.Header.ToTFValue()
 	state.CreateMethod = types.String{Value: createMethod}
 	state.UpdateMethod = types.String{Value: updateMethod}
+	state.MergePatchDisabled = types.Bool{Value: mergePatchDisabled}
 
 	// Set computed attributes
 	state.Output = types.String{Value: string(b)}
@@ -585,7 +605,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 	// Invoke API to Update the resource only when there are changes in the body.
 	if state.Body.Value != plan.Body.Value {
 		body := plan.Body.Value
-		if opt.UpdateMethod == "PATCH" {
+		if opt.UpdateMethod == "PATCH" && !opt.MergePatchDisabled {
 			b, err := jsonpatch.CreateMergePatch([]byte(state.Body.Value), []byte(plan.Body.Value))
 			if err != nil {
 				resp.Diagnostics.AddError(
@@ -635,9 +655,13 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 	plan.Query = opt.Query.ToTFValue()
 	plan.Header = opt.Header.ToTFValue()
 	if plan.CreateMethod.IsUnknown() {
+		// Since the create_method is O+C, it is unknown in the plan when not specified.
 		plan.CreateMethod = types.String{Value: r.p.apiOpt.CreateMethod}
 	}
+	// update_method is already resolved in the update opt here
 	plan.UpdateMethod = types.String{Value: opt.UpdateMethod}
+	// merge_patch_disabled is already resolved in the update opt here
+	plan.MergePatchDisabled = types.Bool{Value: opt.MergePatchDisabled}
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)

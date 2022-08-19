@@ -65,7 +65,7 @@ func TestResource_MsGraph_User(t *testing.T) {
 		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
 		Steps: []resource.TestStep{
 			{
-				Config: d.user(),
+				Config: d.user(false),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrSet(addr, "output"),
 				),
@@ -77,7 +77,19 @@ func TestResource_MsGraph_User(t *testing.T) {
 				ImportStateIdFunc: d.userImportStateIdFunc(addr),
 			},
 			{
-				Config: d.userUpdate(),
+				Config: d.userUpdate(false),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrSet(addr, "output"),
+				),
+			},
+			{
+				ResourceName:      addr,
+				ImportState:       true,
+				ImportStateVerify: false,
+				ImportStateIdFunc: d.userImportStateIdFunc(addr),
+			},
+			{
+				Config: d.user(true),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrSet(addr, "output"),
 				),
@@ -121,7 +133,7 @@ func (d msgraphData) CheckDestroy(addr string) func(*terraform.State) error {
 	}
 }
 
-func (d msgraphData) user() string {
+func (d msgraphData) user(mpDisabled bool) string {
 	return fmt.Sprintf(`
 provider "restful" {
   base_url = %q
@@ -139,14 +151,16 @@ provider "restful" {
 resource "restful_resource" "test" {
   path = "/users"
   name_path = "id"
+  merge_patch_disabled 	= %t
   body = jsonencode({
     accountEnabled    = true
-    mailNickname      = "AdeleV"
-    displayName       = "J.Doe"
-    userPrincipalName = "%d@%s"
+	mailNickname 	  = "AdeleV"
     passwordProfile = {
       password = "SecretP@sswd99!"
     }
+
+    displayName       = "J.Doe"
+    userPrincipalName = "%d@%s"
   })
   write_only_attrs = [
     "mailNickname",
@@ -154,10 +168,10 @@ resource "restful_resource" "test" {
     "passwordProfile",
   ]
 }
-`, d.url, d.clientId, d.clientSecret, d.tenantId, d.rd, d.orgDomain)
+`, d.url, d.clientId, d.clientSecret, d.tenantId, mpDisabled, d.rd, d.orgDomain)
 }
 
-func (d msgraphData) userUpdate() string {
+func (d msgraphData) userUpdate(mpDisabled bool) string {
 	return fmt.Sprintf(`
 provider "restful" {
   base_url = %q
@@ -175,14 +189,15 @@ provider "restful" {
 resource "restful_resource" "test" {
   path = "/users"
   name_path = "id"
+  merge_patch_disabled 	= %t
   body = jsonencode({
     accountEnabled    = false
-    mailNickname      = "AdeleV2"
-    displayName       = "J.Doe"
-    userPrincipalName = "%d@%s"
+	mailNickname 	  = "AdeleV"
     passwordProfile = {
       password = "SecretP@sswd99!"
     }
+    displayName       = "J.Doe2"
+    userPrincipalName = "%d@%s"
   })
   write_only_attrs = [
     "mailNickname",
@@ -190,7 +205,7 @@ resource "restful_resource" "test" {
     "passwordProfile",
   ]
 }
-`, d.url, d.clientId, d.clientSecret, d.tenantId, d.rd, d.orgDomain)
+`, d.url, d.clientId, d.clientSecret, d.tenantId, mpDisabled, d.rd, d.orgDomain)
 }
 
 func (d msgraphData) userImportStateIdFunc(addr string) func(s *terraform.State) (string, error) {

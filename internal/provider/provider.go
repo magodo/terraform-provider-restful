@@ -21,12 +21,13 @@ type Provider struct {
 }
 
 type providerData struct {
-	BaseURL      string              `tfsdk:"base_url"`
-	Security     *securityData       `tfsdk:"security"`
-	CreateMethod *string             `tfsdk:"create_method"`
-	UpdateMethod *string             `tfsdk:"update_method"`
-	Query        map[string][]string `tfsdk:"query"`
-	Header       map[string]string   `tfsdk:"header"`
+	BaseURL            string              `tfsdk:"base_url"`
+	Security           *securityData       `tfsdk:"security"`
+	CreateMethod       *string             `tfsdk:"create_method"`
+	UpdateMethod       *string             `tfsdk:"update_method"`
+	MergePatchDisabled *bool               `tfsdk:"merge_patch_disabled"`
+	Query              map[string][]string `tfsdk:"query"`
+	Header             map[string]string   `tfsdk:"header"`
 }
 
 type securityData struct {
@@ -231,12 +232,18 @@ func (*Provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 			},
 			"update_method": {
 				Type:                types.StringType,
-				Description:         "The method used to update the resource. Possible values are `PUT` and `PATCH`. When set to `PATCH`, only the changed part in the `body` will be used as the request body. Defaults to `PUT`.",
-				MarkdownDescription: "The method used to update the resource. Possible values are `PUT` and `PATCH`. When set to `PATCH`, only the changed part in the `body` will be used as the request body. Defaults to `PUT`.",
+				Description:         "The method used to update the resource. Possible values are `PUT` and `PATCH`. Defaults to `PUT`.",
+				MarkdownDescription: "The method used to update the resource. Possible values are `PUT` and `PATCH`. Defaults to `PUT`.",
 				Optional:            true,
 				// Need a way to set the default value, plan modifier doesn't work here even it is Optional+Computed, because it is at provider level?
 				// Currently, we are setting the default value during the provider configuration.
 				Validators: []tfsdk.AttributeValidator{validator.StringInSlice("PUT", "PATCH")},
+			},
+			"merge_patch_disabled": {
+				Type:                types.BoolType,
+				Description:         "Whether to use a JSON Merge Patch as the request body in the PATCH update? Defaults to `false`. This is only effective when `update_method` is set to `PATCH`.",
+				MarkdownDescription: "Whether to use a JSON Merge Patch as the request body in the PATCH update? Defaults to `false`. This is only effective when `update_method` is set to `PATCH`.",
+				Optional:            true,
 			},
 			"query": {
 				Description:         "The query parameters that are applied to each request.",
@@ -256,12 +263,13 @@ func (*Provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 
 func (p *Provider) ValidateConfig(ctx context.Context, req provider.ValidateConfigRequest, resp *provider.ValidateConfigResponse) {
 	type pt struct {
-		BaseURL      types.String `tfsdk:"base_url"`
-		Security     types.Object `tfsdk:"security"`
-		CreateMethod types.String `tfsdk:"create_method"`
-		UpdateMethod types.String `tfsdk:"update_method"`
-		Query        types.Map    `tfsdk:"query"`
-		Header       types.Map    `tfsdk:"header"`
+		BaseURL            types.String `tfsdk:"base_url"`
+		Security           types.Object `tfsdk:"security"`
+		CreateMethod       types.String `tfsdk:"create_method"`
+		UpdateMethod       types.String `tfsdk:"update_method"`
+		MergePatchDisabled types.Bool   `tfsdk:"merge_patch_disabled"`
+		Query              types.Map    `tfsdk:"query"`
+		Header             types.Map    `tfsdk:"header"`
 	}
 
 	var config pt
@@ -486,16 +494,20 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 	}
 
 	p.apiOpt = apiOption{
-		CreateMethod: "POST",
-		UpdateMethod: "PUT",
-		Query:        map[string][]string{},
-		Header:       map[string]string{},
+		CreateMethod:       "POST",
+		UpdateMethod:       "PUT",
+		MergePatchDisabled: false,
+		Query:              map[string][]string{},
+		Header:             map[string]string{},
 	}
 	if config.CreateMethod != nil {
 		p.apiOpt.CreateMethod = *config.CreateMethod
 	}
 	if config.UpdateMethod != nil {
 		p.apiOpt.UpdateMethod = *config.UpdateMethod
+	}
+	if config.MergePatchDisabled != nil {
+		p.apiOpt.MergePatchDisabled = *config.MergePatchDisabled
 	}
 	if config.Query != nil {
 		p.apiOpt.Query = config.Query
