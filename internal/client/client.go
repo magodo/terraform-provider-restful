@@ -128,10 +128,11 @@ func (c *Client) Read(ctx context.Context, path string, opt ReadOption) (*resty.
 }
 
 type UpdateOption struct {
-	UpdateMethod string
-	Query        Query
-	Header       Header
-	PollOpt      *PollOption
+	UpdateMethod       string
+	MergePatchDisabled bool
+	Query              Query
+	Header             Header
+	PollOpt            *PollOption
 }
 
 func (c *Client) Update(ctx context.Context, path string, body interface{}, opt UpdateOption) (*resty.Response, error) {

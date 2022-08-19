@@ -10,6 +10,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 )
 
+// Generate the provider document.
+//go:generate tfplugindocs generate --provider-name restful --rendered-provider-name Restful
+
 func main() {
 	var debug bool
 

@@ -37,9 +37,10 @@ provider "restful" {
 
 - `create_method` (String) The method used to create the resource. Possible values are `PUT` and `POST`. Defaults to `POST`.
 - `header` (Map of String) The header parameters that are applied to each request.
+- `merge_patch_disabled` (Boolean) Whether to use a JSON Merge Patch as the request body in the PATCH update? Defaults to `false`. This is only effective when `update_method` is set to `PATCH`.
 - `query` (Map of List of String) The query parameters that are applied to each request.
 - `security` (Attributes) The OpenAPI security scheme that is be used for auth. (see [below for nested schema](#nestedatt--security))
-- `update_method` (String) The method used to update the resource. Possible values are `PUT` and `PATCH`. When set to `PATCH`, only the changed part in the `body` will be used as the request body. Defaults to `PUT`.
+- `update_method` (String) The method used to update the resource. Possible values are `PUT` and `PATCH`. Defaults to `PUT`.
 
 <a id="nestedatt--security"></a>
 ### Nested Schema for `security`
