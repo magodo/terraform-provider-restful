@@ -15,16 +15,16 @@ import (
 	"github.com/magodo/terraform-provider-restful/internal/validator"
 )
 
-type actionResourceType struct{}
+type operationResourceType struct{}
 
-func (r actionResourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
+func (r operationResourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
-		Description:         "`restful_action` represents a one-time API call action.",
-		MarkdownDescription: "`restful_action` represents a one-time API call action.",
+		Description:         "`restful_operation` represents a one-time API call operation.",
+		MarkdownDescription: "`restful_operation` represents a one-time API call operation.",
 		Attributes: map[string]tfsdk.Attribute{
 			"id": {
-				Description:         "The ID of the action. Same as the `path`.",
-				MarkdownDescription: "The ID of the action. Same as the `path`.",
+				Description:         "The ID of the operation. Same as the `path`.",
+				MarkdownDescription: "The ID of the operation. Same as the `path`.",
 				Type:                types.StringType,
 				Computed:            true,
 				PlanModifiers: []tfsdk.AttributePlanModifier{
@@ -81,8 +81,8 @@ func (r actionResourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Dia
 	}, nil
 }
 
-func (r ActionResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
-	var config actionResourceData
+func (r OperationResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var config operationResourceData
 	diags := req.Config.Get(ctx, &config)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
@@ -102,17 +102,17 @@ func (r ActionResource) ValidateConfig(ctx context.Context, req resource.Validat
 	}
 }
 
-func (r actionResourceType) NewResource(_ context.Context, p provider.Provider) (resource.Resource, diag.Diagnostics) {
-	return ActionResource{p: *p.(*Provider)}, nil
+func (r operationResourceType) NewResource(_ context.Context, p provider.Provider) (resource.Resource, diag.Diagnostics) {
+	return OperationResource{p: *p.(*Provider)}, nil
 }
 
-type ActionResource struct {
+type OperationResource struct {
 	p Provider
 }
 
-var _ resource.Resource = ActionResource{}
+var _ resource.Resource = OperationResource{}
 
-type actionResourceData struct {
+type operationResourceData struct {
 	ID     types.String `tfsdk:"id"`
 	Path   types.String `tfsdk:"path"`
 	Method types.String `tfsdk:"method"`
@@ -123,8 +123,8 @@ type actionResourceData struct {
 	Output types.String `tfsdk:"output"`
 }
 
-func (r ActionResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Plan, state *tfsdk.State, diagnostics *diag.Diagnostics) {
-	var plan actionResourceData
+func (r OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Plan, state *tfsdk.State, diagnostics *diag.Diagnostics) {
+	var plan operationResourceData
 	diags := tfplan.Get(ctx, &plan)
 	diagnostics.Append(diags...)
 	if diags.HasError() {
@@ -133,23 +133,23 @@ func (r ActionResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Plan, s
 
 	c := r.p.client
 
-	opt, diags := r.p.apiOpt.ForResourceAction(ctx, plan)
+	opt, diags := r.p.apiOpt.ForResourceOperation(ctx, plan)
 	diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
 	}
 
-	response, err := c.Action(ctx, plan.Path.Value, plan.Body.Value, *opt)
+	response, err := c.Operation(ctx, plan.Path.Value, plan.Body.Value, *opt)
 	if err != nil {
 		diagnostics.AddError(
-			"Error to call action",
+			"Error to call operation",
 			err.Error(),
 		)
 		return
 	}
 	if !response.IsSuccess() {
 		diagnostics.AddError(
-			fmt.Sprintf("Action API returns %d", response.StatusCode()),
+			fmt.Sprintf("Operation API returns %d", response.StatusCode()),
 			string(response.Body()),
 		)
 		return
@@ -170,14 +170,14 @@ func (r ActionResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Plan, s
 		p, err := client.NewPollable(*response, *opt.PollOpt)
 		if err != nil {
 			diagnostics.AddError(
-				"Action: Failed to build poller from the response of the initiated request",
+				"Operation: Failed to build poller from the response of the initiated request",
 				err.Error(),
 			)
 			return
 		}
 		if err := p.PollUntilDone(ctx, c); err != nil {
 			diagnostics.AddError(
-				"Action: Polling failure",
+				"Operation: Polling failure",
 				err.Error(),
 			)
 			return
@@ -201,20 +201,20 @@ func (r ActionResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Plan, s
 	}
 }
 
-func (r ActionResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (r OperationResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	r.createOrUpdate(ctx, req.Plan, &resp.State, &resp.Diagnostics)
 	return
 }
 
-func (r ActionResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+func (r OperationResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	r.createOrUpdate(ctx, req.Plan, &resp.State, &resp.Diagnostics)
 	return
 }
 
-func (r ActionResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+func (r OperationResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	return
 }
 
-func (r ActionResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (r OperationResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	return
 }

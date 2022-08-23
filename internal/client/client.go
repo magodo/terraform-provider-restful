@@ -165,14 +165,14 @@ func (c *Client) Delete(ctx context.Context, path string, opt DeleteOption) (*re
 	return req.Delete(path)
 }
 
-type ActionOption struct {
+type OperationOption struct {
 	Method  string
 	Query   Query
 	Header  Header
 	PollOpt *PollOption
 }
 
-func (c *Client) Action(ctx context.Context, path string, body interface{}, opt ActionOption) (*resty.Response, error) {
+func (c *Client) Operation(ctx context.Context, path string, body interface{}, opt OperationOption) (*resty.Response, error) {
 	req := c.R().SetContext(ctx).SetBody(body)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 	req.SetHeaders(opt.Header)
