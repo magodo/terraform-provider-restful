@@ -164,3 +164,30 @@ func (c *Client) Delete(ctx context.Context, path string, opt DeleteOption) (*re
 
 	return req.Delete(path)
 }
+
+type ActionOption struct {
+	Method  string
+	Query   Query
+	Header  Header
+	PollOpt *PollOption
+}
+
+func (c *Client) Action(ctx context.Context, path string, body interface{}, opt ActionOption) (*resty.Response, error) {
+	req := c.R().SetContext(ctx).SetBody(body)
+	req.SetQueryParamsFromValues(url.Values(opt.Query))
+	req.SetHeaders(opt.Header)
+	req = req.SetHeader("Content-Type", "application/json")
+
+	switch opt.Method {
+	case "POST":
+		return req.Post(path)
+	case "PUT":
+		return req.Put(path)
+	case "PATCH":
+		return req.Patch(path)
+	case "DELETE":
+		return req.Delete(path)
+	default:
+		return nil, fmt.Errorf("unknown create method: %s", opt.Method)
+	}
+}

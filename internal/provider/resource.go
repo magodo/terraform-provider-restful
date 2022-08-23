@@ -32,53 +32,54 @@ const __IMPORT_HEADER__ = "__RESTFUL_PROVIDER__"
 
 type resourceType struct{}
 
-func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	pollAttribute := func(s string) tfsdk.Attribute {
-		return tfsdk.Attribute{
-			Description:         fmt.Sprintf("The polling option for the %q operation", s),
-			MarkdownDescription: fmt.Sprintf("The polling option for the %q operation", s),
-			Optional:            true,
-			Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-				"status_locator": {
-					Description:         "Specifies how to discover the status property. The format is either `code` or `<scope>[<path>]`, where `<scope>` can be either `header` or `body`, and the `<path>` is using the gjson syntax.",
-					MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `<scope>[<path>]`, where `<scope>` can be either `header` or `body`, and the `<path>` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).",
-					Required:            true,
-					Type:                types.StringType,
-				},
-				"status": {
-					Description:         "The expected status sentinels for each polling state.",
-					MarkdownDescription: "The expected status sentinels for each polling state.",
-					Required:            true,
-					Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-						"success": {
-							Description:         "The expected status sentinel for suceess status.",
-							MarkdownDescription: "The expected status sentinel for suceess status.",
-							Required:            true,
-							Type:                types.StringType,
-						},
-						"pending": {
-							Description:         "The expected status sentinels for pending status.",
-							MarkdownDescription: "The expected status sentinels for pending status.",
-							Optional:            true,
-							Type:                types.ListType{ElemType: types.StringType},
-						},
-					}),
-				},
-				"url_locator": {
-					Description:         "Specifies how to discover the polling location. The format is as `<scope>[<path>]`, where `<scope>` can be either `header` or `body`, and the `<path>` is using the gjson syntax. When absent, the resource's path is used for polling.",
-					MarkdownDescription: "Specifies how to discover the polling location. The format is as `<scope>[<path>]`, where `<scope>` can be either `header` or `body`, and the `<path>` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md). When absent, the resource's path is used for polling.",
-					Optional:            true,
-					Type:                types.StringType,
-				},
-				"default_delay_sec": {
-					Description:         "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
-					MarkdownDescription: "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
-					Optional:            true,
-					Type:                types.Int64Type,
-				},
-			}),
-		}
+func pollAttribute(s string) tfsdk.Attribute {
+	return tfsdk.Attribute{
+		Description:         fmt.Sprintf("The polling option for the %q operation", s),
+		MarkdownDescription: fmt.Sprintf("The polling option for the %q operation", s),
+		Optional:            true,
+		Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+			"status_locator": {
+				Description:         "Specifies how to discover the status property. The format is either `code` or `<scope>[<path>]`, where `<scope>` can be either `header` or `body`, and the `<path>` is using the gjson syntax.",
+				MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `<scope>[<path>]`, where `<scope>` can be either `header` or `body`, and the `<path>` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).",
+				Required:            true,
+				Type:                types.StringType,
+			},
+			"status": {
+				Description:         "The expected status sentinels for each polling state.",
+				MarkdownDescription: "The expected status sentinels for each polling state.",
+				Required:            true,
+				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+					"success": {
+						Description:         "The expected status sentinel for suceess status.",
+						MarkdownDescription: "The expected status sentinel for suceess status.",
+						Required:            true,
+						Type:                types.StringType,
+					},
+					"pending": {
+						Description:         "The expected status sentinels for pending status.",
+						MarkdownDescription: "The expected status sentinels for pending status.",
+						Optional:            true,
+						Type:                types.ListType{ElemType: types.StringType},
+					},
+				}),
+			},
+			"url_locator": {
+				Description:         "Specifies how to discover the polling location. The format is as `<scope>[<path>]`, where `<scope>` can be either `header` or `body`, and the `<path>` is using the gjson syntax. When absent, the resource's path is used for polling.",
+				MarkdownDescription: "Specifies how to discover the polling location. The format is as `<scope>[<path>]`, where `<scope>` can be either `header` or `body`, and the `<path>` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md). When absent, the resource's path is used for polling.",
+				Optional:            true,
+				Type:                types.StringType,
+			},
+			"default_delay_sec": {
+				Description:         "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
+				MarkdownDescription: "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
+				Optional:            true,
+				Type:                types.Int64Type,
+			},
+		}),
 	}
+}
+
+func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
 		Description:         "`restful_resource` manages a restful resource.",
 		MarkdownDescription: "`restful_resource` manages a restful resource.",
@@ -184,6 +185,34 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 	}, nil
 }
 
+func validatePoll(ctx context.Context, pollObj types.Object, attrName string, resp *resource.ValidateConfigResponse) {
+	if pollObj.Null || pollObj.Unknown {
+		return
+	}
+	var pd pollDataGo
+	diags := pollObj.As(ctx, &pd, types.ObjectAsOptions{})
+	if diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+
+	if _, err := parseLocator(pd.StatusLocator); err != nil {
+		resp.Diagnostics.AddError(
+			"Invalid configuration",
+			fmt.Sprintf("Failed to parse status locator for %q: %s", attrName, err.Error()),
+		)
+	}
+
+	if pd.UrlLocator != nil {
+		if _, err := parseLocator(*pd.UrlLocator); err != nil {
+			resp.Diagnostics.AddError(
+				"Invalid configuration",
+				fmt.Sprintf("Failed to parse url locator for %q: %s", attrName, err.Error()),
+			)
+		}
+	}
+}
+
 func (r Resource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
 	var config resourceData
 	diags := req.Config.Get(ctx, &config)
@@ -222,37 +251,9 @@ func (r Resource) ValidateConfig(ctx context.Context, req resource.ValidateConfi
 		}
 	}
 
-	validatePoll := func(pollObj types.Object, attrName string) {
-		if pollObj.Null || pollObj.Unknown {
-			return
-		}
-		var pd pollDataGo
-		diags := pollObj.As(ctx, &pd, types.ObjectAsOptions{})
-		if diags.HasError() {
-			resp.Diagnostics.Append(diags...)
-			return
-		}
-
-		if _, err := parseLocator(pd.StatusLocator); err != nil {
-			resp.Diagnostics.AddError(
-				"Invalid configuration",
-				fmt.Sprintf("Failed to parse status locator for %q: %s", attrName, err.Error()),
-			)
-		}
-
-		if pd.UrlLocator != nil {
-			if _, err := parseLocator(*pd.UrlLocator); err != nil {
-				resp.Diagnostics.AddError(
-					"Invalid configuration",
-					fmt.Sprintf("Failed to parse url locator for %q: %s", attrName, err.Error()),
-				)
-			}
-		}
-	}
-
-	validatePoll(config.PollCreate, "poll_create")
-	validatePoll(config.PollUpdate, "poll_update")
-	validatePoll(config.PollDelete, "poll_delete")
+	validatePoll(ctx, config.PollCreate, "poll_create", resp)
+	validatePoll(ctx, config.PollUpdate, "poll_update", resp)
+	validatePoll(ctx, config.PollDelete, "poll_delete", resp)
 
 	if !config.Body.IsUnknown() {
 		var body map[string]interface{}
