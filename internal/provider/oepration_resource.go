@@ -70,7 +70,7 @@ func (r operationResourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.
 				Optional:            true,
 				Computed:            true,
 			},
-			"poll": pollAttribute("API"),
+			"poll": pollAttribute("poll", "API"),
 			"output": {
 				Description:         "The response body.",
 				MarkdownDescription: "The response body.",
@@ -91,7 +91,7 @@ func (r OperationResource) ValidateConfig(ctx context.Context, req resource.Vali
 
 	validatePoll(ctx, config.Poll, "poll", resp)
 
-	if !config.Body.IsUnknown() {
+	if !config.Body.IsUnknown() && !config.Body.IsNull() {
 		var body map[string]interface{}
 		if err := json.Unmarshal([]byte(config.Body.Value), &body); err != nil {
 			resp.Diagnostics.AddError(

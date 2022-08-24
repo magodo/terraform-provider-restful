@@ -173,7 +173,10 @@ type OperationOption struct {
 }
 
 func (c *Client) Operation(ctx context.Context, path string, body interface{}, opt OperationOption) (*resty.Response, error) {
-	req := c.R().SetContext(ctx).SetBody(body)
+	req := c.R().SetContext(ctx)
+	if body != "" {
+		req.SetBody(body)
+	}
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 	req.SetHeaders(opt.Header)
 	req = req.SetHeader("Content-Type", "application/json")

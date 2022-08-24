@@ -32,7 +32,7 @@ const __IMPORT_HEADER__ = "__RESTFUL_PROVIDER__"
 
 type resourceType struct{}
 
-func pollAttribute(s string) tfsdk.Attribute {
+func pollAttribute(attr, s string) tfsdk.Attribute {
 	return tfsdk.Attribute{
 		Description:         fmt.Sprintf("The polling option for the %q operation", s),
 		MarkdownDescription: fmt.Sprintf("The polling option for the %q operation", s),
@@ -64,8 +64,8 @@ func pollAttribute(s string) tfsdk.Attribute {
 				}),
 			},
 			"url_locator": {
-				Description:         "Specifies how to discover the polling location. The format is as `<scope>[<path>]`, where `<scope>` can be either `header` or `body`, and the `<path>` is using the gjson syntax. When absent, the resource's path is used for polling.",
-				MarkdownDescription: "Specifies how to discover the polling location. The format is as `<scope>[<path>]`, where `<scope>` can be either `header` or `body`, and the `<path>` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md). When absent, the resource's path is used for polling.",
+				Description:         "Specifies how to discover the polling url. The format is as `<k>[<v>]`, which can be one of `header[path]` (use the property at `path` in response header), `body[path]` (use the property at `path` in response body) or `exact[value]` (use the exact `value`). When absent, the resource's path is used for polling.",
+				MarkdownDescription: "Specifies how to discover the polling url. The format is as `<k>[<v>]`, which can be one of `header[path]` (use the property at `path` in response header), `body[path]` (use the property at `path` in response body) or `exact[value]` (use the exact `value`). When absent, the resource's path is used for polling.",
 				Optional:            true,
 				Type:                types.StringType,
 			},
@@ -108,9 +108,9 @@ func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnosti
 				Type:                types.StringType,
 				Required:            true,
 			},
-			"poll_create": pollAttribute("Create"),
-			"poll_update": pollAttribute("Update"),
-			"poll_delete": pollAttribute("Delete"),
+			"poll_create": pollAttribute("poll_create", "Create"),
+			"poll_update": pollAttribute("poll_update", "Update"),
+			"poll_delete": pollAttribute("poll_delete", "Delete"),
 			"name_path": {
 				Description:         "The path (in gjson syntax) to the name attribute in the response, which is only used during creation of the resource to construct the resource identifier. This is ignored when `create_method` is `PUT`. Either `name_path` or `url_path` needs to set when `create_method` is `POST`.",
 				MarkdownDescription: "The path (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the name attribute in the response, which is only used during creation of the resource to construct the resource identifier. This is ignored when `create_method` is `PUT`. Either `name_path` or `url_path` needs to set when `create_method` is `POST`.",
@@ -189,22 +189,24 @@ func validatePoll(ctx context.Context, pollObj types.Object, attrName string, re
 	if pollObj.Null || pollObj.Unknown {
 		return
 	}
-	var pd pollDataGo
+	var pd pollData
 	diags := pollObj.As(ctx, &pd, types.ObjectAsOptions{})
 	if diags.HasError() {
 		resp.Diagnostics.Append(diags...)
 		return
 	}
 
-	if _, err := parseLocator(pd.StatusLocator); err != nil {
-		resp.Diagnostics.AddError(
-			"Invalid configuration",
-			fmt.Sprintf("Failed to parse status locator for %q: %s", attrName, err.Error()),
-		)
+	if !pd.StatusLocator.IsUnknown() && !pd.StatusLocator.IsNull() {
+		if _, err := parseLocator(pd.StatusLocator.Value); err != nil {
+			resp.Diagnostics.AddError(
+				"Invalid configuration",
+				fmt.Sprintf("Failed to parse status locator for %q: %s", attrName, err.Error()),
+			)
+		}
 	}
 
-	if pd.UrlLocator != nil {
-		if _, err := parseLocator(*pd.UrlLocator); err != nil {
+	if !pd.UrlLocator.IsUnknown() && !pd.UrlLocator.IsNull() {
+		if _, err := parseLocator(pd.UrlLocator.Value); err != nil {
 			resp.Diagnostics.AddError(
 				"Invalid configuration",
 				fmt.Sprintf("Failed to parse url locator for %q: %s", attrName, err.Error()),
@@ -306,6 +308,13 @@ type resourceData struct {
 	Query               types.Map    `tfsdk:"query"`
 	Header              types.Map    `tfsdk:"header"`
 	Output              types.String `tfsdk:"output"`
+}
+
+type pollData struct {
+	StatusLocator types.String `tfsdk:"status_locator"`
+	Status        types.Object `tfsdk:"status"`
+	UrlLocator    types.String `tfsdk:"url_locator"`
+	DefaultDelay  types.Int64  `tfsdk:"default_delay_sec"`
 }
 
 type pollDataGo struct {

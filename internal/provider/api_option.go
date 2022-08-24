@@ -29,14 +29,16 @@ func parseLocator(locator string) (client.ValueLocator, error) {
 		return nil, fmt.Errorf("invalid locator: %s", locator)
 	}
 	submatches := matches[0]
-	scope, path := submatches[1], submatches[2]
-	switch scope {
+	k, v := submatches[1], submatches[2]
+	switch k {
+	case "exact":
+		return client.ExactLocator(v), nil
 	case "header":
-		return client.HeaderLocator(path), nil
+		return client.HeaderLocator(v), nil
 	case "body":
-		return client.BodyLocator(path), nil
+		return client.BodyLocator(v), nil
 	default:
-		return nil, fmt.Errorf("unknown locator scope: %s", scope)
+		return nil, fmt.Errorf("unknown locator key: %s", k)
 	}
 }
 

@@ -70,7 +70,7 @@ Optional:
 - `default_delay_sec` (Number) The interval between two pollings if there is no `Retry-After` in the response header, in second.
 - `status` (Attributes) The expected status sentinels for each polling state. (see [below for nested schema](#nestedatt--poll_create--status))
 - `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `<scope>[<path>]`, where `<scope>` can be either `header` or `body`, and the `<path>` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).
-- `url_locator` (String) Specifies how to discover the polling location. The format is as `<scope>[<path>]`, where `<scope>` can be either `header` or `body`, and the `<path>` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md). When absent, the resource's path is used for polling.
+- `url_locator` (String) Specifies how to discover the polling url. The format is as `<k>[<v>]`, which can be one of `header[path]` (use the property at `path` in response header), `body[path]` (use the property at `path` in response body) or `exact[value]` (use the exact `value`). When absent, the resource's path is used for polling.
 
 <a id="nestedatt--poll_create--status"></a>
 ### Nested Schema for `poll_create.status`
@@ -90,7 +90,7 @@ Optional:
 - `default_delay_sec` (Number) The interval between two pollings if there is no `Retry-After` in the response header, in second.
 - `status` (Attributes) The expected status sentinels for each polling state. (see [below for nested schema](#nestedatt--poll_delete--status))
 - `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `<scope>[<path>]`, where `<scope>` can be either `header` or `body`, and the `<path>` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).
-- `url_locator` (String) Specifies how to discover the polling location. The format is as `<scope>[<path>]`, where `<scope>` can be either `header` or `body`, and the `<path>` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md). When absent, the resource's path is used for polling.
+- `url_locator` (String) Specifies how to discover the polling url. The format is as `<k>[<v>]`, which can be one of `header[path]` (use the property at `path` in response header), `body[path]` (use the property at `path` in response body) or `exact[value]` (use the exact `value`). When absent, the resource's path is used for polling.
 
 <a id="nestedatt--poll_delete--status"></a>
 ### Nested Schema for `poll_delete.status`
@@ -110,7 +110,7 @@ Optional:
 - `default_delay_sec` (Number) The interval between two pollings if there is no `Retry-After` in the response header, in second.
 - `status` (Attributes) The expected status sentinels for each polling state. (see [below for nested schema](#nestedatt--poll_update--status))
 - `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `<scope>[<path>]`, where `<scope>` can be either `header` or `body`, and the `<path>` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).
-- `url_locator` (String) Specifies how to discover the polling location. The format is as `<scope>[<path>]`, where `<scope>` can be either `header` or `body`, and the `<path>` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md). When absent, the resource's path is used for polling.
+- `url_locator` (String) Specifies how to discover the polling url. The format is as `<k>[<v>]`, which can be one of `header[path]` (use the property at `path` in response header), `body[path]` (use the property at `path` in response body) or `exact[value]` (use the exact `value`). When absent, the resource's path is used for polling.
 
 <a id="nestedatt--poll_update--status"></a>
 ### Nested Schema for `poll_update.status`

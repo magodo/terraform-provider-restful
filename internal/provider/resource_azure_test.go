@@ -170,6 +170,29 @@ func TestResource_Azure_VirtualNetwork_SimplePoll(t *testing.T) {
 	})
 }
 
+func TestOperationResource_Azure_Register_RP(t *testing.T) {
+	addr := "restful_operation.test"
+	d := newAzureData()
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { d.precheck(t) },
+		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+		Steps: []resource.TestStep{
+			{
+				Config: d.unregisterRP("Microsoft.ProviderHub"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrSet(addr, "output"),
+				),
+			},
+			{
+				Config: d.registerRP("Microsoft.ProviderHub"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrSet(addr, "output"),
+				),
+			},
+		},
+	})
+}
+
 func (d azureData) CheckDestroy(addr string) func(*terraform.State) error {
 	return func(s *terraform.State) error {
 		c, err := client.New(d.url, &client.BuildOption{
@@ -596,4 +619,68 @@ resource "restful_resource" "test" {
   })
 }
 `, d.vnet_simple_poll_template(), d.rd)
+}
+
+func (d azureData) registerRP(rp string) string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %[1]q
+  security = {
+    oauth2 = {
+      client_id     = %[2]q
+      client_secret = %[3]q
+      token_url     = "https://login.microsoftonline.com/%[4]s/oauth2/v2.0/token"
+      scopes        = ["https://management.azure.com/.default"]
+    }
+  }
+}
+
+resource "restful_operation" "test" {
+  path = "/subscriptions/%[5]s/providers/%[6]s/register"
+  query = {
+    api-version = ["2014-04-01-preview"]
+  }
+  method = "POST"
+  poll = {
+	url_locator = "exact[/subscriptions/%[5]s/providers/%[6]s?api-version=2014-04-01-preview]"
+    status_locator = "body[registrationState]"
+    status = {
+      success = "Registered"
+      pending = ["Registering"]
+    }
+  }
+}
+`, d.url, d.clientId, d.clientSecret, d.tenantId, d.subscriptionId, rp)
+}
+
+func (d azureData) unregisterRP(rp string) string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %[1]q
+  security = {
+    oauth2 = {
+      client_id     = %[2]q
+      client_secret = %[3]q
+      token_url     = "https://login.microsoftonline.com/%[4]s/oauth2/v2.0/token"
+      scopes        = ["https://management.azure.com/.default"]
+    }
+  }
+}
+
+resource "restful_operation" "test" {
+  path = "/subscriptions/%[5]s/providers/%[6]s/unregister"
+  query = {
+    api-version = ["2014-04-01-preview"]
+  }
+  method = "POST"
+  poll = {
+	url_locator = "exact[/subscriptions/%[5]s/providers/%[6]s?api-version=2014-04-01-preview]"
+    status_locator = "body[registrationState]"
+    status = {
+      success = "Unregistered"
+      pending = ["Unregistering"]
+    }
+  }
+}
+`, d.url, d.clientId, d.clientSecret, d.tenantId, d.subscriptionId, rp)
 }
