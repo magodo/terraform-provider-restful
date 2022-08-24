@@ -29,14 +29,16 @@ func parseLocator(locator string) (client.ValueLocator, error) {
 		return nil, fmt.Errorf("invalid locator: %s", locator)
 	}
 	submatches := matches[0]
-	scope, path := submatches[1], submatches[2]
-	switch scope {
+	k, v := submatches[1], submatches[2]
+	switch k {
+	case "exact":
+		return client.ExactLocator(v), nil
 	case "header":
-		return client.HeaderLocator(path), nil
+		return client.HeaderLocator(v), nil
 	case "body":
-		return client.BodyLocator(path), nil
+		return client.BodyLocator(v), nil
 	default:
-		return nil, fmt.Errorf("unknown locator scope: %s", scope)
+		return nil, fmt.Errorf("unknown locator key: %s", k)
 	}
 }
 
@@ -148,6 +150,20 @@ func (opt apiOption) ForResourceDelete(ctx context.Context, d resourceData) (*cl
 	}
 	var diags diag.Diagnostics
 	out.PollOpt, diags = convertPollObject(ctx, d.PollDelete)
+	if diags.HasError() {
+		return nil, diags
+	}
+	return &out, nil
+}
+
+func (opt apiOption) ForResourceOperation(ctx context.Context, d operationResourceData) (*client.OperationOption, diag.Diagnostics) {
+	out := client.OperationOption{
+		Method: d.Method.Value,
+		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
+		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
+	}
+	var diags diag.Diagnostics
+	out.PollOpt, diags = convertPollObject(ctx, d.Poll)
 	if diags.HasError() {
 		return nil, diags
 	}

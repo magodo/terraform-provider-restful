@@ -521,7 +521,8 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 
 func (*Provider) GetResources(context.Context) (map[string]provider.ResourceType, diag.Diagnostics) {
 	return map[string]provider.ResourceType{
-		"restful_resource": resourceType{},
+		"restful_resource":  resourceType{},
+		"restful_operation": operationResourceType{},
 	}, nil
 }
 

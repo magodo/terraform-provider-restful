@@ -17,6 +17,15 @@ type ValueLocator interface {
 	String() string
 }
 
+type ExactLocator string
+
+func (loc ExactLocator) locateValueInResp(_ resty.Response) string {
+	return string(loc)
+}
+func (loc ExactLocator) String() string {
+	return fmt.Sprintf(`exact[%s]`, string(loc))
+}
+
 type HeaderLocator string
 
 func (loc HeaderLocator) locateValueInResp(resp resty.Response) string {
