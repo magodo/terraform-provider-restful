@@ -100,7 +100,10 @@ func (r *OperationResource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Dia
 }
 
 func (r *OperationResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	r.p = req.ProviderData.(*Provider)
+	r.p = &Provider{}
+	if req.ProviderData != nil {
+		r.p = req.ProviderData.(*Provider)
+	}
 	return
 }
 

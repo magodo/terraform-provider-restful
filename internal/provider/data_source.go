@@ -72,7 +72,10 @@ func (d *DataSource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostic
 }
 
 func (d *DataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
-	d.p = req.ProviderData.(*Provider)
+	d.p = &Provider{}
+	if req.ProviderData != nil {
+		d.p = req.ProviderData.(*Provider)
+	}
 	return
 }
 
