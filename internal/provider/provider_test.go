@@ -17,7 +17,7 @@ func TestValidateProviderConfig(t *testing.T) {
 
 	ctx := context.Background()
 	providerSchema, _ := New().GetSchema(ctx)
-	providerType := providerSchema.TerraformType(ctx)
+	providerType := providerSchema.Type().TerraformType(ctx)
 
 	typ := func(paths ...string) tftypes.Type {
 		attr := providerSchema.GetAttributes()[paths[0]]

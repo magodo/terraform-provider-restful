@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	tfpath "github.com/hashicorp/terraform-plugin-framework/path"
-	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 
 	"github.com/magodo/terraform-provider-restful/internal/client"
@@ -30,7 +29,50 @@ import (
 // Magic header used to indicate the value in the state is derived from import.
 const __IMPORT_HEADER__ = "__RESTFUL_PROVIDER__"
 
-type resourceType struct{}
+type Resource struct {
+	p *Provider
+}
+
+var _ resource.Resource = &Resource{}
+
+type resourceData struct {
+	ID                  types.String `tfsdk:"id"`
+	Path                types.String `tfsdk:"path"`
+	Body                types.String `tfsdk:"body"`
+	NamePath            types.String `tfsdk:"name_path"`
+	UrlPath             types.String `tfsdk:"url_path"`
+	WriteOnlyAttributes types.List   `tfsdk:"write_only_attrs"`
+	PollCreate          types.Object `tfsdk:"poll_create"`
+	PollUpdate          types.Object `tfsdk:"poll_update"`
+	PollDelete          types.Object `tfsdk:"poll_delete"`
+	CreateMethod        types.String `tfsdk:"create_method"`
+	UpdateMethod        types.String `tfsdk:"update_method"`
+	MergePatchDisabled  types.Bool   `tfsdk:"merge_patch_disabled"`
+	Query               types.Map    `tfsdk:"query"`
+	Header              types.Map    `tfsdk:"header"`
+	Output              types.String `tfsdk:"output"`
+}
+
+type pollData struct {
+	StatusLocator types.String `tfsdk:"status_locator"`
+	Status        types.Object `tfsdk:"status"`
+	UrlLocator    types.String `tfsdk:"url_locator"`
+	DefaultDelay  types.Int64  `tfsdk:"default_delay_sec"`
+}
+
+type pollDataGo struct {
+	StatusLocator string `tfsdk:"status_locator"`
+	Status        struct {
+		Success string   `tfsdk:"success"`
+		Pending []string `tfsdk:"pending"`
+	} `tfsdk:"status"`
+	UrlLocator   *string `tfsdk:"url_locator"`
+	DefaultDelay *int64  `tfsdk:"default_delay_sec"`
+}
+
+func (r *Resource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_resource"
+}
 
 func pollAttribute(attr, s string) tfsdk.Attribute {
 	return tfsdk.Attribute{
@@ -79,7 +121,7 @@ func pollAttribute(attr, s string) tfsdk.Attribute {
 	}
 }
 
-func (r resourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
+func (r *Resource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
 		Description:         "`restful_resource` manages a restful resource.",
 		MarkdownDescription: "`restful_resource` manages a restful resource.",
@@ -215,7 +257,7 @@ func validatePoll(ctx context.Context, pollObj types.Object, attrName string, re
 	}
 }
 
-func (r Resource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
 	var config resourceData
 	diags := req.Config.Get(ctx, &config)
 	resp.Diagnostics.Append(diags...)
@@ -282,49 +324,12 @@ func (r Resource) ValidateConfig(ctx context.Context, req resource.ValidateConfi
 	}
 }
 
-func (r resourceType) NewResource(_ context.Context, p provider.Provider) (resource.Resource, diag.Diagnostics) {
-	return Resource{p: *p.(*Provider)}, nil
-}
-
-type Resource struct {
-	p Provider
-}
-
-var _ resource.Resource = Resource{}
-
-type resourceData struct {
-	ID                  types.String `tfsdk:"id"`
-	Path                types.String `tfsdk:"path"`
-	Body                types.String `tfsdk:"body"`
-	NamePath            types.String `tfsdk:"name_path"`
-	UrlPath             types.String `tfsdk:"url_path"`
-	WriteOnlyAttributes types.List   `tfsdk:"write_only_attrs"`
-	PollCreate          types.Object `tfsdk:"poll_create"`
-	PollUpdate          types.Object `tfsdk:"poll_update"`
-	PollDelete          types.Object `tfsdk:"poll_delete"`
-	CreateMethod        types.String `tfsdk:"create_method"`
-	UpdateMethod        types.String `tfsdk:"update_method"`
-	MergePatchDisabled  types.Bool   `tfsdk:"merge_patch_disabled"`
-	Query               types.Map    `tfsdk:"query"`
-	Header              types.Map    `tfsdk:"header"`
-	Output              types.String `tfsdk:"output"`
-}
-
-type pollData struct {
-	StatusLocator types.String `tfsdk:"status_locator"`
-	Status        types.Object `tfsdk:"status"`
-	UrlLocator    types.String `tfsdk:"url_locator"`
-	DefaultDelay  types.Int64  `tfsdk:"default_delay_sec"`
-}
-
-type pollDataGo struct {
-	StatusLocator string `tfsdk:"status_locator"`
-	Status        struct {
-		Success string   `tfsdk:"success"`
-		Pending []string `tfsdk:"pending"`
-	} `tfsdk:"status"`
-	UrlLocator   *string `tfsdk:"url_locator"`
-	DefaultDelay *int64  `tfsdk:"default_delay_sec"`
+func (r *Resource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	r.p = &Provider{}
+	if req.ProviderData != nil {
+		r.p = req.ProviderData.(*Provider)
+	}
+	return
 }
 
 func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {

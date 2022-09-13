@@ -6,15 +6,30 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/tidwall/gjson"
 )
 
-type dataSourceType struct{}
+type DataSource struct {
+	p *Provider
+}
 
-func (d dataSourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
+var _ datasource.DataSource = &DataSource{}
+
+type dataSourceData struct {
+	ID       types.String `tfsdk:"id"`
+	Query    types.Map    `tfsdk:"query"`
+	Header   types.Map    `tfsdk:"header"`
+	Selector types.String `tfsdk:"selector"`
+	Output   types.String `tfsdk:"output"`
+}
+
+func (d *DataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_resource"
+}
+
+func (d *DataSource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
 		Description:         "`restful_resource` data source can be used to retrieve the model of a restful resource by ID.",
 		MarkdownDescription: "`restful_resource` data source can be used to retrieve the model of a restful resource by ID.",
@@ -56,25 +71,15 @@ func (d dataSourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnos
 	}, nil
 }
 
-func (d dataSourceType) NewDataSource(_ context.Context, p provider.Provider) (datasource.DataSource, diag.Diagnostics) {
-	return dataSource{p: *p.(*Provider)}, nil
+func (d *DataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
+	d.p = &Provider{}
+	if req.ProviderData != nil {
+		d.p = req.ProviderData.(*Provider)
+	}
+	return
 }
 
-type dataSource struct {
-	p Provider
-}
-
-var _ datasource.DataSource = dataSource{}
-
-type dataSourceData struct {
-	ID       types.String `tfsdk:"id"`
-	Query    types.Map    `tfsdk:"query"`
-	Header   types.Map    `tfsdk:"header"`
-	Selector types.String `tfsdk:"selector"`
-	Output   types.String `tfsdk:"output"`
-}
-
-func (d dataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
+func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var config dataSourceData
 	diags := req.Config.Get(ctx, &config)
 	resp.Diagnostics.Append(diags...)

@@ -7,7 +7,6 @@ import (
 	"path"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -15,9 +14,28 @@ import (
 	"github.com/magodo/terraform-provider-restful/internal/validator"
 )
 
-type operationResourceType struct{}
+type OperationResource struct {
+	p *Provider
+}
 
-func (r operationResourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
+var _ resource.Resource = &OperationResource{}
+
+type operationResourceData struct {
+	ID     types.String `tfsdk:"id"`
+	Path   types.String `tfsdk:"path"`
+	Method types.String `tfsdk:"method"`
+	Body   types.String `tfsdk:"body"`
+	Query  types.Map    `tfsdk:"query"`
+	Header types.Map    `tfsdk:"header"`
+	Poll   types.Object `tfsdk:"poll"`
+	Output types.String `tfsdk:"output"`
+}
+
+func (r *OperationResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_operation"
+}
+
+func (r *OperationResource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	return tfsdk.Schema{
 		Description:         "`restful_operation` represents a one-time API call operation.",
 		MarkdownDescription: "`restful_operation` represents a one-time API call operation.",
@@ -81,7 +99,15 @@ func (r operationResourceType) GetSchema(_ context.Context) (tfsdk.Schema, diag.
 	}, nil
 }
 
-func (r OperationResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+func (r *OperationResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	r.p = &Provider{}
+	if req.ProviderData != nil {
+		r.p = req.ProviderData.(*Provider)
+	}
+	return
+}
+
+func (r *OperationResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
 	var config operationResourceData
 	diags := req.Config.Get(ctx, &config)
 	resp.Diagnostics.Append(diags...)
@@ -102,28 +128,7 @@ func (r OperationResource) ValidateConfig(ctx context.Context, req resource.Vali
 	}
 }
 
-func (r operationResourceType) NewResource(_ context.Context, p provider.Provider) (resource.Resource, diag.Diagnostics) {
-	return OperationResource{p: *p.(*Provider)}, nil
-}
-
-type OperationResource struct {
-	p Provider
-}
-
-var _ resource.Resource = OperationResource{}
-
-type operationResourceData struct {
-	ID     types.String `tfsdk:"id"`
-	Path   types.String `tfsdk:"path"`
-	Method types.String `tfsdk:"method"`
-	Body   types.String `tfsdk:"body"`
-	Query  types.Map    `tfsdk:"query"`
-	Header types.Map    `tfsdk:"header"`
-	Poll   types.Object `tfsdk:"poll"`
-	Output types.String `tfsdk:"output"`
-}
-
-func (r OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Plan, state *tfsdk.State, diagnostics *diag.Diagnostics) {
+func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Plan, state *tfsdk.State, diagnostics *diag.Diagnostics) {
 	var plan operationResourceData
 	diags := tfplan.Get(ctx, &plan)
 	diagnostics.Append(diags...)
@@ -201,20 +206,20 @@ func (r OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Plan
 	}
 }
 
-func (r OperationResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+func (r *OperationResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	r.createOrUpdate(ctx, req.Plan, &resp.State, &resp.Diagnostics)
 	return
 }
 
-func (r OperationResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+func (r *OperationResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	r.createOrUpdate(ctx, req.Plan, &resp.State, &resp.Diagnostics)
 	return
 }
 
-func (r OperationResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+func (r *OperationResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	return
 }
 
-func (r OperationResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (r *OperationResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	return
 }

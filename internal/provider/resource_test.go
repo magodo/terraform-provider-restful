@@ -14,9 +14,9 @@ func TestValidateResourceConfig(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	resources, _ := New().GetResources(ctx)
-	resourceSchema, _ := resources["restful_resource"].GetSchema(ctx)
-	resourceType := resourceSchema.TerraformType(ctx)
+	res := &Resource{}
+	resourceSchema, _ := res.GetSchema(ctx)
+	resourceType := resourceSchema.Type().TerraformType(ctx)
 
 	typ := func(paths ...string) tftypes.Type {
 		attr := resourceSchema.GetAttributes()[paths[0]]
@@ -143,7 +143,13 @@ func TestValidateResourceConfig(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			testServer := providerserver.NewProtocol6(New())()
+			p := New()
+			testServer := providerserver.NewProtocol6(p)()
+			ctx := context.Background()
+			if _, err := testServer.GetProviderSchema(ctx, &tfprotov6.GetProviderSchemaRequest{}); err != nil {
+				t.Errorf("Unexpected error: %s", err)
+				return
+			}
 			dv, err := tfprotov6.NewDynamicValue(resourceType, tc.config)
 			if err != nil {
 				t.Errorf("Unexpected error: %s", err)
@@ -153,7 +159,7 @@ func TestValidateResourceConfig(t *testing.T) {
 				TypeName: "restful_resource",
 				Config:   &dv,
 			}
-			got, err := testServer.ValidateResourceConfig(context.Background(), req)
+			got, err := testServer.ValidateResourceConfig(ctx, req)
 			if err != nil {
 				t.Errorf("Unexpected error: %s", err)
 				return
