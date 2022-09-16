@@ -19,8 +19,6 @@ import (
 
 type ProviderInterface interface {
 	provider.ProviderWithMetadata
-	provider.ProviderWithDataSources
-	provider.ProviderWithResources
 	provider.ProviderWithValidateConfig
 }
 
