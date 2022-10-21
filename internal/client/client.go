@@ -128,6 +128,7 @@ func (c *Client) Read(ctx context.Context, path string, opt ReadOption) (*resty.
 }
 
 type UpdateOption struct {
+	CreateMethod       string
 	UpdateMethod       string
 	MergePatchDisabled bool
 	Query              Query

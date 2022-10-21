@@ -123,10 +123,14 @@ func (opt apiOption) ForResourceRead(ctx context.Context, d resourceData) (*clie
 
 func (opt apiOption) ForResourceUpdate(ctx context.Context, d resourceData) (*client.UpdateOption, diag.Diagnostics) {
 	out := client.UpdateOption{
+		CreateMethod:       opt.CreateMethod,
 		UpdateMethod:       opt.UpdateMethod,
 		MergePatchDisabled: opt.MergePatchDisabled,
 		Query:              opt.Query.Clone().TakeOrSelf(ctx, d.Query),
 		Header:             opt.Header.Clone().TakeOrSelf(ctx, d.Header),
+	}
+	if !d.CreateMethod.Unknown && !d.CreateMethod.Null {
+		out.CreateMethod = d.CreateMethod.Value
 	}
 	if !d.UpdateMethod.Unknown && !d.UpdateMethod.Null {
 		out.UpdateMethod = d.UpdateMethod.Value
