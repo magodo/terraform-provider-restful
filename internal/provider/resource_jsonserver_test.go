@@ -41,7 +41,22 @@ func TestResource_JSONServer_Basic(t *testing.T) {
 		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
 		Steps: []resource.TestStep{
 			{
-				Config: d.basic(),
+				Config: d.basic("foo"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrSet(addr, "output"),
+				),
+			},
+			{
+				ResourceName:            addr,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"name_path"},
+				ImportStateIdFunc: func(s *terraform.State) (string, error) {
+					return fmt.Sprintf(`{"id": %q, "body": {"foo": null}}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
+				},
+			},
+			{
+				Config: d.basic("bar"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrSet(addr, "output"),
 				),
@@ -124,7 +139,7 @@ func (d jsonServerData) CheckDestroy(addr string) func(*terraform.State) error {
 	}
 }
 
-func (d jsonServerData) basic() string {
+func (d jsonServerData) basic(v string) string {
 	return fmt.Sprintf(`
 provider "restful" {
   base_url = %q
@@ -133,11 +148,11 @@ provider "restful" {
 resource "restful_resource" "test" {
   path = "posts"
   body = jsonencode({
-  	foo = "bar"
+  	foo = %q
 })
   name_path = "id"
 }
-`, d.url)
+`, d.url, v)
 
 }
 

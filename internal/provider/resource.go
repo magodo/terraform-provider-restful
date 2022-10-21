@@ -639,13 +639,15 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 			body = string(b)
 		}
 
-		var path string
-		switch opt.CreateMethod {
-		case "PUT":
-			path = plan.UpdatePath.Value
-		case "POST":
-			segs := strings.Split(plan.ID.Value, "/")
-			path, _ = url.JoinPath(plan.UpdatePath.Value, segs[len(segs)-1])
+		path := plan.ID.Value
+		if !plan.UpdatePath.IsNull() {
+			switch opt.CreateMethod {
+			case "PUT":
+				path = plan.UpdatePath.Value
+			case "POST":
+				segs := strings.Split(plan.ID.Value, "/")
+				path, _ = url.JoinPath(plan.UpdatePath.Value, segs[len(segs)-1])
+			}
 		}
 
 		response, err := c.Update(ctx, path, body, *opt)
