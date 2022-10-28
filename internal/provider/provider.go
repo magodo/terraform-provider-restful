@@ -311,8 +311,8 @@ func (*Provider) ValidateConfig(ctx context.Context, req provider.ValidateConfig
 		return
 	}
 
-	if !config.BaseURL.Unknown {
-		if _, err := url.Parse(config.BaseURL.Value); err != nil {
+	if !config.BaseURL.IsUnknown() {
+		if _, err := url.Parse(config.BaseURL.ValueString()); err != nil {
 			resp.Diagnostics.AddError(
 				"Invalid configuration",
 				"The `base_url` is not a valid URL",
@@ -321,13 +321,13 @@ func (*Provider) ValidateConfig(ctx context.Context, req provider.ValidateConfig
 		}
 	}
 
-	if !config.Security.Unknown && !config.Security.Null {
-		httpObj := config.Security.Attrs["http"].(types.Object)
-		apikeyObj := config.Security.Attrs["apikey"].(types.Set)
-		oauth2Obj := config.Security.Attrs["oauth2"].(types.Object)
+	if !config.Security.IsUnknown() && !config.Security.IsNull() {
+		httpObj := config.Security.Attributes()["http"].(types.Object)
+		apikeyObj := config.Security.Attributes()["apikey"].(types.Set)
+		oauth2Obj := config.Security.Attributes()["oauth2"].(types.Object)
 
 		l := []string{}
-		if !httpObj.Null && !httpObj.Unknown {
+		if !httpObj.IsNull() && !httpObj.IsUnknown() {
 			l = append(l, "http")
 			type httpData struct {
 				Type     types.String `tfsdk:"type"`
@@ -340,42 +340,42 @@ func (*Provider) ValidateConfig(ctx context.Context, req provider.ValidateConfig
 				resp.Diagnostics.Append(diags...)
 				return
 			}
-			if !d.Username.Unknown && !d.Password.Unknown && !d.Token.Unknown {
-				if !d.Type.Unknown {
-					switch d.Type.Value {
+			if !d.Username.IsUnknown() && !d.Password.IsUnknown() && !d.Token.IsUnknown() {
+				if !d.Type.IsUnknown() {
+					switch d.Type.ValueString() {
 					case string(client.HTTPAuthTypeBasic):
-						if d.Username.Null {
+						if d.Username.IsNull() {
 							resp.Diagnostics.AddError(
 								"Invalid configuration: `security.http`",
 								fmt.Sprintf("`username` is required when `type` is %s", client.HTTPAuthTypeBasic),
 							)
 						}
-						if d.Password.Null {
+						if d.Password.IsNull() {
 							resp.Diagnostics.AddError(
 								"Invalid configuration: `security.http`",
 								fmt.Sprintf("`password` is required when `type` is %s", client.HTTPAuthTypeBasic),
 							)
 						}
-						if !d.Token.Null {
+						if !d.Token.IsNull() {
 							resp.Diagnostics.AddError(
 								"Invalid configuration: `security.http`",
 								fmt.Sprintf("`token` can't be specified when `type` is %s", client.HTTPAuthTypeBasic),
 							)
 						}
 					case string(client.HTTPAuthTypeBearer):
-						if !d.Username.Null {
+						if !d.Username.IsNull() {
 							resp.Diagnostics.AddError(
 								"Invalid configuration: `security.http`",
 								fmt.Sprintf("`username` can't be specified when `type` is %s", client.HTTPAuthTypeBearer),
 							)
 						}
-						if !d.Password.Null {
+						if !d.Password.IsNull() {
 							resp.Diagnostics.AddError(
 								"Invalid configuration: `security.http`",
 								fmt.Sprintf("`password` can't be specified when `type` is %s", client.HTTPAuthTypeBearer),
 							)
 						}
-						if d.Token.Null {
+						if d.Token.IsNull() {
 							resp.Diagnostics.AddError(
 								"Invalid configuration: `security.http`",
 								fmt.Sprintf("`token` is required when `type` is %s", client.HTTPAuthTypeBearer),
@@ -387,7 +387,7 @@ func (*Provider) ValidateConfig(ctx context.Context, req provider.ValidateConfig
 					}
 				}
 
-				if !(d.Username.Null && d.Password.Null && !d.Token.Null) && !(!d.Username.Null && !d.Password.Null && d.Token.Null) {
+				if !(d.Username.IsNull() && d.Password.IsNull() && !d.Token.IsNull()) && !(!d.Username.IsNull() && !d.Password.IsNull() && d.Token.IsNull()) {
 					resp.Diagnostics.AddError(
 						"Invalid configuration: `security.http`",
 						"Either `username` & `password`, or `token` should be specified",
@@ -396,7 +396,7 @@ func (*Provider) ValidateConfig(ctx context.Context, req provider.ValidateConfig
 				}
 			}
 		}
-		if !oauth2Obj.Null && !oauth2Obj.Unknown {
+		if !oauth2Obj.IsNull() && !oauth2Obj.IsUnknown() {
 			l = append(l, "oauth2")
 			type oauth2Data struct {
 				TokenUrl       types.String `tfsdk:"token_url"`
@@ -413,8 +413,8 @@ func (*Provider) ValidateConfig(ctx context.Context, req provider.ValidateConfig
 				resp.Diagnostics.Append(diags...)
 				return
 			}
-			if !d.ClientId.Unknown && !d.ClientSecret.Unknown && !d.Username.Unknown && !d.Password.Unknown {
-				if !(d.ClientId.Null && d.ClientSecret.Null && !d.Username.Null && !d.Password.Null) && !(!d.ClientId.Null && !d.ClientSecret.Null && d.Username.Null && d.Password.Null) {
+			if !d.ClientId.IsUnknown() && !d.ClientSecret.IsUnknown() && !d.Username.IsUnknown() && !d.Password.IsUnknown() {
+				if !(d.ClientId.IsNull() && d.ClientSecret.IsNull() && !d.Username.IsNull() && !d.Password.IsNull()) && !(!d.ClientId.IsNull() && !d.ClientSecret.IsNull() && d.Username.IsNull() && d.Password.IsNull()) {
 					resp.Diagnostics.AddError(
 						"Invalid configuration: `security.oauth2`",
 						"Either `username` & `password`, or `client_id` & `client_secret` should be specified",
@@ -423,13 +423,13 @@ func (*Provider) ValidateConfig(ctx context.Context, req provider.ValidateConfig
 				}
 			}
 		}
-		if !apikeyObj.Null && !apikeyObj.Unknown {
+		if !apikeyObj.IsNull() && !apikeyObj.IsUnknown() {
 			l = append(l, "apikey")
 		}
 
 		// In case any of the block is unknown, we don't know whether it will evaluate into null or not.
 		// Here, we do best effort to ensure at least one of them is set.
-		if httpObj.Null && oauth2Obj.Null && apikeyObj.Null {
+		if httpObj.IsNull() && oauth2Obj.IsNull() && apikeyObj.IsNull() {
 			resp.Diagnostics.AddError(
 				"Invalid configuration: `security`",
 				"There is no security scheme specified",

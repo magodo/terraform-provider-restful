@@ -43,7 +43,7 @@ func parseLocator(locator string) (client.ValueLocator, error) {
 }
 
 func convertPollObject(ctx context.Context, obj types.Object) (*client.PollOption, diag.Diagnostics) {
-	if obj.Null {
+	if obj.IsNull() {
 		return nil, nil
 	}
 	popt := &client.PollOption{}
@@ -102,8 +102,8 @@ func (opt apiOption) ForResourceCreate(ctx context.Context, d resourceData) (*cl
 		Query:        opt.Query.Clone().TakeOrSelf(ctx, d.Query),
 		Header:       opt.Header.Clone().TakeOrSelf(ctx, d.Header),
 	}
-	if !d.CreateMethod.Unknown && !d.CreateMethod.Null {
-		out.CreateMethod = d.CreateMethod.Value
+	if !d.CreateMethod.IsUnknown() && !d.CreateMethod.IsNull() {
+		out.CreateMethod = d.CreateMethod.ValueString()
 	}
 	var diags diag.Diagnostics
 	out.PollOpt, diags = convertPollObject(ctx, d.PollCreate)
@@ -128,11 +128,11 @@ func (opt apiOption) ForResourceUpdate(ctx context.Context, d resourceData) (*cl
 		Query:              opt.Query.Clone().TakeOrSelf(ctx, d.Query),
 		Header:             opt.Header.Clone().TakeOrSelf(ctx, d.Header),
 	}
-	if !d.UpdateMethod.Unknown && !d.UpdateMethod.Null {
-		out.UpdateMethod = d.UpdateMethod.Value
+	if !d.UpdateMethod.IsUnknown() && !d.UpdateMethod.IsNull() {
+		out.UpdateMethod = d.UpdateMethod.ValueString()
 	}
-	if !d.MergePatchDisabled.Unknown && !d.MergePatchDisabled.Null {
-		out.MergePatchDisabled = d.MergePatchDisabled.Value
+	if !d.MergePatchDisabled.IsUnknown() && !d.MergePatchDisabled.IsNull() {
+		out.MergePatchDisabled = d.MergePatchDisabled.ValueBool()
 	}
 
 	var diags diag.Diagnostics
@@ -158,7 +158,7 @@ func (opt apiOption) ForResourceDelete(ctx context.Context, d resourceData) (*cl
 
 func (opt apiOption) ForResourceOperation(ctx context.Context, d operationResourceData) (*client.OperationOption, diag.Diagnostics) {
 	out := client.OperationOption{
-		Method: d.Method.Value,
+		Method: d.Method.ValueString(),
 		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
 		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
 	}

@@ -29,19 +29,19 @@ func (v stringInSliceValidator) Validate(ctx context.Context, req tfsdk.Validate
 		return
 	}
 
-	if str.Unknown || str.Null {
+	if str.IsUnknown() || str.IsNull() {
 		return
 	}
 
 	for _, valid := range v.valids {
-		if str.Value == valid {
+		if str.ValueString() == valid {
 			return
 		}
 	}
 	resp.Diagnostics.AddAttributeError(
 		req.AttributePath,
 		"Invalid String",
-		fmt.Sprintf("String must be one of [%s], got: %s.", strings.Join(v.valids, ","), str.Value),
+		fmt.Sprintf("String must be one of [%s], got: %s.", strings.Join(v.valids, ","), str.ValueString()),
 	)
 }
 
