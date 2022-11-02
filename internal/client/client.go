@@ -21,11 +21,11 @@ func (q Query) Clone() Query {
 }
 
 func (q Query) TakeOrSelf(ctx context.Context, v types.Map) Query {
-	if len(v.Elems) == 0 {
+	if len(v.Elements()) == 0 {
 		return q
 	}
 	nq := Query{}
-	for k, v := range v.Elems {
+	for k, v := range v.Elements() {
 		vs := []string{}
 		diags := v.(types.List).ElementsAs(ctx, &vs, false)
 		if diags.HasError() {
@@ -53,12 +53,12 @@ func (h Header) Clone() Header {
 }
 
 func (h Header) TakeOrSelf(ctx context.Context, v types.Map) Header {
-	if len(v.Elems) == 0 {
+	if len(v.Elements()) == 0 {
 		return h
 	}
 	nh := Header{}
-	for k, v := range v.Elems {
-		nh[k] = v.(types.String).Value
+	for k, v := range v.Elements() {
+		nh[k] = v.(types.String).ValueString()
 	}
 	return nh
 }

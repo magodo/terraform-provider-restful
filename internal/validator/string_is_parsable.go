@@ -33,11 +33,11 @@ func (v stringIsParsable) Validate(ctx context.Context, req tfsdk.ValidateAttrib
 		return
 	}
 
-	if str.Unknown || str.Null {
+	if str.IsUnknown() || str.IsNull() {
 		return
 	}
 
-	if err := v.parsable.Parse(str.Value); err != nil {
+	if err := v.parsable.Parse(str.ValueString()); err != nil {
 		resp.Diagnostics.AddAttributeError(
 			req.AttributePath,
 			"Invalid String",

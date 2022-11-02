@@ -119,7 +119,7 @@ func (r *OperationResource) ValidateConfig(ctx context.Context, req resource.Val
 
 	if !config.Body.IsUnknown() && !config.Body.IsNull() {
 		var body map[string]interface{}
-		if err := json.Unmarshal([]byte(config.Body.Value), &body); err != nil {
+		if err := json.Unmarshal([]byte(config.Body.ValueString()), &body); err != nil {
 			resp.Diagnostics.AddError(
 				"Invalid configuration",
 				fmt.Sprintf(`Failed to unmarshal "body": %s: %s`, err.Error(), config.Body.String()),
@@ -144,7 +144,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 		return
 	}
 
-	response, err := c.Operation(ctx, plan.Path.Value, plan.Body.Value, *opt)
+	response, err := c.Operation(ctx, plan.Path.ValueString(), plan.Body.ValueString(), *opt)
 	if err != nil {
 		diagnostics.AddError(
 			"Error to call operation",
@@ -163,7 +163,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 	b := response.Body()
 
 	// For POST create method, generate the resource id by combining the path and the id in response.
-	resourceId := plan.Path.Value
+	resourceId := plan.Path.ValueString()
 
 	// For LRO, wait for completion
 	if opt.PollOpt != nil {

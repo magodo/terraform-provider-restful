@@ -235,7 +235,7 @@ func (r *Resource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics)
 }
 
 func validatePoll(ctx context.Context, pollObj types.Object, attrName string, resp *resource.ValidateConfigResponse) {
-	if pollObj.Null || pollObj.Unknown {
+	if pollObj.IsNull() || pollObj.IsUnknown() {
 		return
 	}
 	var pd pollData
@@ -246,7 +246,7 @@ func validatePoll(ctx context.Context, pollObj types.Object, attrName string, re
 	}
 
 	if !pd.StatusLocator.IsUnknown() && !pd.StatusLocator.IsNull() {
-		if _, err := parseLocator(pd.StatusLocator.Value); err != nil {
+		if _, err := parseLocator(pd.StatusLocator.ValueString()); err != nil {
 			resp.Diagnostics.AddError(
 				"Invalid configuration",
 				fmt.Sprintf("Failed to parse status locator for %q: %s", attrName, err.Error()),
@@ -255,7 +255,7 @@ func validatePoll(ctx context.Context, pollObj types.Object, attrName string, re
 	}
 
 	if !pd.UrlLocator.IsUnknown() && !pd.UrlLocator.IsNull() {
-		if _, err := parseLocator(pd.UrlLocator.Value); err != nil {
+		if _, err := parseLocator(pd.UrlLocator.ValueString()); err != nil {
 			resp.Diagnostics.AddError(
 				"Invalid configuration",
 				fmt.Sprintf("Failed to parse url locator for %q: %s", attrName, err.Error()),
@@ -273,26 +273,26 @@ func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConf
 	}
 
 	createMethod := r.p.apiOpt.CreateMethod
-	if !config.CreateMethod.Unknown {
-		if !config.CreateMethod.Null {
-			createMethod = config.CreateMethod.Value
+	if !config.CreateMethod.IsUnknown() {
+		if !config.CreateMethod.IsNull() {
+			createMethod = config.CreateMethod.ValueString()
 		}
-		if !config.NamePath.Unknown && !config.UrlPath.Unknown {
+		if !config.NamePath.IsUnknown() && !config.UrlPath.IsUnknown() {
 			if createMethod == "PUT" {
-				if !config.NamePath.Null {
+				if !config.NamePath.IsNull() {
 					resp.Diagnostics.AddError(
 						"Invalid configuration",
 						"The `name_path` can not be specified when `create_method` is `PUT`",
 					)
 				}
-				if !config.UrlPath.Null {
+				if !config.UrlPath.IsNull() {
 					resp.Diagnostics.AddError(
 						"Invalid configuration",
 						"The `url_path` can not be specified when `create_method` is `PUT`",
 					)
 				}
 			} else if createMethod == "POST" {
-				if config.NamePath.Null && config.UrlPath.Null || !config.NamePath.Null && !config.UrlPath.Null {
+				if config.NamePath.IsNull() && config.UrlPath.IsNull() || !config.NamePath.IsNull() && !config.UrlPath.IsNull() {
 					resp.Diagnostics.AddError(
 						"Invalid configuration",
 						"Exactly one of `name_path` and `url_path` should be specified when `create_method` is `POST`",
@@ -308,7 +308,7 @@ func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConf
 
 	if !config.Body.IsUnknown() {
 		var body map[string]interface{}
-		if err := json.Unmarshal([]byte(config.Body.Value), &body); err != nil {
+		if err := json.Unmarshal([]byte(config.Body.ValueString()), &body); err != nil {
 			resp.Diagnostics.AddError(
 				"Invalid configuration",
 				fmt.Sprintf(`Failed to unmarshal "body": %s: %s`, err.Error(), config.Body.String()),
@@ -316,10 +316,10 @@ func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConf
 		}
 
 		if !config.WriteOnlyAttributes.IsUnknown() && !config.WriteOnlyAttributes.IsNull() {
-			for _, ie := range config.WriteOnlyAttributes.Elems {
+			for _, ie := range config.WriteOnlyAttributes.Elements() {
 				ie := ie.(types.String)
 				if !ie.IsUnknown() && !ie.IsNull() {
-					if !gjson.Get(config.Body.Value, ie.Value).Exists() {
+					if !gjson.Get(config.Body.ValueString(), ie.ValueString()).Exists() {
 						resp.Diagnostics.AddError(
 							"Invalid configuration",
 							fmt.Sprintf(`Invalid path in "write_only_attrs": %s`, ie.String()),
@@ -363,7 +363,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 		if diags.HasError() {
 			return
 		}
-		response, err := c.Read(ctx, plan.Path.Value, *opt)
+		response, err := c.Read(ctx, plan.Path.ValueString(), *opt)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Existance check failed",
@@ -374,14 +374,14 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 		if response.StatusCode() != http.StatusNotFound {
 			resp.Diagnostics.AddError(
 				"Resource already exists",
-				fmt.Sprintf("A resource with the ID %q already exists - to be managed via Terraform this resource needs to be imported into the State. Please see the resource documentation for %q for more information.", plan.Path.Value, `restful_resource`),
+				fmt.Sprintf("A resource with the ID %q already exists - to be managed via Terraform this resource needs to be imported into the State. Please see the resource documentation for %q for more information.", plan.Path.ValueString(), `restful_resource`),
 			)
 			return
 		}
 	}
 
 	// Create the resource
-	response, err := c.Create(ctx, plan.Path.Value, plan.Body.Value, *opt)
+	response, err := c.Create(ctx, plan.Path.ValueString(), plan.Body.ValueString(), *opt)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error to call create",
@@ -404,29 +404,29 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	switch opt.CreateMethod {
 	case "POST":
 		switch {
-		case !plan.NamePath.Null:
-			result := gjson.GetBytes(b, plan.NamePath.Value)
+		case !plan.NamePath.IsNull():
+			result := gjson.GetBytes(b, plan.NamePath.ValueString())
 			if !result.Exists() {
 				resp.Diagnostics.AddError(
 					fmt.Sprintf("Failed to identify resource name"),
-					fmt.Sprintf("Can't find resource name in path %q", plan.NamePath.Value),
+					fmt.Sprintf("Can't find resource name in path %q", plan.NamePath.ValueString()),
 				)
 				return
 			}
-			resourceId = path.Join(plan.Path.Value, result.String())
-		case !plan.UrlPath.Null:
-			result := gjson.GetBytes(b, plan.UrlPath.Value)
+			resourceId = path.Join(plan.Path.ValueString(), result.String())
+		case !plan.UrlPath.IsNull():
+			result := gjson.GetBytes(b, plan.UrlPath.ValueString())
 			if !result.Exists() {
 				resp.Diagnostics.AddError(
 					fmt.Sprintf("Failed to identify resource id"),
-					fmt.Sprintf("Can't find resource id in path %q", plan.UrlPath.Value),
+					fmt.Sprintf("Can't find resource id in path %q", plan.UrlPath.ValueString()),
 				)
 				return
 			}
 			resourceId = strings.TrimPrefix(result.String(), c.BaseURL)
 		}
 	case "PUT":
-		resourceId = plan.Path.Value
+		resourceId = plan.Path.ValueString()
 	}
 
 	// For LRO, wait for completion
@@ -507,7 +507,7 @@ func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *reso
 		return
 	}
 
-	response, err := c.Read(ctx, state.ID.Value, *opt)
+	response, err := c.Read(ctx, state.ID.ValueString(), *opt)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error to call read",
@@ -531,7 +531,7 @@ func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *reso
 
 	var writeOnlyAttributes []string
 	// In case write_only_attrs (O+C) is not set, set its default value as is defined in schema. This can avoid unnecessary plan diff after import.
-	if state.WriteOnlyAttributes.Null {
+	if state.WriteOnlyAttributes.IsNull() {
 		state.WriteOnlyAttributes = types.List{
 			ElemType: types.StringType,
 			Elems:    []attr.Value{},
@@ -544,11 +544,11 @@ func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *reso
 	}
 
 	var body string
-	if strings.HasPrefix(state.Body.Value, __IMPORT_HEADER__) {
+	if strings.HasPrefix(state.Body.ValueString(), __IMPORT_HEADER__) {
 		// This branch is only invoked during `terraform import`.
-		body, err = ModifyBodyForImport(strings.TrimPrefix(state.Body.Value, __IMPORT_HEADER__), string(b))
+		body, err = ModifyBodyForImport(strings.TrimPrefix(state.Body.ValueString(), __IMPORT_HEADER__), string(b))
 	} else {
-		body, err = ModifyBody(state.Body.Value, string(b), writeOnlyAttributes)
+		body, err = ModifyBody(state.Body.ValueString(), string(b), writeOnlyAttributes)
 	}
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -562,26 +562,26 @@ func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *reso
 	state.Body = types.String{Value: string(body)}
 
 	createMethod := r.p.apiOpt.CreateMethod
-	if state.CreateMethod.Value != "" {
-		createMethod = state.CreateMethod.Value
+	if state.CreateMethod.ValueString() != "" {
+		createMethod = state.CreateMethod.ValueString()
 	}
 
 	updateMethod := r.p.apiOpt.UpdateMethod
-	if state.UpdateMethod.Value != "" {
-		updateMethod = state.UpdateMethod.Value
+	if state.UpdateMethod.ValueString() != "" {
+		updateMethod = state.UpdateMethod.ValueString()
 	}
 
 	mergePatchDisabled := r.p.apiOpt.MergePatchDisabled
-	if !state.MergePatchDisabled.Null {
-		mergePatchDisabled = state.MergePatchDisabled.Value
+	if !state.MergePatchDisabled.IsNull() {
+		mergePatchDisabled = state.MergePatchDisabled.ValueBool()
 	}
 
 	// Set force new properties
 	switch createMethod {
 	case "POST":
-		state.Path = types.String{Value: filepath.Dir(state.ID.Value)}
+		state.Path = types.String{Value: filepath.Dir(state.ID.ValueString())}
 	case "PUT":
-		state.Path = types.String{Value: state.ID.Value}
+		state.Path = types.String{Value: state.ID.ValueString()}
 	}
 
 	// Set overridable (O+C) attributes from option to state
@@ -625,10 +625,10 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 	}
 
 	// Invoke API to Update the resource only when there are changes in the body.
-	if state.Body.Value != plan.Body.Value {
-		body := plan.Body.Value
+	if state.Body.ValueString() != plan.Body.ValueString() {
+		body := plan.Body.ValueString()
 		if opt.UpdateMethod == "PATCH" && !opt.MergePatchDisabled {
-			b, err := jsonpatch.CreateMergePatch([]byte(state.Body.Value), []byte(plan.Body.Value))
+			b, err := jsonpatch.CreateMergePatch([]byte(state.Body.ValueString()), []byte(plan.Body.ValueString()))
 			if err != nil {
 				resp.Diagnostics.AddError(
 					"Update failure",
@@ -639,14 +639,14 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 			body = string(b)
 		}
 
-		path := plan.ID.Value
+		path := plan.ID.ValueString()
 		if !plan.UpdatePath.IsNull() {
 			switch opt.CreateMethod {
 			case "PUT":
-				path = plan.UpdatePath.Value
+				path = plan.UpdatePath.ValueString()
 			case "POST":
-				segs := strings.Split(plan.ID.Value, "/")
-				path, _ = url.JoinPath(plan.UpdatePath.Value, segs[len(segs)-1])
+				segs := strings.Split(plan.ID.ValueString(), "/")
+				path, _ = url.JoinPath(plan.UpdatePath.ValueString(), segs[len(segs)-1])
 			}
 		}
 
@@ -732,7 +732,7 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 		return
 	}
 
-	response, err := c.Delete(ctx, state.ID.Value, *opt)
+	response, err := c.Delete(ctx, state.ID.ValueString(), *opt)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error to call delete",

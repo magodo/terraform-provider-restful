@@ -95,7 +95,7 @@ func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp 
 		return
 	}
 
-	response, err := c.Read(ctx, config.ID.Value, *opt)
+	response, err := c.Read(ctx, config.ID.ValueString(), *opt)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error to call Read",
@@ -113,19 +113,19 @@ func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp 
 
 	b := response.Body()
 
-	if config.Selector.Value != "" {
-		result := gjson.GetBytes(b, config.Selector.Value)
+	if config.Selector.ValueString() != "" {
+		result := gjson.GetBytes(b, config.Selector.ValueString())
 		if !result.Exists() {
 			resp.Diagnostics.AddError(
 				fmt.Sprintf("Failed to select resource from response"),
-				fmt.Sprintf("Can't find resource with query %q", config.Selector.Value),
+				fmt.Sprintf("Can't find resource with query %q", config.Selector.ValueString()),
 			)
 			return
 		}
 		if len(result.Array()) > 1 {
 			resp.Diagnostics.AddError(
 				fmt.Sprintf("Failed to select resource from response"),
-				fmt.Sprintf("Multiple resources with query %q found (%d)", config.Selector.Value, len(result.Array())),
+				fmt.Sprintf("Multiple resources with query %q found (%d)", config.Selector.ValueString(), len(result.Array())),
 			)
 			return
 		}
