@@ -78,7 +78,7 @@ func TestResource_Azure_ResourceGroup(t *testing.T) {
 				ImportStateIdFunc:       d.resourceGroupImportStateIdFunc(addr),
 			},
 			{
-				Config: d.resourceGroup_update(),
+				Config: d.resourceGroup_complete(),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrSet(addr, "output"),
 				),
@@ -89,6 +89,44 @@ func TestResource_Azure_ResourceGroup(t *testing.T) {
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"poll_delete"},
 				ImportStateIdFunc:       d.resourceGroupImportStateIdFunc(addr),
+			},
+		},
+	})
+}
+
+func TestResource_Azure_ResourceGroup_updatePath(t *testing.T) {
+	addr := "restful_resource.test"
+	d := newAzureData()
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { d.precheck(t) },
+		CheckDestroy:             d.CheckDestroy(addr),
+		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+		Steps: []resource.TestStep{
+			{
+				Config: d.resourceGroup_updatePath(),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrSet(addr, "output"),
+				),
+			},
+			{
+				ResourceName:            addr,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"poll_delete"},
+				ImportStateIdFunc:       d.resourceGroupUpdatePathImportStateIdFunc(addr),
+			},
+			{
+				Config: d.resourceGroup_updatePath_complete(),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrSet(addr, "output"),
+				),
+			},
+			{
+				ResourceName:            addr,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"poll_delete"},
+				ImportStateIdFunc:       d.resourceGroupUpdatePathImportStateIdFunc(addr),
 			},
 		},
 	})
@@ -259,7 +297,7 @@ resource "restful_resource" "test" {
 }
 `, d.url, d.clientId, d.clientSecret, d.tenantId, d.subscriptionId, d.rd)
 }
-func (d azureData) resourceGroup_update() string {
+func (d azureData) resourceGroup_complete() string {
 	return fmt.Sprintf(`
 provider "restful" {
   base_url = %q
@@ -299,6 +337,87 @@ resource "restful_resource" "test" {
 `, d.url, d.clientId, d.clientSecret, d.tenantId, d.subscriptionId, d.rd)
 }
 
+func (d azureData) resourceGroup_updatePath() string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+  security = {
+    oauth2 = {
+      client_id     = %q
+      client_secret = %q
+      token_url     = "https://login.microsoftonline.com/%s/oauth2/v2.0/token"
+      scopes        = ["https://management.azure.com/.default"]
+    }
+  }
+}
+
+resource "restful_resource" "test" {
+  path = "/subscriptions/%s/resourceGroups/restful-test-%d"
+  query = {
+    api-version = ["2020-06-01"]
+  }
+  body = jsonencode({
+    location = "westeurope"
+  })
+
+  create_method = "PUT"
+
+  update_path = "/subscriptions/%s/resourceGroups/restful-test-%d"
+
+  poll_delete = {
+    status_locator = "code"
+    status = {
+      success = "200"
+      pending = ["202"]
+    }
+    url_locator = "header[location]"
+  }
+}
+`, d.url, d.clientId, d.clientSecret, d.tenantId, d.subscriptionId, d.rd, d.subscriptionId, d.rd)
+}
+
+func (d azureData) resourceGroup_updatePath_complete() string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+  security = {
+    oauth2 = {
+      client_id     = %q
+      client_secret = %q
+      token_url     = "https://login.microsoftonline.com/%s/oauth2/v2.0/token"
+      scopes        = ["https://management.azure.com/.default"]
+    }
+  }
+}
+
+resource "restful_resource" "test" {
+  path = "/subscriptions/%s/resourceGroups/restful-test-%d"
+  query = {
+    api-version = ["2020-06-01"]
+  }
+  body = jsonencode({
+    location = "westeurope"
+	tags = {
+	  foo = "bar"
+	}
+  })
+
+  create_method = "PUT"
+
+  update_path = "/subscriptions/%s/resourceGroups/restful-test-%d"
+
+  poll_delete = {
+    status_locator = "code"
+    status = {
+      success = "200"
+      pending = ["202"]
+    }
+    url_locator = "header[location]"
+  }
+}
+`, d.url, d.clientId, d.clientSecret, d.tenantId, d.subscriptionId, d.rd, d.subscriptionId, d.rd)
+}
+
 func (d azureData) resourceGroupImportStateIdFunc(addr string) func(s *terraform.State) (string, error) {
 	return func(s *terraform.State) (string, error) {
 		return fmt.Sprintf(`{
@@ -307,6 +426,23 @@ func (d azureData) resourceGroupImportStateIdFunc(addr string) func(s *terraform
   "api-version": ["2020-06-01"]
 },
 "create_method": "PUT",
+"body": {
+  "location": null,
+  "tags": null
+}
+}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
+	}
+}
+
+func (d azureData) resourceGroupUpdatePathImportStateIdFunc(addr string) func(s *terraform.State) (string, error) {
+	return func(s *terraform.State) (string, error) {
+		return fmt.Sprintf(`{
+"id": %[1]q,
+"query": {
+  "api-version": ["2020-06-01"]
+},
+"create_method": "PUT",
+"update_path": %[1]q,
 "body": {
   "location": null,
   "tags": null

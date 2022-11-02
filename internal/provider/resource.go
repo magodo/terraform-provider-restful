@@ -47,6 +47,7 @@ type resourceData struct {
 	PollDelete          types.Object `tfsdk:"poll_delete"`
 	CreateMethod        types.String `tfsdk:"create_method"`
 	UpdateMethod        types.String `tfsdk:"update_method"`
+	UpdatePath          types.String `tfsdk:"update_path"`
 	MergePatchDisabled  types.Bool   `tfsdk:"merge_patch_disabled"`
 	Query               types.Map    `tfsdk:"query"`
 	Header              types.Map    `tfsdk:"header"`
@@ -195,6 +196,12 @@ func (r *Resource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics)
 				Optional:            true,
 				Computed:            true,
 				Validators:          []tfsdk.AttributeValidator{validator.StringInSlice("PUT", "PATCH")},
+			},
+			"update_path": {
+				Description:         "The path used to update the resource, relative to the `base_url` of the provider. It differs when `create_method` is `PUT` (represents the full path) and `POST` (represents the base path with out the last name segment).",
+				MarkdownDescription: "The path used to update the resource, relative to the `base_url` of the provider. It differs when `create_method` is `PUT` (represents the full path) and `POST` (represents the base path with out the last name segment).",
+				Type:                types.StringType,
+				Optional:            true,
 			},
 			"merge_patch_disabled": {
 				Description:         "Whether to use a JSON Merge Patch as the request body in the PATCH update? This is only effective when `update_method` is set to `PATCH`. This overrides the `merge_patch_disabled` set in the provider block (defaults to `false`).",
@@ -632,7 +639,18 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 			body = string(b)
 		}
 
-		response, err := c.Update(ctx, state.ID.ValueString(), body, *opt)
+		path := plan.ID.ValueString()
+		if !plan.UpdatePath.IsNull() {
+			switch opt.CreateMethod {
+			case "PUT":
+				path = plan.UpdatePath.ValueString()
+			case "POST":
+				segs := strings.Split(plan.ID.ValueString(), "/")
+				path, _ = url.JoinPath(plan.UpdatePath.ValueString(), segs[len(segs)-1])
+			}
+		}
+
+		response, err := c.Update(ctx, path, body, *opt)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error to call update",
@@ -669,10 +687,8 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 	// Set overridable attributes from option to state that might affect the read
 	plan.Query = opt.Query.ToTFValue()
 	plan.Header = opt.Header.ToTFValue()
-	if plan.CreateMethod.IsUnknown() {
-		// Since the create_method is O+C, it is unknown in the plan when not specified.
-		plan.CreateMethod = types.String{Value: r.p.apiOpt.CreateMethod}
-	}
+	// create is already resolved in the update opt here
+	plan.CreateMethod = types.String{Value: opt.CreateMethod}
 	// update_method is already resolved in the update opt here
 	plan.UpdateMethod = types.String{Value: opt.UpdateMethod}
 	// merge_patch_disabled is already resolved in the update opt here
@@ -770,6 +786,9 @@ type importSpec struct {
 	// However, it is optional for POST created resources, or the `create_method` is correctly set in the provider level.
 	CreateMethod string `json:"create_method"`
 
+	// UpdatePath is only required when you want to set a customized update path rather than its resource ID.
+	UpdatePath *string `json:"update_path"`
+
 	// Body represents the properties expected to be managed and tracked by Terraform. The value of these properties can be null as a place holder.
 	// When absent, all the response payload read wil be set to `body`.
 	Body map[string]interface{}
@@ -780,6 +799,7 @@ func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest
 	queryPath := tfpath.Root("query")
 	headerPath := tfpath.Root("header")
 	createMethodPath := tfpath.Root("create_method")
+	updatePath := tfpath.Root("update_path")
 	bodyPath := tfpath.Root("body")
 
 	var imp importSpec
@@ -808,4 +828,5 @@ func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, queryPath, imp.Query)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, headerPath, imp.Header)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, createMethodPath, imp.CreateMethod)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, updatePath, imp.UpdatePath)...)
 }
