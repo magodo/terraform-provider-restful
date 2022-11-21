@@ -107,7 +107,7 @@ func NewPollable(resp resty.Response, opt PollOption) (*Pollable, error) {
 		}
 		p.URL = url
 	} else {
-		p.URL = resp.Request.RawRequest.URL.String()
+		p.URL = resp.Request.URL
 	}
 
 	return &p, nil
