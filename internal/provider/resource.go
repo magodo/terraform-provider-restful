@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"path"
-	"path/filepath"
 	"strings"
 
 	tfpath "github.com/hashicorp/terraform-plugin-framework/path"
@@ -48,6 +47,8 @@ type resourceData struct {
 	CreateMethod        types.String `tfsdk:"create_method"`
 	UpdateMethod        types.String `tfsdk:"update_method"`
 	UpdatePath          types.String `tfsdk:"update_path"`
+	DeletePath          types.String `tfsdk:"delete_path"`
+	DeleteMethod        types.String `tfsdk:"delete_method"`
 	MergePatchDisabled  types.Bool   `tfsdk:"merge_patch_disabled"`
 	Query               types.Map    `tfsdk:"query"`
 	Header              types.Map    `tfsdk:"header"`
@@ -202,6 +203,19 @@ func (r *Resource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics)
 				MarkdownDescription: "The path used to update the resource, relative to the `base_url` of the provider. It differs when `create_method` is `PUT` (represents the full path) and `POST` (represents the base path with out the last name segment).",
 				Type:                types.StringType,
 				Optional:            true,
+			},
+			"delete_path": {
+				Description:         "The path path used to delete the resource, relative to the `base_url` of the provider. It differs when `create_method` is `PUT` (represents the full path) and `POST` (represents the base path with out the last name segment).",
+				MarkdownDescription: "The path used to delete the resource, relative to the `base_url` of the provider. It differs when `create_method` is `PUT` (represents the full path) and `POST` (represents the base path with out the last name segment).",
+				Type:                types.StringType,
+				Optional:            true,
+			},
+			"delete_method": {
+				Description:         "The method used to delete the resource. Possible values is `POST`. This overrides the provider block (defaults to DELETE).",
+				MarkdownDescription: "The method used to delete the resource. Possible values is `POST`. This overrides the provider block (defaults to DELETE).",
+				Type:                types.StringType,
+				Optional:            true,
+				Validators:          []tfsdk.AttributeValidator{validator.StringInSlice("POST", "DELETE")},
 			},
 			"merge_patch_disabled": {
 				Description:         "Whether to use a JSON Merge Patch as the request body in the PATCH update? This is only effective when `update_method` is set to `PATCH`. This overrides the `merge_patch_disabled` set in the provider block (defaults to `false`).",
@@ -413,7 +427,12 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 				)
 				return
 			}
-			resourceId = path.Join(plan.Path.ValueString(), result.String())
+
+			if strings.Contains(plan.UpdatePath.ValueString(), "%s") {
+				resourceId = strings.Replace(plan.UpdatePath.ValueString(), "%s", result.String(), 1)
+			} else {
+				resourceId = path.Join(plan.Path.ValueString(), result.String())
+			}
 		case !plan.UrlPath.IsNull():
 			result := gjson.GetBytes(b, plan.UrlPath.ValueString())
 			if !result.Exists() {
@@ -429,12 +448,22 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 		resourceId = plan.Path.ValueString()
 	}
 
+	// Set resource ID to state before the LRO
+	plan.ID = types.String{Value: resourceId}
+
+	diags = resp.State.Set(ctx, plan)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
+
 	// For LRO, wait for completion
 	if opt.PollOpt != nil {
 		if opt.PollOpt.UrlLocator == nil {
 			// Update the request URL to pointing to the resource path, which is mainly for resources whose create method is POST.
 			// As it will be used to poll the resource status.
-			response.Request.URL = path.Join(c.BaseURL, resourceId)
+			path, _ := url.JoinPath(c.BaseURL, resourceId)
+			response.Request.URL = fmt.Sprintf("%s?%s", path, response.Request.QueryParam.Encode())
 		}
 		p, err := client.NewPollable(*response, *opt.PollOpt)
 		if err != nil {
@@ -464,15 +493,6 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	if plan.MergePatchDisabled.IsUnknown() {
 		// Since the merge_patch_disabled is O+C, it is unknown in the plan when not specified.
 		plan.MergePatchDisabled = types.Bool{Value: r.p.apiOpt.MergePatchDisabled}
-	}
-
-	// Set resource ID to state
-	plan.ID = types.String{Value: resourceId}
-
-	diags = resp.State.Set(ctx, plan)
-	resp.Diagnostics.Append(diags...)
-	if diags.HasError() {
-		return
 	}
 
 	rreq := resource.ReadRequest{
@@ -576,13 +596,6 @@ func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *reso
 		mergePatchDisabled = state.MergePatchDisabled.ValueBool()
 	}
 
-	// Set force new properties
-	switch createMethod {
-	case "POST":
-		state.Path = types.String{Value: filepath.Dir(state.ID.ValueString())}
-	case "PUT":
-		state.Path = types.String{Value: state.ID.ValueString()}
-	}
 
 	// Set overridable (O+C) attributes from option to state
 	state.Query = opt.Query.ToTFValue()
@@ -645,8 +658,13 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 			case "PUT":
 				path = plan.UpdatePath.ValueString()
 			case "POST":
-				segs := strings.Split(plan.ID.ValueString(), "/")
-				path, _ = url.JoinPath(plan.UpdatePath.ValueString(), segs[len(segs)-1])
+				if strings.Contains(plan.UpdatePath.ValueString(), "%s") {
+					var id string = gjson.Get(state.Output.ValueString(), plan.NamePath.ValueString()).String()
+					path = strings.Replace(plan.UpdatePath.ValueString(), "%s", id, 1)
+				} else {
+					segs := strings.Split(plan.ID.ValueString(), "/")
+					path, _ = url.JoinPath(plan.UpdatePath.ValueString(), segs[len(segs)-1])
+				}
 			}
 		}
 
@@ -732,7 +750,16 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 		return
 	}
 
-	response, err := c.Delete(ctx, state.ID.ValueString(), *opt)
+	var pathUrl string;
+	if !state.DeletePath.IsNull() {
+		var id string = gjson.Get(state.Output.ValueString(), state.NamePath.ValueString()).String()
+		pathUrl = strings.Replace(state.DeletePath.ValueString(), "%s", id, 1)
+	} else {
+		pathUrl = state.ID.ValueString()
+	}
+
+
+	response, err := c.Delete(ctx, pathUrl, *opt)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error to call delete",

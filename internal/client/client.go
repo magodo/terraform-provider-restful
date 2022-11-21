@@ -153,6 +153,7 @@ func (c *Client) Update(ctx context.Context, path string, body interface{}, opt 
 }
 
 type DeleteOption struct {
+	Method  string
 	Query   Query
 	Header  Header
 	PollOpt *PollOption
@@ -163,7 +164,12 @@ func (c *Client) Delete(ctx context.Context, path string, opt DeleteOption) (*re
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 	req.SetHeaders(opt.Header)
 
-	return req.Delete(path)
+	switch opt.Method {
+	case "POST":
+		return req.Post(path)
+	default:
+		return req.Delete(path)
+	}
 }
 
 type OperationOption struct {

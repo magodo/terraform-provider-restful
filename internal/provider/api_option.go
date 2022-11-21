@@ -149,6 +149,7 @@ func (opt apiOption) ForResourceUpdate(ctx context.Context, d resourceData) (*cl
 
 func (opt apiOption) ForResourceDelete(ctx context.Context, d resourceData) (*client.DeleteOption, diag.Diagnostics) {
 	out := client.DeleteOption{
+		Method: d.DeleteMethod.ValueString(),
 		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
 		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
 	}
