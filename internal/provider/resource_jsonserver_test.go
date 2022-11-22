@@ -50,9 +50,9 @@ func TestResource_JSONServer_Basic(t *testing.T) {
 				ResourceName:            addr,
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"name_path"},
+				ImportStateVerifyIgnore: []string{"read_path"},
 				ImportStateIdFunc: func(s *terraform.State) (string, error) {
-					return fmt.Sprintf(`{"id": %q, "body": {"foo": null}}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
+					return fmt.Sprintf(`{"id": %q, "path": "posts", "body": {"foo": null}}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
 				},
 			},
 			{
@@ -65,16 +65,16 @@ func TestResource_JSONServer_Basic(t *testing.T) {
 				ResourceName:            addr,
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"name_path"},
+				ImportStateVerifyIgnore: []string{"read_path"},
 				ImportStateIdFunc: func(s *terraform.State) (string, error) {
-					return fmt.Sprintf(`{"id": %q, "body": {"foo": null}}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
+					return fmt.Sprintf(`{"id": %q, "path": "posts", "body": {"foo": null}}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
 				},
 			},
 		},
 	})
 }
 
-func TestResource_JSONServer_UpdatePath(t *testing.T) {
+func TestResource_JSONServer_PatchUpdate(t *testing.T) {
 	addr := "restful_resource.test"
 	d := newJsonServerData()
 	resource.Test(t, resource.TestCase{
@@ -83,7 +83,7 @@ func TestResource_JSONServer_UpdatePath(t *testing.T) {
 		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
 		Steps: []resource.TestStep{
 			{
-				Config: d.updatePath("foo"),
+				Config: d.patch("foo"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrSet(addr, "output"),
 				),
@@ -92,13 +92,13 @@ func TestResource_JSONServer_UpdatePath(t *testing.T) {
 				ResourceName:            addr,
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"name_path"},
+				ImportStateVerifyIgnore: []string{"read_path"},
 				ImportStateIdFunc: func(s *terraform.State) (string, error) {
-					return fmt.Sprintf(`{"id": %q, "update_path": "posts", "body": {"foo": null}}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
+					return fmt.Sprintf(`{"id": %q, "path": "posts", "update_method": "PATCH", "body": {"foo": null}}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
 				},
 			},
 			{
-				Config: d.updatePath("bar"),
+				Config: d.patch("bar"),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrSet(addr, "output"),
 				),
@@ -107,9 +107,51 @@ func TestResource_JSONServer_UpdatePath(t *testing.T) {
 				ResourceName:            addr,
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"name_path"},
+				ImportStateVerifyIgnore: []string{"read_path"},
 				ImportStateIdFunc: func(s *terraform.State) (string, error) {
-					return fmt.Sprintf(`{"id": %q, "update_path": "posts", "body": {"foo": null}}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
+					return fmt.Sprintf(`{"id": %q, "path": "posts", "update_method": "PATCH", "body": {"foo": null}}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
+				},
+			},
+		},
+	})
+}
+
+func TestResource_JSONServer_FullPath(t *testing.T) {
+	addr := "restful_resource.test"
+	d := newJsonServerData()
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { d.precheck(t) },
+		CheckDestroy:             d.CheckDestroy(addr),
+		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+		Steps: []resource.TestStep{
+			{
+				Config: d.fullPath("foo"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrSet(addr, "output"),
+				),
+			},
+			{
+				ResourceName:            addr,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"read_path"},
+				ImportStateIdFunc: func(s *terraform.State) (string, error) {
+					return fmt.Sprintf(`{"id": %q, "path": "posts", "update_path": "$(path)/$(body.id)", "delete_path": "$(path)/$(body.id)", "body": {"foo": null}}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
+				},
+			},
+			{
+				Config: d.fullPath("bar"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrSet(addr, "output"),
+				),
+			},
+			{
+				ResourceName:            addr,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"read_path"},
+				ImportStateIdFunc: func(s *terraform.State) (string, error) {
+					return fmt.Sprintf(`{"id": %q, "path": "posts", "update_path": "$(path)/$(body.id)", "delete_path": "$(path)/$(body.id)", "body": {"foo": null}}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
 				},
 			},
 		},
@@ -150,13 +192,12 @@ resource "restful_resource" "test" {
   body = jsonencode({
   	foo = %q
 })
-  name_path = "id"
+  read_path = "$(path)/$(body.id)"
 }
 `, d.url, v)
-
 }
 
-func (d jsonServerData) updatePath(v string) string {
+func (d jsonServerData) patch(v string) string {
 	return fmt.Sprintf(`
 provider "restful" {
   base_url = %q
@@ -164,11 +205,29 @@ provider "restful" {
 
 resource "restful_resource" "test" {
   path = "posts"
-  update_path = "posts"
+  read_path = "$(path)/$(body.id)"
+  update_method = "PATCH"
   body = jsonencode({
   	foo = %q
 })
-  name_path = "id"
+}
+`, d.url, v)
+}
+
+func (d jsonServerData) fullPath(v string) string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+resource "restful_resource" "test" {
+  path = "posts"
+  read_path = "$(path)/$(body.id)"
+  update_path = "$(path)/$(body.id)"
+  delete_path = "$(path)/$(body.id)"
+  body = jsonencode({
+  	foo = %q
+})
 }
 `, d.url, v)
 

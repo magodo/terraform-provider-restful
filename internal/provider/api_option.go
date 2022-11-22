@@ -14,6 +14,7 @@ import (
 type apiOption struct {
 	CreateMethod       string
 	UpdateMethod       string
+	DeleteMethod       string
 	MergePatchDisabled bool
 	Query              client.Query
 	Header             client.Header
@@ -98,12 +99,12 @@ func (opt apiOption) ForDataSourceRead(ctx context.Context, d dataSourceData) (*
 
 func (opt apiOption) ForResourceCreate(ctx context.Context, d resourceData) (*client.CreateOption, diag.Diagnostics) {
 	out := client.CreateOption{
-		CreateMethod: opt.CreateMethod,
-		Query:        opt.Query.Clone().TakeOrSelf(ctx, d.Query),
-		Header:       opt.Header.Clone().TakeOrSelf(ctx, d.Header),
+		Method: opt.CreateMethod,
+		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
+		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
 	}
 	if !d.CreateMethod.IsUnknown() && !d.CreateMethod.IsNull() {
-		out.CreateMethod = d.CreateMethod.ValueString()
+		out.Method = d.CreateMethod.ValueString()
 	}
 	var diags diag.Diagnostics
 	out.PollOpt, diags = convertPollObject(ctx, d.PollCreate)
@@ -123,17 +124,13 @@ func (opt apiOption) ForResourceRead(ctx context.Context, d resourceData) (*clie
 
 func (opt apiOption) ForResourceUpdate(ctx context.Context, d resourceData) (*client.UpdateOption, diag.Diagnostics) {
 	out := client.UpdateOption{
-		CreateMethod:       opt.CreateMethod,
-		UpdateMethod:       opt.UpdateMethod,
+		Method:             opt.UpdateMethod,
 		MergePatchDisabled: opt.MergePatchDisabled,
 		Query:              opt.Query.Clone().TakeOrSelf(ctx, d.Query),
 		Header:             opt.Header.Clone().TakeOrSelf(ctx, d.Header),
 	}
-	if !d.CreateMethod.IsUnknown() && !d.CreateMethod.IsNull() {
-		out.CreateMethod = d.CreateMethod.ValueString()
-	}
 	if !d.UpdateMethod.IsUnknown() && !d.UpdateMethod.IsNull() {
-		out.UpdateMethod = d.UpdateMethod.ValueString()
+		out.Method = d.UpdateMethod.ValueString()
 	}
 	if !d.MergePatchDisabled.IsUnknown() && !d.MergePatchDisabled.IsNull() {
 		out.MergePatchDisabled = d.MergePatchDisabled.ValueBool()
@@ -149,9 +146,15 @@ func (opt apiOption) ForResourceUpdate(ctx context.Context, d resourceData) (*cl
 
 func (opt apiOption) ForResourceDelete(ctx context.Context, d resourceData) (*client.DeleteOption, diag.Diagnostics) {
 	out := client.DeleteOption{
+		Method: opt.DeleteMethod,
 		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
 		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
 	}
+
+	if !d.DeleteMethod.IsUnknown() && !d.DeleteMethod.IsNull() {
+		out.Method = d.DeleteMethod.ValueString()
+	}
+
 	var diags diag.Diagnostics
 	out.PollOpt, diags = convertPollObject(ctx, d.PollDelete)
 	if diags.HasError() {

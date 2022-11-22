@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"path"
-	"path/filepath"
 	"strings"
 
 	tfpath "github.com/hashicorp/terraform-plugin-framework/path"
@@ -36,22 +34,29 @@ type Resource struct {
 var _ resource.Resource = &Resource{}
 
 type resourceData struct {
-	ID                  types.String `tfsdk:"id"`
-	Path                types.String `tfsdk:"path"`
+	ID types.String `tfsdk:"id"`
+
+	Path       types.String `tfsdk:"path"`
+	ReadPath   types.String `tfsdk:"read_path"`
+	UpdatePath types.String `tfsdk:"update_path"`
+	DeletePath types.String `tfsdk:"delete_path"`
+
+	CreateMethod types.String `tfsdk:"create_method"`
+	UpdateMethod types.String `tfsdk:"update_method"`
+	DeleteMethod types.String `tfsdk:"delete_method"`
+
 	Body                types.String `tfsdk:"body"`
-	NamePath            types.String `tfsdk:"name_path"`
-	UrlPath             types.String `tfsdk:"url_path"`
 	WriteOnlyAttributes types.List   `tfsdk:"write_only_attrs"`
-	PollCreate          types.Object `tfsdk:"poll_create"`
-	PollUpdate          types.Object `tfsdk:"poll_update"`
-	PollDelete          types.Object `tfsdk:"poll_delete"`
-	CreateMethod        types.String `tfsdk:"create_method"`
-	UpdateMethod        types.String `tfsdk:"update_method"`
-	UpdatePath          types.String `tfsdk:"update_path"`
-	MergePatchDisabled  types.Bool   `tfsdk:"merge_patch_disabled"`
-	Query               types.Map    `tfsdk:"query"`
-	Header              types.Map    `tfsdk:"header"`
-	Output              types.String `tfsdk:"output"`
+
+	PollCreate types.Object `tfsdk:"poll_create"`
+	PollUpdate types.Object `tfsdk:"poll_update"`
+	PollDelete types.Object `tfsdk:"poll_delete"`
+
+	MergePatchDisabled types.Bool `tfsdk:"merge_patch_disabled"`
+	Query              types.Map  `tfsdk:"query"`
+	Header             types.Map  `tfsdk:"header"`
+
+	Output types.String `tfsdk:"output"`
 }
 
 type pollData struct {
@@ -137,14 +142,33 @@ func (r *Resource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics)
 				},
 			},
 			"path": {
-				Description:         "The path of the resource, relative to the `base_url` of the provider. It differs when `create_method` is `PUT` and `POST`.",
-				MarkdownDescription: "The path of the resource, relative to the `base_url` of the provider. It differs when `create_method` is `PUT` and `POST`.",
+				Description:         "The path used to create the resource, relative to the `base_url` of the provider.",
+				MarkdownDescription: "The path used to create the resource, relative to the `base_url` of the provider.",
 				Type:                types.StringType,
 				Required:            true,
 				PlanModifiers: []tfsdk.AttributePlanModifier{
 					resource.RequiresReplace(),
 				},
 			},
+			"read_path": {
+				Description:         "The API path used to read the resource, which is used as the `id`.",
+				MarkdownDescription: "The API path used to read the resource, which is used as the `id`.",
+				Optional:            true,
+				Type:                types.StringType,
+			},
+			"update_path": {
+				Description:         "The API path used to update the resource. The `id` is used instead if `update_path` is absent.",
+				MarkdownDescription: "The API path used to update the resource. The `id` is used instead if `update_path` is absent.",
+				Optional:            true,
+				Type:                types.StringType,
+			},
+			"delete_path": {
+				Description:         "The API path used to delete the resource. The `id` is used instead if `delete_path` is absent.",
+				MarkdownDescription: "The API path used to delete the resource. The `id` is used instead if `delete_path` is absent.",
+				Optional:            true,
+				Type:                types.StringType,
+			},
+
 			"body": {
 				Description:         "The properties of the resource.",
 				MarkdownDescription: "The properties of the resource.",
@@ -154,18 +178,7 @@ func (r *Resource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics)
 			"poll_create": pollAttribute("poll_create", "Create"),
 			"poll_update": pollAttribute("poll_update", "Update"),
 			"poll_delete": pollAttribute("poll_delete", "Delete"),
-			"name_path": {
-				Description:         "The path (in gjson syntax) to the name attribute in the response, which is only used during creation of the resource to construct the resource identifier. This is ignored when `create_method` is `PUT`. Either `name_path` or `url_path` needs to set when `create_method` is `POST`.",
-				MarkdownDescription: "The path (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the name attribute in the response, which is only used during creation of the resource to construct the resource identifier. This is ignored when `create_method` is `PUT`. Either `name_path` or `url_path` needs to set when `create_method` is `POST`.",
-				Optional:            true,
-				Type:                types.StringType,
-			},
-			"url_path": {
-				Description:         "The path (in gjson syntax) to the id attribute in the response, which is only used during creation of the resource to be as the resource identifier. This is ignored when `create_method` is `PUT`. Either `name_path` or `url_path` needs to set when `create_method` is `POST`.",
-				MarkdownDescription: "The path (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the id attribute in the response, which is only used during creation of the resource to be as the resource identifier. This is ignored when `create_method` is `PUT`. Either `name_path` or `url_path` needs to set when `create_method` is `POST`.",
-				Optional:            true,
-				Type:                types.StringType,
-			},
+
 			"write_only_attrs": {
 				Description:         "A list of paths (in gjson syntax) to the attributes that are only settable, but won't be read in GET response.",
 				MarkdownDescription: "A list of paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attributes that are only settable, but won't be read in GET response.",
@@ -197,11 +210,13 @@ func (r *Resource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics)
 				Computed:            true,
 				Validators:          []tfsdk.AttributeValidator{validator.StringInSlice("PUT", "PATCH")},
 			},
-			"update_path": {
-				Description:         "The path used to update the resource, relative to the `base_url` of the provider. It differs when `create_method` is `PUT` (represents the full path) and `POST` (represents the base path with out the last name segment).",
-				MarkdownDescription: "The path used to update the resource, relative to the `base_url` of the provider. It differs when `create_method` is `PUT` (represents the full path) and `POST` (represents the base path with out the last name segment).",
+			"delete_method": {
+				Description:         "The method used to delete the resource. Possible values are `DELETE` and `POST`. This overrides the `delete_method` set in the provider block (defaults to DELETE).",
+				MarkdownDescription: "The method used to delete the resource. Possible values are `DELETE` and `POST`. This overrides the `delete_method` set in the provider block (defaults to DELETE).",
 				Type:                types.StringType,
 				Optional:            true,
+				Computed:            true,
+				Validators:          []tfsdk.AttributeValidator{validator.StringInSlice("DELETE", "POST")},
 			},
 			"merge_patch_disabled": {
 				Description:         "Whether to use a JSON Merge Patch as the request body in the PATCH update? This is only effective when `update_method` is set to `PATCH`. This overrides the `merge_patch_disabled` set in the provider block (defaults to `false`).",
@@ -272,36 +287,6 @@ func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConf
 		return
 	}
 
-	createMethod := r.p.apiOpt.CreateMethod
-	if !config.CreateMethod.IsUnknown() {
-		if !config.CreateMethod.IsNull() {
-			createMethod = config.CreateMethod.ValueString()
-		}
-		if !config.NamePath.IsUnknown() && !config.UrlPath.IsUnknown() {
-			if createMethod == "PUT" {
-				if !config.NamePath.IsNull() {
-					resp.Diagnostics.AddError(
-						"Invalid configuration",
-						"The `name_path` can not be specified when `create_method` is `PUT`",
-					)
-				}
-				if !config.UrlPath.IsNull() {
-					resp.Diagnostics.AddError(
-						"Invalid configuration",
-						"The `url_path` can not be specified when `create_method` is `PUT`",
-					)
-				}
-			} else if createMethod == "POST" {
-				if config.NamePath.IsNull() && config.UrlPath.IsNull() || !config.NamePath.IsNull() && !config.UrlPath.IsNull() {
-					resp.Diagnostics.AddError(
-						"Invalid configuration",
-						"Exactly one of `name_path` and `url_path` should be specified when `create_method` is `POST`",
-					)
-				}
-			}
-		}
-	}
-
 	validatePoll(ctx, config.PollCreate, "poll_create", resp)
 	validatePoll(ctx, config.PollUpdate, "poll_update", resp)
 	validatePoll(ctx, config.PollDelete, "poll_delete", resp)
@@ -357,7 +342,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 
 	// Existance check for resources whose create method is `PUT`, in which case the `path` is the same as its ID.
 	// It is not possible to query the resource prior creation for resources whose create method is `POST`, since the `path` in this case is not enough for a `GET`.
-	if opt.CreateMethod == "PUT" {
+	if opt.Method == "PUT" {
 		opt, diags := r.p.apiOpt.ForResourceRead(ctx, plan)
 		resp.Diagnostics.Append(diags...)
 		if diags.HasError() {
@@ -399,34 +384,17 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 
 	b := response.Body()
 
-	// For POST create method, generate the resource id by combining the path and the id in response.
-	var resourceId string
-	switch opt.CreateMethod {
-	case "POST":
-		switch {
-		case !plan.NamePath.IsNull():
-			result := gjson.GetBytes(b, plan.NamePath.ValueString())
-			if !result.Exists() {
-				resp.Diagnostics.AddError(
-					fmt.Sprintf("Failed to identify resource name"),
-					fmt.Sprintf("Can't find resource name in path %q", plan.NamePath.ValueString()),
-				)
-				return
-			}
-			resourceId = path.Join(plan.Path.ValueString(), result.String())
-		case !plan.UrlPath.IsNull():
-			result := gjson.GetBytes(b, plan.UrlPath.ValueString())
-			if !result.Exists() {
-				resp.Diagnostics.AddError(
-					fmt.Sprintf("Failed to identify resource id"),
-					fmt.Sprintf("Can't find resource id in path %q", plan.UrlPath.ValueString()),
-				)
-				return
-			}
-			resourceId = strings.TrimPrefix(result.String(), c.BaseURL)
+	// Construct the resource id, which is used as the path to read the resource later on. By default, it is the same as the "path", unless "read_path" is specified.
+	resourceId := plan.Path.ValueString()
+	if !plan.ReadPath.IsNull() {
+		resourceId, err = BuildPath(plan.ReadPath.ValueString(), r.p.client.BaseURL, plan.Path.ValueString(), b)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				fmt.Sprintf("Failed to build the path for reading the resource"),
+				fmt.Sprintf("Can't build resource id with `read_path`: %q, `path`: %q, `body`: %q", plan.ReadPath.ValueString(), plan.Path.ValueString(), string(b)),
+			)
+			return
 		}
-	case "PUT":
-		resourceId = plan.Path.ValueString()
 	}
 
 	// For LRO, wait for completion
@@ -434,7 +402,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 		if opt.PollOpt.UrlLocator == nil {
 			// Update the request URL to pointing to the resource path, which is mainly for resources whose create method is POST.
 			// As it will be used to poll the resource status.
-			response.Request.URL = path.Join(c.BaseURL, resourceId)
+			response.Request.RawRequest.URL.Path = resourceId
 		}
 		p, err := client.NewPollable(*response, *opt.PollOpt)
 		if err != nil {
@@ -455,12 +423,20 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	// Set overridable attributes from option to state
 	plan.Query = opt.Query.ToTFValue()
 	plan.Header = opt.Header.ToTFValue()
+
 	// create_method is already resolved in the create opt here
-	plan.CreateMethod = types.String{Value: opt.CreateMethod}
+	plan.CreateMethod = types.String{Value: opt.Method}
+
+	// Since the update_method is O+C, it is unknown in the plan when not specified.
 	if plan.UpdateMethod.IsUnknown() {
-		// Since the update_method is O+C, it is unknown in the plan when not specified.
 		plan.UpdateMethod = types.String{Value: r.p.apiOpt.UpdateMethod}
 	}
+
+	// Since the delete is O+C, it is unknown in the plan when not specified.
+	if plan.DeleteMethod.IsUnknown() {
+		plan.DeleteMethod = types.String{Value: r.p.apiOpt.DeleteMethod}
+	}
+
 	if plan.MergePatchDisabled.IsUnknown() {
 		// Since the merge_patch_disabled is O+C, it is unknown in the plan when not specified.
 		plan.MergePatchDisabled = types.Bool{Value: r.p.apiOpt.MergePatchDisabled}
@@ -571,17 +547,14 @@ func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *reso
 		updateMethod = state.UpdateMethod.ValueString()
 	}
 
+	deleteMethod := r.p.apiOpt.DeleteMethod
+	if state.DeleteMethod.ValueString() != "" {
+		deleteMethod = state.DeleteMethod.ValueString()
+	}
+
 	mergePatchDisabled := r.p.apiOpt.MergePatchDisabled
 	if !state.MergePatchDisabled.IsNull() {
 		mergePatchDisabled = state.MergePatchDisabled.ValueBool()
-	}
-
-	// Set force new properties
-	switch createMethod {
-	case "POST":
-		state.Path = types.String{Value: filepath.Dir(state.ID.ValueString())}
-	case "PUT":
-		state.Path = types.String{Value: state.ID.ValueString()}
 	}
 
 	// Set overridable (O+C) attributes from option to state
@@ -589,6 +562,7 @@ func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *reso
 	state.Header = opt.Header.ToTFValue()
 	state.CreateMethod = types.String{Value: createMethod}
 	state.UpdateMethod = types.String{Value: updateMethod}
+	state.DeleteMethod = types.String{Value: deleteMethod}
 	state.MergePatchDisabled = types.Bool{Value: mergePatchDisabled}
 
 	// Set computed attributes
@@ -627,7 +601,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 	// Invoke API to Update the resource only when there are changes in the body.
 	if state.Body.ValueString() != plan.Body.ValueString() {
 		body := plan.Body.ValueString()
-		if opt.UpdateMethod == "PATCH" && !opt.MergePatchDisabled {
+		if opt.Method == "PATCH" && !opt.MergePatchDisabled {
 			b, err := jsonpatch.CreateMergePatch([]byte(state.Body.ValueString()), []byte(plan.Body.ValueString()))
 			if err != nil {
 				resp.Diagnostics.AddError(
@@ -641,12 +615,14 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 
 		path := plan.ID.ValueString()
 		if !plan.UpdatePath.IsNull() {
-			switch opt.CreateMethod {
-			case "PUT":
-				path = plan.UpdatePath.ValueString()
-			case "POST":
-				segs := strings.Split(plan.ID.ValueString(), "/")
-				path, _ = url.JoinPath(plan.UpdatePath.ValueString(), segs[len(segs)-1])
+			var err error
+			path, err = BuildPath(plan.UpdatePath.ValueString(), r.p.client.BaseURL, plan.Path.ValueString(), []byte(state.Output.ValueString()))
+			if err != nil {
+				resp.Diagnostics.AddError(
+					fmt.Sprintf("Failed to build the path for updating the resource"),
+					fmt.Sprintf("Can't build path with `update_path`: %q, `path`: %q, `body`: %q", plan.UpdatePath.ValueString(), plan.Path.ValueString(), string(state.Output.ValueString())),
+				)
+				return
 			}
 		}
 
@@ -687,10 +663,20 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 	// Set overridable attributes from option to state that might affect the read
 	plan.Query = opt.Query.ToTFValue()
 	plan.Header = opt.Header.ToTFValue()
-	// create is already resolved in the update opt here
-	plan.CreateMethod = types.String{Value: opt.CreateMethod}
+
 	// update_method is already resolved in the update opt here
-	plan.UpdateMethod = types.String{Value: opt.UpdateMethod}
+	plan.UpdateMethod = types.String{Value: opt.Method}
+
+	// Since the create_method is O+C, it is unknown in the plan when not specified.
+	if plan.CreateMethod.IsUnknown() {
+		plan.CreateMethod = types.String{Value: r.p.apiOpt.CreateMethod}
+	}
+
+	// Since the delete is O+C, it is unknown in the plan when not specified.
+	if plan.DeleteMethod.IsUnknown() {
+		plan.DeleteMethod = types.String{Value: r.p.apiOpt.DeleteMethod}
+	}
+
 	// merge_patch_disabled is already resolved in the update opt here
 	plan.MergePatchDisabled = types.Bool{Value: opt.MergePatchDisabled}
 
@@ -732,7 +718,20 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 		return
 	}
 
-	response, err := c.Delete(ctx, state.ID.ValueString(), *opt)
+	path := state.ID.ValueString()
+	if !state.DeletePath.IsNull() {
+		var err error
+		path, err = BuildPath(state.DeletePath.ValueString(), r.p.client.BaseURL, state.Path.ValueString(), []byte(state.Output.ValueString()))
+		if err != nil {
+			resp.Diagnostics.AddError(
+				fmt.Sprintf("Failed to build the path for deleting the resource"),
+				fmt.Sprintf("Can't build path with `delete_path`: %q, `path`: %q, `body`: %q", state.DeletePath.ValueString(), state.Path.ValueString(), string(state.Output.ValueString())),
+			)
+			return
+		}
+	}
+
+	response, err := c.Delete(ctx, path, *opt)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error to call delete",
@@ -776,18 +775,24 @@ type importSpec struct {
 	// Id is the resource id, which is always required.
 	Id string `json:"id"`
 
+	// Path is the path used to create the resource.
+	Path string `json:"path"`
+
+	// UpdatePath is the path used to update the resource
+	UpdatePath *string `json:"update_path"`
+
+	// DeletePath is the path used to delte the resource
+	DeletePath *string `json:"delete_path"`
+
 	// Query is only required when it is mandatory for reading the resource.
 	Query url.Values `json:"query"`
 
 	// Header is only required when it is mandatory for reading the resource.
 	Header url.Values `json:"header"`
 
-	// CreateMethod is necessarily for correctly setting the `path` (a force new attribute) during Read.
-	// However, it is optional for POST created resources, or the `create_method` is correctly set in the provider level.
-	CreateMethod string `json:"create_method"`
-
-	// UpdatePath is only required when you want to set a customized update path rather than its resource ID.
-	UpdatePath *string `json:"update_path"`
+	CreateMethod *string `json:"create_method"`
+	UpdateMethod *string `json:"update_method"`
+	DeleteMethod *string `json:"delete_method"`
 
 	// Body represents the properties expected to be managed and tracked by Terraform. The value of these properties can be null as a place holder.
 	// When absent, all the response payload read wil be set to `body`.
@@ -796,10 +801,14 @@ type importSpec struct {
 
 func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	idPath := tfpath.Root("id")
+	path := tfpath.Root("path")
+	updatePath := tfpath.Root("update_path")
+	deletePath := tfpath.Root("delete_path")
 	queryPath := tfpath.Root("query")
 	headerPath := tfpath.Root("header")
 	createMethodPath := tfpath.Root("create_method")
-	updatePath := tfpath.Root("update_path")
+	updateMethodPath := tfpath.Root("update_method")
+	deleteMethodPath := tfpath.Root("delete_method")
 	bodyPath := tfpath.Root("body")
 
 	var imp importSpec
@@ -825,8 +834,12 @@ func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest
 	}
 
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, idPath, imp.Id)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path, imp.Path)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, updatePath, imp.UpdatePath)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, deletePath, imp.DeletePath)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, queryPath, imp.Query)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, headerPath, imp.Header)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, createMethodPath, imp.CreateMethod)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, updatePath, imp.UpdatePath)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, updateMethodPath, imp.UpdateMethod)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, deleteMethodPath, imp.DeleteMethod)...)
 }
