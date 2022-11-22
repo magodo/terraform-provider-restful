@@ -128,6 +128,7 @@ func pollAttribute(attr, s string) tfsdk.Attribute {
 }
 
 func (r *Resource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
+	pathDescription := "The path can be string literal, or combined by followings: `$(path)` expanded to `path`, `$(body.x.y.z)` expands to the `x.y.z` property in API body, `#(body.id)` expands to the `id` property, with `base_url` prefix trimmed."
 	return tfsdk.Schema{
 		Description:         "`restful_resource` manages a restful resource.",
 		MarkdownDescription: "`restful_resource` manages a restful resource.",
@@ -151,20 +152,20 @@ func (r *Resource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics)
 				},
 			},
 			"read_path": {
-				Description:         "The API path used to read the resource, which is used as the `id`.",
-				MarkdownDescription: "The API path used to read the resource, which is used as the `id`.",
+				Description:         "The API path used to read the resource, which is used as the `id`. " + pathDescription,
+				MarkdownDescription: "The API path used to read the resource, which is used as the `id`. " + pathDescription,
 				Optional:            true,
 				Type:                types.StringType,
 			},
 			"update_path": {
-				Description:         "The API path used to update the resource. The `id` is used instead if `update_path` is absent.",
-				MarkdownDescription: "The API path used to update the resource. The `id` is used instead if `update_path` is absent.",
+				Description:         "The API path used to update the resource. The `id` is used instead if `update_path` is absent. " + pathDescription,
+				MarkdownDescription: "The API path used to update the resource. The `id` is used instead if `update_path` is absent. " + pathDescription,
 				Optional:            true,
 				Type:                types.StringType,
 			},
 			"delete_path": {
-				Description:         "The API path used to delete the resource. The `id` is used instead if `delete_path` is absent.",
-				MarkdownDescription: "The API path used to delete the resource. The `id` is used instead if `delete_path` is absent.",
+				Description:         "The API path used to delete the resource. The `id` is used instead if `delete_path` is absent. " + pathDescription,
+				MarkdownDescription: "The API path used to delete the resource. The `id` is used instead if `delete_path` is absent. " + pathDescription,
 				Optional:            true,
 				Type:                types.StringType,
 			},
