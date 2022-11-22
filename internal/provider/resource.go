@@ -134,8 +134,8 @@ func (r *Resource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics)
 		MarkdownDescription: "`restful_resource` manages a restful resource.",
 		Attributes: map[string]tfsdk.Attribute{
 			"id": {
-				Description:         "The ID of the Resource. Same as the `path` when the `create_method` is `PUT`.",
-				MarkdownDescription: "The ID of the Resource. Same as the `path` when the `create_method` is `PUT`.",
+				Description:         "The ID of the Resource.",
+				MarkdownDescription: "The ID of the Resource.",
 				Type:                types.StringType,
 				Computed:            true,
 				PlanModifiers: []tfsdk.AttributePlanModifier{
