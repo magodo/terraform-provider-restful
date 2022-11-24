@@ -398,6 +398,35 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 		}
 	}
 
+	// Set the value for overridable (O+C) attributes in plan, which will affect read
+	plan.Query = opt.Query.ToTFValue()
+	plan.Header = opt.Header.ToTFValue()
+	// create_method is already resolved in the create opt here
+	plan.CreateMethod = types.String{Value: opt.Method}
+	// Since the update_method is O+C, it is unknown in the plan when not specified.
+	if plan.UpdateMethod.IsUnknown() {
+		plan.UpdateMethod = types.String{Value: r.p.apiOpt.UpdateMethod}
+	}
+	// Since the delete is O+C, it is unknown in the plan when not specified.
+	if plan.DeleteMethod.IsUnknown() {
+		plan.DeleteMethod = types.String{Value: r.p.apiOpt.DeleteMethod}
+	}
+	// Since the merge_patch_disabled is O+C, it is unknown in the plan when not specified.
+	if plan.MergePatchDisabled.IsUnknown() {
+		plan.MergePatchDisabled = types.Bool{Value: r.p.apiOpt.MergePatchDisabled}
+	}
+
+	// Set resource ID
+	plan.ID = types.String{Value: resourceId}
+
+	// Early set the state using the plan. There is another state setting in the read right after the polling (if any).
+	// Here is mainly for setting the resource id to the state, in order to avoid resource halfly created not tracked by terraform.
+	diags = resp.State.Set(ctx, plan)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
+
 	// For LRO, wait for completion
 	if opt.PollOpt != nil {
 		if opt.PollOpt.UrlLocator == nil {
@@ -419,37 +448,6 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 			)
 			return
 		}
-	}
-
-	// Set overridable attributes from option to state
-	plan.Query = opt.Query.ToTFValue()
-	plan.Header = opt.Header.ToTFValue()
-
-	// create_method is already resolved in the create opt here
-	plan.CreateMethod = types.String{Value: opt.Method}
-
-	// Since the update_method is O+C, it is unknown in the plan when not specified.
-	if plan.UpdateMethod.IsUnknown() {
-		plan.UpdateMethod = types.String{Value: r.p.apiOpt.UpdateMethod}
-	}
-
-	// Since the delete is O+C, it is unknown in the plan when not specified.
-	if plan.DeleteMethod.IsUnknown() {
-		plan.DeleteMethod = types.String{Value: r.p.apiOpt.DeleteMethod}
-	}
-
-	if plan.MergePatchDisabled.IsUnknown() {
-		// Since the merge_patch_disabled is O+C, it is unknown in the plan when not specified.
-		plan.MergePatchDisabled = types.Bool{Value: r.p.apiOpt.MergePatchDisabled}
-	}
-
-	// Set resource ID to state
-	plan.ID = types.String{Value: resourceId}
-
-	diags = resp.State.Set(ctx, plan)
-	resp.Diagnostics.Append(diags...)
-	if diags.HasError() {
-		return
 	}
 
 	rreq := resource.ReadRequest{
@@ -661,23 +659,19 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 		}
 	}
 
-	// Set overridable attributes from option to state that might affect the read
+	// Set the value for overridable (O+C) attributes in plan, which will affect read
 	plan.Query = opt.Query.ToTFValue()
 	plan.Header = opt.Header.ToTFValue()
-
 	// update_method is already resolved in the update opt here
 	plan.UpdateMethod = types.String{Value: opt.Method}
-
 	// Since the create_method is O+C, it is unknown in the plan when not specified.
 	if plan.CreateMethod.IsUnknown() {
 		plan.CreateMethod = types.String{Value: r.p.apiOpt.CreateMethod}
 	}
-
 	// Since the delete is O+C, it is unknown in the plan when not specified.
 	if plan.DeleteMethod.IsUnknown() {
 		plan.DeleteMethod = types.String{Value: r.p.apiOpt.DeleteMethod}
 	}
-
 	// merge_patch_disabled is already resolved in the update opt here
 	plan.MergePatchDisabled = types.Bool{Value: opt.MergePatchDisabled}
 
