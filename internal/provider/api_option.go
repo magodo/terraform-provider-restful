@@ -85,7 +85,7 @@ func convertPollObject(ctx context.Context, obj types.Object) (*client.PollOptio
 func (opt apiOption) ForDataSourceRead(ctx context.Context, d dataSourceData) (*client.ReadOption, diag.Diagnostics) {
 	out := client.ReadOption{}
 
-	if diags := d.Query.ElementsAs(ctx, &out.Header, false); diags.HasError() {
+	if diags := d.Header.ElementsAs(ctx, &out.Header, false); diags.HasError() {
 		return nil, diags
 	}
 
@@ -179,7 +179,7 @@ func (opt apiOption) ForResourceOperation(ctx context.Context, d operationResour
 		Method: d.Method.ValueString(),
 	}
 
-	if diags := d.Query.ElementsAs(ctx, &out.Header, false); diags.HasError() {
+	if diags := d.Header.ElementsAs(ctx, &out.Header, false); diags.HasError() {
 		return nil, diags
 	}
 
