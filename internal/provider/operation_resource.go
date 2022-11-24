@@ -194,10 +194,10 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 	plan.Header = opt.Header.ToTFValue()
 
 	// Set resource ID to state
-	plan.ID = types.String{Value: resourceId}
+	plan.ID = types.StringValue(resourceId)
 
 	// Set Output to state
-	plan.Output = types.String{Value: string(b)}
+	plan.Output = types.StringValue(string(b))
 
 	diags = state.Set(ctx, plan)
 	diagnostics.Append(diags...)

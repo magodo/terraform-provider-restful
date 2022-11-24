@@ -137,9 +137,7 @@ func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp 
 		Query:    opt.Query.ToTFValue(),
 		Header:   opt.Header.ToTFValue(),
 		Selector: config.Selector,
-		Output: types.String{
-			Value: string(b),
-		},
+		Output:   types.StringValue(string(b)),
 	}
 	diags = resp.State.Set(ctx, state)
 	resp.Diagnostics.Append(diags...)

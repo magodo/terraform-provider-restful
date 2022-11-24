@@ -391,22 +391,22 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	plan.Query = opt.Query.ToTFValue()
 	plan.Header = opt.Header.ToTFValue()
 	// create_method is already resolved in the create opt here
-	plan.CreateMethod = types.String{Value: opt.Method}
+	plan.CreateMethod = types.StringValue(opt.Method)
 	// Since the update_method is O+C, it is unknown in the plan when not specified.
 	if plan.UpdateMethod.IsUnknown() {
-		plan.UpdateMethod = types.String{Value: r.p.apiOpt.UpdateMethod}
+		plan.UpdateMethod = types.StringValue(r.p.apiOpt.UpdateMethod)
 	}
 	// Since the delete is O+C, it is unknown in the plan when not specified.
 	if plan.DeleteMethod.IsUnknown() {
-		plan.DeleteMethod = types.String{Value: r.p.apiOpt.DeleteMethod}
+		plan.DeleteMethod = types.StringValue(r.p.apiOpt.DeleteMethod)
 	}
 	// Since the merge_patch_disabled is O+C, it is unknown in the plan when not specified.
 	if plan.MergePatchDisabled.IsUnknown() {
-		plan.MergePatchDisabled = types.Bool{Value: r.p.apiOpt.MergePatchDisabled}
+		plan.MergePatchDisabled = types.BoolValue(r.p.apiOpt.MergePatchDisabled)
 	}
 
 	// Set resource ID
-	plan.ID = types.String{Value: resourceId}
+	plan.ID = types.StringValue(resourceId)
 
 	// Early set the state using the plan. There is another state setting in the read right after the polling (if any).
 	// Here is mainly for setting the resource id to the state, in order to avoid resource halfly created not tracked by terraform.
@@ -516,7 +516,7 @@ func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *reso
 	}
 
 	// Set body, which is modified during read.
-	state.Body = types.String{Value: string(body)}
+	state.Body = types.StringValue(string(body))
 
 	createMethod := r.p.apiOpt.CreateMethod
 	if state.CreateMethod.ValueString() != "" {
@@ -541,13 +541,13 @@ func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *reso
 	// Set overridable (O+C) attributes from option to state
 	state.Query = opt.Query.ToTFValue()
 	state.Header = opt.Header.ToTFValue()
-	state.CreateMethod = types.String{Value: createMethod}
-	state.UpdateMethod = types.String{Value: updateMethod}
-	state.DeleteMethod = types.String{Value: deleteMethod}
-	state.MergePatchDisabled = types.Bool{Value: mergePatchDisabled}
+	state.CreateMethod = types.StringValue(createMethod)
+	state.UpdateMethod = types.StringValue(updateMethod)
+	state.DeleteMethod = types.StringValue(deleteMethod)
+	state.MergePatchDisabled = types.BoolValue(mergePatchDisabled)
 
 	// Set computed attributes
-	state.Output = types.String{Value: string(b)}
+	state.Output = types.StringValue(string(b))
 
 	diags = resp.State.Set(ctx, state)
 	resp.Diagnostics.Append(diags...)
@@ -645,17 +645,17 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 	plan.Query = opt.Query.ToTFValue()
 	plan.Header = opt.Header.ToTFValue()
 	// update_method is already resolved in the update opt here
-	plan.UpdateMethod = types.String{Value: opt.Method}
+	plan.UpdateMethod = types.StringValue(opt.Method)
 	// Since the create_method is O+C, it is unknown in the plan when not specified.
 	if plan.CreateMethod.IsUnknown() {
-		plan.CreateMethod = types.String{Value: r.p.apiOpt.CreateMethod}
+		plan.CreateMethod = types.StringValue(r.p.apiOpt.CreateMethod)
 	}
 	// Since the delete is O+C, it is unknown in the plan when not specified.
 	if plan.DeleteMethod.IsUnknown() {
-		plan.DeleteMethod = types.String{Value: r.p.apiOpt.DeleteMethod}
+		plan.DeleteMethod = types.StringValue(r.p.apiOpt.DeleteMethod)
 	}
 	// merge_patch_disabled is already resolved in the update opt here
-	plan.MergePatchDisabled = types.Bool{Value: opt.MergePatchDisabled}
+	plan.MergePatchDisabled = types.BoolValue(opt.MergePatchDisabled)
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
