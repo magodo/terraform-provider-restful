@@ -152,8 +152,8 @@ func (r *Resource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics)
 				},
 			},
 			"read_path": {
-				Description:         "The API path used to read the resource, which is used as the `id`. " + pathDescription,
-				MarkdownDescription: "The API path used to read the resource, which is used as the `id`. " + pathDescription,
+				Description:         "The API path used to read the resource, which is used as the `id`. The `path` is used as the `id` instead if `read_path` is absent. " + pathDescription,
+				MarkdownDescription: "The API path used to read the resource, which is used as the `id`. The `path` is used as the `id` instead if `read_path` is absent. " + pathDescription,
 				Optional:            true,
 				Type:                types.StringType,
 			},
