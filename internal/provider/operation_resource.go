@@ -6,12 +6,15 @@ import (
 	"fmt"
 	"path"
 
+	fwpath "github.com/hashicorp/terraform-plugin-framework/path"
+
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/magodo/terraform-provider-restful/internal/client"
+	"github.com/magodo/terraform-provider-restful/internal/planmodifier"
 )
 
 type OperationResource struct {
@@ -82,6 +85,7 @@ func (r *OperationResource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Dia
 				Type:                types.MapType{ElemType: types.ListType{ElemType: types.StringType}},
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       []tfsdk.AttributePlanModifier{planmodifier.ProviderMetadataDefaultAttribute(fwpath.Root("query"), types.MapNull(types.ListType{ElemType: types.StringType}))},
 			},
 			"header": {
 				Description:         "The header parameters that are applied to each request. This overrides the `header` set in the provider block.",
@@ -89,6 +93,7 @@ func (r *OperationResource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Dia
 				Type:                types.MapType{ElemType: types.StringType},
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       []tfsdk.AttributePlanModifier{planmodifier.ProviderMetadataDefaultAttribute(fwpath.Root("header"), types.MapNull(types.StringType))},
 			},
 			"poll": pollAttribute("poll", "API"),
 			"output": {

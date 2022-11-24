@@ -484,6 +484,14 @@ func (d azureData) vnetImportStateIdFunc(addr string) func(s *terraform.State) (
 
 func (d azureData) vnet_template() string {
 	return fmt.Sprintf(`
+terraform {
+  provider_meta "restful" {
+    resource = {
+      create_method = "PUT"
+    }
+  }
+}
+
 provider "restful" {
   base_url = %q
   security = {
@@ -494,7 +502,6 @@ provider "restful" {
       scopes        = ["https://management.azure.com/.default"]
     }
   }
-  create_method = "PUT"
 }
 
 resource "restful_resource" "rg" {
@@ -617,6 +624,14 @@ resource "restful_resource" "test" {
 
 func (d azureData) vnet_simple_poll_template() string {
 	return fmt.Sprintf(`
+terraform {
+  provider_meta "restful" {
+    resource = {
+      create_method = "PUT"
+    }
+  }
+}
+
 provider "restful" {
   base_url = %q
   security = {
@@ -627,7 +642,6 @@ provider "restful" {
       scopes        = ["https://management.azure.com/.default"]
     }
   }
-  create_method = "PUT"
 }
 
 resource "restful_resource" "rg" {

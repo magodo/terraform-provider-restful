@@ -1,9 +1,9 @@
 resource "restful_resource" "rg" {
-  path = format("/subscriptions/%s/resourceGroups/%s", var.subscription_id, "example")
+  path          = format("/subscriptions/%s/resourceGroups/%s", var.subscription_id, "example")
+  create_method = "PUT"
   query = {
     api-version = ["2020-06-01"]
   }
-  create_method = "PUT"
   poll_delete = {
     status_locator = "code"
     status = {
@@ -14,7 +14,7 @@ resource "restful_resource" "rg" {
   body = jsonencode({
     location = "westus"
     tags = {
-      foo = "bar"
+      foo = "baz"
     }
   })
 }

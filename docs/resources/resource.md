@@ -14,11 +14,11 @@ description: |-
 
 ```terraform
 resource "restful_resource" "rg" {
-  path = format("/subscriptions/%s/resourceGroups/%s", var.subscription_id, "example")
+  path          = format("/subscriptions/%s/resourceGroups/%s", var.subscription_id, "example")
+  create_method = "PUT"
   query = {
     api-version = ["2020-06-01"]
   }
-  create_method = "PUT"
   poll_delete = {
     status_locator = "code"
     status = {
@@ -29,7 +29,7 @@ resource "restful_resource" "rg" {
   body = jsonencode({
     location = "westus"
     tags = {
-      foo = "bar"
+      foo = "baz"
     }
   })
 }
@@ -45,17 +45,17 @@ resource "restful_resource" "rg" {
 
 ### Optional
 
-- `create_method` (String) The method used to create the resource. Possible values are `PUT` and `POST`. This overrides the `create_method` set in the provider block (defaults to POST).
-- `delete_method` (String) The method used to delete the resource. Possible values are `DELETE` and `POST`. This overrides the `delete_method` set in the provider block (defaults to DELETE).
+- `create_method` (String) The method used to create the resource. Possible values are `PUT` and `POST`. Defaults to `POST`.
+- `delete_method` (String) The method used to delete the resource. Possible values are `DELETE` and `POST`. Defaults to `DELETE`.
 - `delete_path` (String) The API path used to delete the resource. The `id` is used instead if `delete_path` is absent. The path can be string literal, or combined by followings: `$(path)` expanded to `path`, `$(body.x.y.z)` expands to the `x.y.z` property in API body, `#(body.id)` expands to the `id` property, with `base_url` prefix trimmed.
 - `header` (Map of String) The header parameters that are applied to each request. This overrides the `header` set in the provider block.
-- `merge_patch_disabled` (Boolean) Whether to use a JSON Merge Patch as the request body in the PATCH update? This is only effective when `update_method` is set to `PATCH`. This overrides the `merge_patch_disabled` set in the provider block (defaults to `false`).
+- `merge_patch_disabled` (Boolean) Whether to use a JSON Merge Patch as the request body in the PATCH update? This is only effective when `update_method` is set to `PATCH`. Defaults to `false`.
 - `poll_create` (Attributes) The polling option for the "Create" operation (see [below for nested schema](#nestedatt--poll_create))
 - `poll_delete` (Attributes) The polling option for the "Delete" operation (see [below for nested schema](#nestedatt--poll_delete))
 - `poll_update` (Attributes) The polling option for the "Update" operation (see [below for nested schema](#nestedatt--poll_update))
 - `query` (Map of List of String) The query parameters that are applied to each request. This overrides the `query` set in the provider block.
 - `read_path` (String) The API path used to read the resource, which is used as the `id`. The `path` is used as the `id` instead if `read_path` is absent. The path can be string literal, or combined by followings: `$(path)` expanded to `path`, `$(body.x.y.z)` expands to the `x.y.z` property in API body, `#(body.id)` expands to the `id` property, with `base_url` prefix trimmed.
-- `update_method` (String) The method used to update the resource. Possible values are `PUT` and `PATCH`. This overrides the `update_method` set in the provider block (defaults to PUT).
+- `update_method` (String) The method used to update the resource. Possible values are `PUT` and `PATCH`. Defaults to `PUT`.
 - `update_path` (String) The API path used to update the resource. The `id` is used instead if `update_path` is absent. The path can be string literal, or combined by followings: `$(path)` expanded to `path`, `$(body.x.y.z)` expands to the `x.y.z` property in API body, `#(body.id)` expands to the `id` property, with `base_url` prefix trimmed.
 - `write_only_attrs` (List of String) A list of paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attributes that are only settable, but won't be read in GET response.
 
@@ -147,18 +147,19 @@ Import is supported using the following syntax:
 ```shell
 # The import spec consists of following keys:
 #
-# - id (Required)               : The resource id.
-# - path (Required)             : The path used to create the resource.
-# - update_path (Optional)      : The path used to update the resource.
-# - delete_path (Optional)      : The path used to delete the resource.
-# - query (Optional)            : The query parameters.
-# - header (Optional)           : The header.
-# - create_method (Optional)    : The method used to create the resource. Defaults to POST.
-# - update_method (Optional)    : The method used to update the resource. Defaults to PUT
-# - delete_method (Optional)    : The method used to delete the resource. Defaults to DELETE.
-# - body (Optional)             : The interested properties in the response body that you want to manage via this resource. If you omit this, then all the properties will be keeping track, which in 
-#                                 most cases is not what you want (e.g. the read only attributes shouldn't be managed).
-#                                 The value of each property is not important here, hence leave them as `null`.
+# - id (Required)                   : The resource id.
+# - path (Required)                 : The path used to create the resource.
+# - update_path (Optional)          : The path used to update the resource.
+# - delete_path (Optional)          : The path used to delete the resource.
+# - query (Optional)                : The query parameters.
+# - header (Optional)               : The header.
+# - create_method (Optional)        : The method used to create the resource. Defaults to POST.
+# - update_method (Optional)        : The method used to update the resource. Defaults to PUT
+# - delete_method (Optional)        : The method used to delete the resource. Defaults to DELETE.
+# - merge_patch_disabled (Optional) : Whether merge patch is disabled. Defaults to false.
+# - body (Optional)                 : The interested properties in the response body that you want to manage via this resource. If you omit this, then all the properties will be keeping track, which in 
+#                                     most cases is not what you want (e.g. the read only attributes shouldn't be managed).
+#                                     The value of each property is not important here, hence leave them as `null`.
 terraform import restful_resource.example '{
   "id": "/subscriptions/0-0-0-0/resourceGroups/example",
   "path": "/subscriptions/0-0-0-0/resourceGroups/example",

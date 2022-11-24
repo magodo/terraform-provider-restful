@@ -6,8 +6,10 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/magodo/terraform-provider-restful/internal/planmodifier"
 	"github.com/tidwall/gjson"
 )
 
@@ -46,6 +48,7 @@ func (d *DataSource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostic
 				Type:                types.MapType{ElemType: types.ListType{ElemType: types.StringType}},
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       []tfsdk.AttributePlanModifier{planmodifier.ProviderMetadataDefaultAttribute(path.Root("query"), types.MapNull(types.ListType{ElemType: types.StringType}))},
 			},
 			"header": {
 				Description:         "The header parameters that are applied to each request. This overrides the `header` set in the provider block.",
@@ -53,6 +56,7 @@ func (d *DataSource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostic
 				Type:                types.MapType{ElemType: types.StringType},
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       []tfsdk.AttributePlanModifier{planmodifier.ProviderMetadataDefaultAttribute(path.Root("header"), types.MapNull(types.StringType))},
 			},
 			"selector": {
 				Description:         "A selector in gjson query syntax, that is used when `id` represents a collection of resources, to select exactly one member resource of from it",

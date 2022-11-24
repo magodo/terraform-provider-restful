@@ -32,11 +32,11 @@ provider "restful" {
       scopes        = ["https://management.azure.com/.default"]
     }
   }
-  create_method = "PUT"
 }
 
 resource "restful_resource" "rg" {
-  path = format("/subscriptions/%s/resourceGroups/%s", var.subscription_id, "example")
+  path          = format("/subscriptions/%s/resourceGroups/%s", var.subscription_id, "example")
+  create_method = "PUT"
   query = {
     api-version = ["2020-06-01"]
   }
@@ -68,7 +68,8 @@ locals {
 }
 
 resource "restful_resource" "vnet" {
-  path = format("%s/providers/Microsoft.Network/virtualNetworks/%s", restful_resource.rg.id, "example")
+  path          = format("%s/providers/Microsoft.Network/virtualNetworks/%s", restful_resource.rg.id, "example")
+  create_method = "PUT"
   query = {
     api-version = ["2021-05-01"]
   }

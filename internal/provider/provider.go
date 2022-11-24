@@ -19,6 +19,7 @@ import (
 
 type ProviderInterface interface {
 	provider.ProviderWithMetadata
+	provider.ProviderWithMetaSchema
 	provider.ProviderWithValidateConfig
 }
 
@@ -30,14 +31,8 @@ type Provider struct {
 }
 
 type providerData struct {
-	BaseURL            string              `tfsdk:"base_url"`
-	Security           *securityData       `tfsdk:"security"`
-	CreateMethod       *string             `tfsdk:"create_method"`
-	UpdateMethod       *string             `tfsdk:"update_method"`
-	DeleteMethod       *string             `tfsdk:"delete_method"`
-	MergePatchDisabled *bool               `tfsdk:"merge_patch_disabled"`
-	Query              map[string][]string `tfsdk:"query"`
-	Header             map[string]string   `tfsdk:"header"`
+	BaseURL  string        `tfsdk:"base_url"`
+	Security *securityData `tfsdk:"security"`
 }
 
 type securityData struct {
@@ -76,6 +71,57 @@ func New() provider.Provider {
 
 func (*Provider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
 	resp.TypeName = "restful"
+}
+
+func (*Provider) GetMetaSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
+	// Note that the PlanModifiers and Validators don't work for meta schema.
+	return tfsdk.Schema{
+		Attributes: map[string]tfsdk.Attribute{
+			"query": {
+				Description:         "The query parameters that are applied to each resource/data source.",
+				MarkdownDescription: "The query parameters that are applied to each resource/data source.",
+				Type:                types.MapType{ElemType: types.ListType{ElemType: types.StringType}},
+				Optional:            true,
+			},
+			"header": {
+				Description:         "The header parameters that are applied to each resource/data source.",
+				MarkdownDescription: "The header parameters that are applied to each resource/data source.",
+				Type:                types.MapType{ElemType: types.StringType},
+				Optional:            true,
+			},
+			"resource": {
+				Description:         "The metadata applies only to restful_resource.",
+				MarkdownDescription: "The metadata applies only to restful_resource.",
+				Optional:            true,
+				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+					"create_method": {
+						Type:                types.StringType,
+						Description:         "The method used to create the resource. Possible values are `PUT` and `POST`. Defaults to `POST`.",
+						MarkdownDescription: "The method used to create the resource. Possible values are `PUT` and `POST`. Defaults to `POST`.",
+						Optional:            true,
+					},
+					"update_method": {
+						Type:                types.StringType,
+						Description:         "The method used to update the resource. Possible values are `PUT` and `PATCH`. Defaults to `PUT`.",
+						MarkdownDescription: "The method used to update the resource. Possible values are `PUT` and `PATCH`. Defaults to `PUT`.",
+						Optional:            true,
+					},
+					"delete_method": {
+						Type:                types.StringType,
+						Description:         "The method used to delete the resource. Possible values are `DELETE` and `POST`. Defaults to `DELETE`.",
+						MarkdownDescription: "The method used to delete the resource. Possible values are `DELETE` and `POST`. Defaults to `DELETE`.",
+						Optional:            true,
+					},
+					"merge_patch_disabled": {
+						Type:                types.BoolType,
+						Description:         "Whether to use a JSON Merge Patch as the request body in the PATCH update? Defaults to `false`. This is only effective when `update_method` is set to `PATCH`.",
+						MarkdownDescription: "Whether to use a JSON Merge Patch as the request body in the PATCH update? Defaults to `false`. This is only effective when `update_method` is set to `PATCH`.",
+						Optional:            true,
+					},
+				}),
+			},
+		},
+	}, nil
 }
 
 func (*Provider) DataSources(context.Context) []func() datasource.DataSource {
@@ -254,71 +300,14 @@ func (*Provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 					},
 				),
 			},
-			"create_method": {
-				Type:                types.StringType,
-				Description:         "The method used to create the resource. Possible values are `PUT` and `POST`. Defaults to `POST`.",
-				MarkdownDescription: "The method used to create the resource. Possible values are `PUT` and `POST`. Defaults to `POST`.",
-				Optional:            true,
-				// Need a way to set the default value, plan modifier doesn't work here even it is Optional+Computed, because it is at provider level?
-				// Currently, we are setting the default value during the provider configuration.
-				Validators: []tfsdk.AttributeValidator{
-					stringvalidator.OneOf("PUT", "POST"),
-				},
-			},
-			"update_method": {
-				Type:                types.StringType,
-				Description:         "The method used to update the resource. Possible values are `PUT` and `PATCH`. Defaults to `PUT`.",
-				MarkdownDescription: "The method used to update the resource. Possible values are `PUT` and `PATCH`. Defaults to `PUT`.",
-				Optional:            true,
-				// Need a way to set the default value, plan modifier doesn't work here even it is Optional+Computed, because it is at provider level?
-				// Currently, we are setting the default value during the provider configuration.
-				Validators: []tfsdk.AttributeValidator{
-					stringvalidator.OneOf("PUT", "PATCH"),
-				},
-			},
-			"delete_method": {
-				Type:                types.StringType,
-				Description:         "The method used to delete the resource. Possible values are `DELETE` and `POST`. Defaults to `DELETE`.",
-				MarkdownDescription: "The method used to delete the resource. Possible values are `DELETE` and `POST`. Defaults to `DELETE`.",
-				Optional:            true,
-				// Need a way to set the default value, plan modifier doesn't work here even it is Optional+Computed, because it is at provider level?
-				// Currently, we are setting the default value during the provider configuration.
-				Validators: []tfsdk.AttributeValidator{
-					stringvalidator.OneOf("DELETE", "POST"),
-				},
-			},
-			"merge_patch_disabled": {
-				Type:                types.BoolType,
-				Description:         "Whether to use a JSON Merge Patch as the request body in the PATCH update? Defaults to `false`. This is only effective when `update_method` is set to `PATCH`.",
-				MarkdownDescription: "Whether to use a JSON Merge Patch as the request body in the PATCH update? Defaults to `false`. This is only effective when `update_method` is set to `PATCH`.",
-				Optional:            true,
-			},
-			"query": {
-				Description:         "The query parameters that are applied to each request.",
-				MarkdownDescription: "The query parameters that are applied to each request.",
-				Type:                types.MapType{ElemType: types.ListType{ElemType: types.StringType}},
-				Optional:            true,
-			},
-			"header": {
-				Description:         "The header parameters that are applied to each request.",
-				MarkdownDescription: "The header parameters that are applied to each request.",
-				Type:                types.MapType{ElemType: types.StringType},
-				Optional:            true,
-			},
 		},
 	}, nil
 }
 
 func (*Provider) ValidateConfig(ctx context.Context, req provider.ValidateConfigRequest, resp *provider.ValidateConfigResponse) {
 	type pt struct {
-		BaseURL            types.String `tfsdk:"base_url"`
-		Security           types.Object `tfsdk:"security"`
-		CreateMethod       types.String `tfsdk:"create_method"`
-		UpdateMethod       types.String `tfsdk:"update_method"`
-		DeleteMethod       types.String `tfsdk:"delete_method"`
-		MergePatchDisabled types.Bool   `tfsdk:"merge_patch_disabled"`
-		Query              types.Map    `tfsdk:"query"`
-		Header             types.Map    `tfsdk:"header"`
+		BaseURL  types.String `tfsdk:"base_url"`
+		Security types.Object `tfsdk:"security"`
 	}
 
 	var config pt
@@ -542,32 +531,7 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 		)
 	}
 
-	p.apiOpt = apiOption{
-		CreateMethod:       "POST",
-		UpdateMethod:       "PUT",
-		DeleteMethod:       "DELETE",
-		MergePatchDisabled: false,
-		Query:              map[string][]string{},
-		Header:             map[string]string{},
-	}
-	if config.CreateMethod != nil {
-		p.apiOpt.CreateMethod = *config.CreateMethod
-	}
-	if config.UpdateMethod != nil {
-		p.apiOpt.UpdateMethod = *config.UpdateMethod
-	}
-	if config.DeleteMethod != nil {
-		p.apiOpt.DeleteMethod = *config.DeleteMethod
-	}
-	if config.MergePatchDisabled != nil {
-		p.apiOpt.MergePatchDisabled = *config.MergePatchDisabled
-	}
-	if config.Query != nil {
-		p.apiOpt.Query = config.Query
-	}
-	if config.Header != nil {
-		p.apiOpt.Header = config.Header
-	}
+	p.apiOpt = apiOption{}
 
 	resp.ResourceData = p
 	resp.DataSourceData = p

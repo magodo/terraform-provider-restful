@@ -9,10 +9,12 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	tfpath "github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 
 	"github.com/magodo/terraform-provider-restful/internal/client"
+	"github.com/magodo/terraform-provider-restful/internal/planmodifier"
 
 	"github.com/tidwall/gjson"
 
@@ -185,41 +187,45 @@ func (r *Resource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics)
 				Type:                types.ListType{ElemType: types.StringType},
 			},
 			"create_method": {
-				Description:         "The method used to create the resource. Possible values are `PUT` and `POST`. This overrides the `create_method` set in the provider block (defaults to POST).",
-				MarkdownDescription: "The method used to create the resource. Possible values are `PUT` and `POST`. This overrides the `create_method` set in the provider block (defaults to POST).",
+				Description:         "The method used to create the resource. Possible values are `PUT` and `POST`. Defaults to `POST`.",
+				MarkdownDescription: "The method used to create the resource. Possible values are `PUT` and `POST`. Defaults to `POST`.",
 				Type:                types.StringType,
 				Optional:            true,
 				Computed:            true,
 				Validators: []tfsdk.AttributeValidator{
 					stringvalidator.OneOf("PUT", "POST"),
 				},
+				PlanModifiers: []tfsdk.AttributePlanModifier{planmodifier.ProviderMetadataDefaultAttribute(path.Root("resource").AtName("create_method"), types.StringValue("POST"))},
 			},
 			"update_method": {
-				Description:         "The method used to update the resource. Possible values are `PUT` and `PATCH`. This overrides the `update_method` set in the provider block (defaults to PUT).",
-				MarkdownDescription: "The method used to update the resource. Possible values are `PUT` and `PATCH`. This overrides the `update_method` set in the provider block (defaults to PUT).",
+				Description:         "The method used to update the resource. Possible values are `PUT` and `PATCH`. Defaults to `PUT`.",
+				MarkdownDescription: "The method used to update the resource. Possible values are `PUT` and `PATCH`. Defaults to `PUT`.",
 				Type:                types.StringType,
 				Optional:            true,
 				Computed:            true,
 				Validators: []tfsdk.AttributeValidator{
 					stringvalidator.OneOf("PUT", "PATCH"),
 				},
+				PlanModifiers: []tfsdk.AttributePlanModifier{planmodifier.ProviderMetadataDefaultAttribute(path.Root("resource").AtName("update_method"), types.StringValue("PUT"))},
 			},
 			"delete_method": {
-				Description:         "The method used to delete the resource. Possible values are `DELETE` and `POST`. This overrides the `delete_method` set in the provider block (defaults to DELETE).",
-				MarkdownDescription: "The method used to delete the resource. Possible values are `DELETE` and `POST`. This overrides the `delete_method` set in the provider block (defaults to DELETE).",
+				Description:         "The method used to delete the resource. Possible values are `DELETE` and `POST`. Defaults to `DELETE`.",
+				MarkdownDescription: "The method used to delete the resource. Possible values are `DELETE` and `POST`. Defaults to `DELETE`.",
 				Type:                types.StringType,
 				Optional:            true,
 				Computed:            true,
 				Validators: []tfsdk.AttributeValidator{
 					stringvalidator.OneOf("DELETE", "POST"),
 				},
+				PlanModifiers: []tfsdk.AttributePlanModifier{planmodifier.ProviderMetadataDefaultAttribute(path.Root("resource").AtName("delete_method"), types.StringValue("DELETE"))},
 			},
 			"merge_patch_disabled": {
-				Description:         "Whether to use a JSON Merge Patch as the request body in the PATCH update? This is only effective when `update_method` is set to `PATCH`. This overrides the `merge_patch_disabled` set in the provider block (defaults to `false`).",
-				MarkdownDescription: "Whether to use a JSON Merge Patch as the request body in the PATCH update? This is only effective when `update_method` is set to `PATCH`. This overrides the `merge_patch_disabled` set in the provider block (defaults to `false`).",
+				Description:         "Whether to use a JSON Merge Patch as the request body in the PATCH update? This is only effective when `update_method` is set to `PATCH`. Defaults to `false`.",
+				MarkdownDescription: "Whether to use a JSON Merge Patch as the request body in the PATCH update? This is only effective when `update_method` is set to `PATCH`. Defaults to `false`.",
 				Type:                types.BoolType,
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       []tfsdk.AttributePlanModifier{planmodifier.ProviderMetadataDefaultAttribute(path.Root("resource").AtName("merge_patch_disabled"), types.BoolValue(false))},
 			},
 			"query": {
 				Description:         "The query parameters that are applied to each request. This overrides the `query` set in the provider block.",
@@ -227,6 +233,7 @@ func (r *Resource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics)
 				Type:                types.MapType{ElemType: types.ListType{ElemType: types.StringType}},
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       []tfsdk.AttributePlanModifier{planmodifier.ProviderMetadataDefaultAttribute(path.Root("query"), types.MapNull(types.ListType{ElemType: types.StringType}))},
 			},
 			"header": {
 				Description:         "The header parameters that are applied to each request. This overrides the `header` set in the provider block.",
@@ -234,6 +241,7 @@ func (r *Resource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics)
 				Type:                types.MapType{ElemType: types.StringType},
 				Optional:            true,
 				Computed:            true,
+				PlanModifiers:       []tfsdk.AttributePlanModifier{planmodifier.ProviderMetadataDefaultAttribute(path.Root("header"), types.MapNull(types.StringType))},
 			},
 			"output": {
 				Description:         "The response body after reading the resource.",
@@ -393,24 +401,6 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 		}
 	}
 
-	// Set the value for overridable (O+C) attributes in plan, which will affect read
-	plan.Query = opt.Query.ToTFValue()
-	plan.Header = opt.Header.ToTFValue()
-	// create_method is already resolved in the create opt here
-	plan.CreateMethod = types.StringValue(opt.Method)
-	// Since the update_method is O+C, it is unknown in the plan when not specified.
-	if plan.UpdateMethod.IsUnknown() {
-		plan.UpdateMethod = types.StringValue(r.p.apiOpt.UpdateMethod)
-	}
-	// Since the delete is O+C, it is unknown in the plan when not specified.
-	if plan.DeleteMethod.IsUnknown() {
-		plan.DeleteMethod = types.StringValue(r.p.apiOpt.DeleteMethod)
-	}
-	// Since the merge_patch_disabled is O+C, it is unknown in the plan when not specified.
-	if plan.MergePatchDisabled.IsUnknown() {
-		plan.MergePatchDisabled = types.BoolValue(r.p.apiOpt.MergePatchDisabled)
-	}
-
 	// Set resource ID
 	plan.ID = types.StringValue(resourceId)
 
@@ -524,34 +514,6 @@ func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *reso
 	// Set body, which is modified during read.
 	state.Body = types.StringValue(string(body))
 
-	createMethod := r.p.apiOpt.CreateMethod
-	if state.CreateMethod.ValueString() != "" {
-		createMethod = state.CreateMethod.ValueString()
-	}
-
-	updateMethod := r.p.apiOpt.UpdateMethod
-	if state.UpdateMethod.ValueString() != "" {
-		updateMethod = state.UpdateMethod.ValueString()
-	}
-
-	deleteMethod := r.p.apiOpt.DeleteMethod
-	if state.DeleteMethod.ValueString() != "" {
-		deleteMethod = state.DeleteMethod.ValueString()
-	}
-
-	mergePatchDisabled := r.p.apiOpt.MergePatchDisabled
-	if !state.MergePatchDisabled.IsNull() {
-		mergePatchDisabled = state.MergePatchDisabled.ValueBool()
-	}
-
-	// Set overridable (O+C) attributes from option to state
-	state.Query = opt.Query.ToTFValue()
-	state.Header = opt.Header.ToTFValue()
-	state.CreateMethod = types.StringValue(createMethod)
-	state.UpdateMethod = types.StringValue(updateMethod)
-	state.DeleteMethod = types.StringValue(deleteMethod)
-	state.MergePatchDisabled = types.BoolValue(mergePatchDisabled)
-
 	// Set computed attributes
 	state.Output = types.StringValue(string(b))
 
@@ -646,22 +608,6 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 			}
 		}
 	}
-
-	// Set the value for overridable (O+C) attributes in plan, which will affect read
-	plan.Query = opt.Query.ToTFValue()
-	plan.Header = opt.Header.ToTFValue()
-	// update_method is already resolved in the update opt here
-	plan.UpdateMethod = types.StringValue(opt.Method)
-	// Since the create_method is O+C, it is unknown in the plan when not specified.
-	if plan.CreateMethod.IsUnknown() {
-		plan.CreateMethod = types.StringValue(r.p.apiOpt.CreateMethod)
-	}
-	// Since the delete is O+C, it is unknown in the plan when not specified.
-	if plan.DeleteMethod.IsUnknown() {
-		plan.DeleteMethod = types.StringValue(r.p.apiOpt.DeleteMethod)
-	}
-	// merge_patch_disabled is already resolved in the update opt here
-	plan.MergePatchDisabled = types.BoolValue(opt.MergePatchDisabled)
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
@@ -777,6 +723,8 @@ type importSpec struct {
 	UpdateMethod *string `json:"update_method"`
 	DeleteMethod *string `json:"delete_method"`
 
+	MergePatchDisabled *bool `json:"merge_patch_disabled"`
+
 	// Body represents the properties expected to be managed and tracked by Terraform. The value of these properties can be null as a place holder.
 	// When absent, all the response payload read wil be set to `body`.
 	Body map[string]interface{}
@@ -792,6 +740,7 @@ func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest
 	createMethodPath := tfpath.Root("create_method")
 	updateMethodPath := tfpath.Root("update_method")
 	deleteMethodPath := tfpath.Root("delete_method")
+	mergePatchDisabledPath := tfpath.Root("merge_patch_disabled")
 	bodyPath := tfpath.Root("body")
 
 	var imp importSpec
@@ -822,7 +771,28 @@ func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, deletePath, imp.DeletePath)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, queryPath, imp.Query)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, headerPath, imp.Header)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, createMethodPath, imp.CreateMethod)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, updateMethodPath, imp.UpdateMethod)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, deleteMethodPath, imp.DeleteMethod)...)
+
+	createMethod := "POST"
+	if imp.CreateMethod != nil {
+		createMethod = *imp.CreateMethod
+	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, createMethodPath, createMethod)...)
+
+	updateMethod := "PUT"
+	if imp.UpdateMethod != nil {
+		updateMethod = *imp.UpdateMethod
+	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, updateMethodPath, updateMethod)...)
+
+	deleteMethod := "DELETE"
+	if imp.DeleteMethod != nil {
+		deleteMethod = *imp.DeleteMethod
+	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, deleteMethodPath, deleteMethod)...)
+
+	mergePatchDisabled := false
+	if imp.MergePatchDisabled != nil {
+		mergePatchDisabled = *imp.MergePatchDisabled
+	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, mergePatchDisabledPath, mergePatchDisabled)...)
 }

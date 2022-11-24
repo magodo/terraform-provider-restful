@@ -145,13 +145,13 @@ provider "restful" {
       scopes        = ["https://graph.microsoft.com/.default"]
     }
   }
-  update_method = "PATCH"
 }
 
 resource "restful_resource" "test" {
   path = "/users"
   read_path = "$(path)/$(body.id)"
   merge_patch_disabled 	= %t
+  update_method = "PATCH"
   body = jsonencode({
     accountEnabled    = true
 	mailNickname 	  = "AdeleV"
@@ -183,12 +183,12 @@ provider "restful" {
       scopes        = ["https://graph.microsoft.com/.default"]
     }
   }
-  update_method = "PATCH"
 }
 
 resource "restful_resource" "test" {
   path = "/users"
   read_path = "$(path)/$(body.id)"
+  update_method = "PATCH"
   merge_patch_disabled 	= %t
   body = jsonencode({
     accountEnabled    = false

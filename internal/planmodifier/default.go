@@ -27,6 +27,7 @@ func (m DefaultAttributePlanModifier) Modify(ctx context.Context, req tfsdk.Modi
 			"Error converting config value",
 			fmt.Sprintf("An unexpected error was encountered converting a %s to its equivalent Terraform representation. This is always a bug in the provilder.\n\nError: %s", req.AttributePlan.Type(ctx), err),
 		)
+		return
 	}
 
 	// if configuration was provided, then don't use the default
@@ -40,6 +41,7 @@ func (m DefaultAttributePlanModifier) Modify(ctx context.Context, req tfsdk.Modi
 			"Error converting plan value",
 			fmt.Sprintf("An unexpected error was encountered converting a %s to its equivalent Terraform representation. This is always a bug in the provilder.\n\nError: %s", req.AttributePlan.Type(ctx), err),
 		)
+		return
 	}
 
 	// If the plan is known and not null (for example due to another plan modifier),

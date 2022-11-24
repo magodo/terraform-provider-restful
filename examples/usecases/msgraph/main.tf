@@ -28,12 +28,12 @@ provider "restful" {
       scopes        = ["https://graph.microsoft.com/.default"]
     }
   }
-  update_method = "PATCH"
 }
 
 resource "restful_resource" "group" {
-  path      = "/groups"
-  read_path = "$(path)/$(body.id)"
+  path          = "/groups"
+  update_method = "PATCH"
+  read_path     = "$(path)/$(body.id)"
   body = jsonencode({
     description = "Self help community for library"
     displayName = "Library Assist"
@@ -47,8 +47,9 @@ resource "restful_resource" "group" {
 }
 
 resource "restful_resource" "user" {
-  path      = "/users"
-  read_path = "$(path)/$(body.id)"
+  path          = "/users"
+  update_method = "PATCH"
+  read_path     = "$(path)/$(body.id)"
   body = jsonencode({
     accountEnabled    = true
     mailNickname      = "AdeleV"

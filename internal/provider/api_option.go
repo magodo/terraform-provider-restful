@@ -11,14 +11,7 @@ import (
 	"github.com/magodo/terraform-provider-restful/internal/client"
 )
 
-type apiOption struct {
-	CreateMethod       string
-	UpdateMethod       string
-	DeleteMethod       string
-	MergePatchDisabled bool
-	Query              client.Query
-	Header             client.Header
-}
+type apiOption struct{}
 
 func parseLocator(locator string) (client.ValueLocator, error) {
 	if locator == "code" {
@@ -90,22 +83,32 @@ func convertPollObject(ctx context.Context, obj types.Object) (*client.PollOptio
 }
 
 func (opt apiOption) ForDataSourceRead(ctx context.Context, d dataSourceData) (*client.ReadOption, diag.Diagnostics) {
-	out := client.ReadOption{
-		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
-		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
+	out := client.ReadOption{}
+
+	if diags := d.Query.ElementsAs(ctx, &out.Header, false); diags.HasError() {
+		return nil, diags
 	}
+
+	if diags := d.Query.ElementsAs(ctx, &out.Query, false); diags.HasError() {
+		return nil, diags
+	}
+
 	return &out, nil
 }
 
 func (opt apiOption) ForResourceCreate(ctx context.Context, d resourceData) (*client.CreateOption, diag.Diagnostics) {
 	out := client.CreateOption{
-		Method: opt.CreateMethod,
-		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
-		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
+		Method: d.CreateMethod.ValueString(),
 	}
-	if !d.CreateMethod.IsUnknown() && !d.CreateMethod.IsNull() {
-		out.Method = d.CreateMethod.ValueString()
+
+	if diags := d.Query.ElementsAs(ctx, &out.Query, false); diags.HasError() {
+		return nil, diags
 	}
+
+	if diags := d.Header.ElementsAs(ctx, &out.Header, false); diags.HasError() {
+		return nil, diags
+	}
+
 	var diags diag.Diagnostics
 	out.PollOpt, diags = convertPollObject(ctx, d.PollCreate)
 	if diags.HasError() {
@@ -115,25 +118,31 @@ func (opt apiOption) ForResourceCreate(ctx context.Context, d resourceData) (*cl
 }
 
 func (opt apiOption) ForResourceRead(ctx context.Context, d resourceData) (*client.ReadOption, diag.Diagnostics) {
-	out := client.ReadOption{
-		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
-		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
+	out := client.ReadOption{}
+
+	if diags := d.Query.ElementsAs(ctx, &out.Query, false); diags.HasError() {
+		return nil, diags
 	}
+
+	if diags := d.Header.ElementsAs(ctx, &out.Header, false); diags.HasError() {
+		return nil, diags
+	}
+
 	return &out, nil
 }
 
 func (opt apiOption) ForResourceUpdate(ctx context.Context, d resourceData) (*client.UpdateOption, diag.Diagnostics) {
 	out := client.UpdateOption{
-		Method:             opt.UpdateMethod,
-		MergePatchDisabled: opt.MergePatchDisabled,
-		Query:              opt.Query.Clone().TakeOrSelf(ctx, d.Query),
-		Header:             opt.Header.Clone().TakeOrSelf(ctx, d.Header),
+		Method:             d.UpdateMethod.ValueString(),
+		MergePatchDisabled: d.MergePatchDisabled.ValueBool(),
 	}
-	if !d.UpdateMethod.IsUnknown() && !d.UpdateMethod.IsNull() {
-		out.Method = d.UpdateMethod.ValueString()
+
+	if diags := d.Query.ElementsAs(ctx, &out.Query, false); diags.HasError() {
+		return nil, diags
 	}
-	if !d.MergePatchDisabled.IsUnknown() && !d.MergePatchDisabled.IsNull() {
-		out.MergePatchDisabled = d.MergePatchDisabled.ValueBool()
+
+	if diags := d.Header.ElementsAs(ctx, &out.Header, false); diags.HasError() {
+		return nil, diags
 	}
 
 	var diags diag.Diagnostics
@@ -146,13 +155,15 @@ func (opt apiOption) ForResourceUpdate(ctx context.Context, d resourceData) (*cl
 
 func (opt apiOption) ForResourceDelete(ctx context.Context, d resourceData) (*client.DeleteOption, diag.Diagnostics) {
 	out := client.DeleteOption{
-		Method: opt.DeleteMethod,
-		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
-		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
+		Method: d.DeleteMethod.ValueString(),
 	}
 
-	if !d.DeleteMethod.IsUnknown() && !d.DeleteMethod.IsNull() {
-		out.Method = d.DeleteMethod.ValueString()
+	if diags := d.Query.ElementsAs(ctx, &out.Query, false); diags.HasError() {
+		return nil, diags
+	}
+
+	if diags := d.Header.ElementsAs(ctx, &out.Header, false); diags.HasError() {
+		return nil, diags
 	}
 
 	var diags diag.Diagnostics
@@ -166,9 +177,16 @@ func (opt apiOption) ForResourceDelete(ctx context.Context, d resourceData) (*cl
 func (opt apiOption) ForResourceOperation(ctx context.Context, d operationResourceData) (*client.OperationOption, diag.Diagnostics) {
 	out := client.OperationOption{
 		Method: d.Method.ValueString(),
-		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
-		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
 	}
+
+	if diags := d.Query.ElementsAs(ctx, &out.Header, false); diags.HasError() {
+		return nil, diags
+	}
+
+	if diags := d.Query.ElementsAs(ctx, &out.Query, false); diags.HasError() {
+		return nil, diags
+	}
+
 	var diags diag.Diagnostics
 	out.PollOpt, diags = convertPollObject(ctx, d.Poll)
 	if diags.HasError() {

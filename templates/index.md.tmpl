@@ -1,0 +1,53 @@
+---
+page_title: "{{.ProviderShortName}} Provider"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.ProviderShortName}} Provider
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+```terraform
+terraform {
+  #...
+
+  provider_meta "restful" {
+    header = {
+      foo = "bar"
+    }
+    resource = {
+      create_method = "PUT"
+    }
+  }
+}
+
+provider "restful" {
+  base_url = "https://management.azure.com"
+  security = {
+    oauth2 = {
+      client_id     = var.client_id
+      client_secret = var.client_secret
+      token_url     = format("https://login.microsoftonline.com/%s/oauth2/v2.0/token", var.tenant_id)
+      scopes        = ["https://management.azure.com/.default"]
+    }
+  }
+}
+```
+
+## Provider Metadata Schema
+
+The restful provider provides following [metadata schema](https://developer.hashicorp.com/terraform/internals/provider-meta) to allow users to tune the default values for each attributes:
+
+- `query`: The default query parameters applied to all resource/data source operations.
+- `header`: The default header pairs applied to all resource/data source operations.
+- `resource`: The metadata applies only to restful_resource, which includes:
+	- `create_method`		: The default method used to create a resource. Possible values are `POST` and `PUT`. Defaults to `POST`.
+	- `update_method`		: The default method used to update a resource. Possible values are `PUT` and `PATCH`. Defaults to `PUT`.
+	- `delete_method`		: The default method used to update a resource. Possible values are `DELETE` and `POST`. Defaults to `DELETE`.
+	- `merge_patch_disabled`: Whether merge patch is disabled when updating a resource. Defaults to `false`.
+
+{{ .SchemaMarkdown | trimspace }}
