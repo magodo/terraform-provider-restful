@@ -12,10 +12,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 
 	"github.com/magodo/terraform-provider-restful/internal/client"
-	"github.com/magodo/terraform-provider-restful/internal/planmodifier"
 	"github.com/magodo/terraform-provider-restful/internal/validator"
 
-	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/tidwall/gjson"
 
 	jsonpatch "github.com/evanphx/json-patch"
@@ -184,16 +182,7 @@ func (r *Resource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics)
 				Description:         "A list of paths (in gjson syntax) to the attributes that are only settable, but won't be read in GET response.",
 				MarkdownDescription: "A list of paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attributes that are only settable, but won't be read in GET response.",
 				Optional:            true,
-				Computed:            true,
 				Type:                types.ListType{ElemType: types.StringType},
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					planmodifier.DefaultAttributePlanModifier{
-						Default: types.List{
-							ElemType: types.StringType,
-							Elems:    []attr.Value{},
-						},
-					},
-				},
 			},
 			"create_method": {
 				Description:         "The method used to create the resource. Possible values are `PUT` and `POST`. This overrides the `create_method` set in the provider block (defaults to POST).",
@@ -505,13 +494,6 @@ func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *reso
 	b := response.Body()
 
 	var writeOnlyAttributes []string
-	// In case write_only_attrs (O+C) is not set, set its default value as is defined in schema. This can avoid unnecessary plan diff after import.
-	if state.WriteOnlyAttributes.IsNull() {
-		state.WriteOnlyAttributes = types.List{
-			ElemType: types.StringType,
-			Elems:    []attr.Value{},
-		}
-	}
 	diags = state.WriteOnlyAttributes.ElementsAs(ctx, &writeOnlyAttributes, false)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
