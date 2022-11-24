@@ -34,6 +34,7 @@ type providerData struct {
 	Security           *securityData       `tfsdk:"security"`
 	CreateMethod       *string             `tfsdk:"create_method"`
 	UpdateMethod       *string             `tfsdk:"update_method"`
+	DeleteMethod       *string             `tfsdk:"delete_method"`
 	MergePatchDisabled *bool               `tfsdk:"merge_patch_disabled"`
 	Query              map[string][]string `tfsdk:"query"`
 	Header             map[string]string   `tfsdk:"header"`
@@ -271,6 +272,15 @@ func (*Provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 				// Currently, we are setting the default value during the provider configuration.
 				Validators: []tfsdk.AttributeValidator{validator.StringInSlice("PUT", "PATCH")},
 			},
+			"delete_method": {
+				Type:                types.StringType,
+				Description:         "The method used to delete the resource. Possible values are `DELETE` and `POST`. Defaults to `DELETE`.",
+				MarkdownDescription: "The method used to delete the resource. Possible values are `DELETE` and `POST`. Defaults to `DELETE`.",
+				Optional:            true,
+				// Need a way to set the default value, plan modifier doesn't work here even it is Optional+Computed, because it is at provider level?
+				// Currently, we are setting the default value during the provider configuration.
+				Validators: []tfsdk.AttributeValidator{validator.StringInSlice("DELETE", "POST")},
+			},
 			"merge_patch_disabled": {
 				Type:                types.BoolType,
 				Description:         "Whether to use a JSON Merge Patch as the request body in the PATCH update? Defaults to `false`. This is only effective when `update_method` is set to `PATCH`.",
@@ -299,6 +309,7 @@ func (*Provider) ValidateConfig(ctx context.Context, req provider.ValidateConfig
 		Security           types.Object `tfsdk:"security"`
 		CreateMethod       types.String `tfsdk:"create_method"`
 		UpdateMethod       types.String `tfsdk:"update_method"`
+		DeleteMethod       types.String `tfsdk:"delete_method"`
 		MergePatchDisabled types.Bool   `tfsdk:"merge_patch_disabled"`
 		Query              types.Map    `tfsdk:"query"`
 		Header             types.Map    `tfsdk:"header"`
@@ -528,6 +539,7 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 	p.apiOpt = apiOption{
 		CreateMethod:       "POST",
 		UpdateMethod:       "PUT",
+		DeleteMethod:       "DELETE",
 		MergePatchDisabled: false,
 		Query:              map[string][]string{},
 		Header:             map[string]string{},
@@ -537,6 +549,9 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 	}
 	if config.UpdateMethod != nil {
 		p.apiOpt.UpdateMethod = *config.UpdateMethod
+	}
+	if config.DeleteMethod != nil {
+		p.apiOpt.DeleteMethod = *config.DeleteMethod
 	}
 	if config.MergePatchDisabled != nil {
 		p.apiOpt.MergePatchDisabled = *config.MergePatchDisabled

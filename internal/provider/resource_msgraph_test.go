@@ -150,7 +150,7 @@ provider "restful" {
 
 resource "restful_resource" "test" {
   path = "/users"
-  name_path = "id"
+  read_path = "$(path)/$(body.id)"
   merge_patch_disabled 	= %t
   body = jsonencode({
     accountEnabled    = true
@@ -188,7 +188,7 @@ provider "restful" {
 
 resource "restful_resource" "test" {
   path = "/users"
-  name_path = "id"
+  read_path = "$(path)/$(body.id)"
   merge_patch_disabled 	= %t
   body = jsonencode({
     accountEnabled    = false
@@ -212,6 +212,7 @@ func (d msgraphData) userImportStateIdFunc(addr string) func(s *terraform.State)
 	return func(s *terraform.State) (string, error) {
 		return fmt.Sprintf(`{
 "id": %q,
+"path": "/users",
 "body": {
   "displayName": null,
   "userPrincipalName": null

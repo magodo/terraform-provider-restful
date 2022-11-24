@@ -11,7 +11,7 @@ import (
 )
 
 // Generate the provider document.
-//go:generate tfplugindocs generate --provider-name restful --rendered-provider-name Restful
+//go:generate tfplugindocs generate
 
 func main() {
 	var debug bool

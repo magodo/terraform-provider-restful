@@ -92,10 +92,10 @@ func New(baseURL string, opt *BuildOption) (*Client, error) {
 }
 
 type CreateOption struct {
-	CreateMethod string
-	Query        Query
-	Header       Header
-	PollOpt      *PollOption
+	Method  string
+	Query   Query
+	Header  Header
+	PollOpt *PollOption
 }
 
 func (c *Client) Create(ctx context.Context, path string, body interface{}, opt CreateOption) (*resty.Response, error) {
@@ -104,13 +104,13 @@ func (c *Client) Create(ctx context.Context, path string, body interface{}, opt 
 	req.SetHeaders(opt.Header)
 	req = req.SetHeader("Content-Type", "application/json")
 
-	switch opt.CreateMethod {
+	switch opt.Method {
 	case "POST":
 		return req.Post(path)
 	case "PUT":
 		return req.Put(path)
 	default:
-		return nil, fmt.Errorf("unknown create method: %s", opt.CreateMethod)
+		return nil, fmt.Errorf("unknown create method: %s", opt.Method)
 	}
 }
 
@@ -128,8 +128,7 @@ func (c *Client) Read(ctx context.Context, path string, opt ReadOption) (*resty.
 }
 
 type UpdateOption struct {
-	CreateMethod       string
-	UpdateMethod       string
+	Method             string
 	MergePatchDisabled bool
 	Query              Query
 	Header             Header
@@ -142,17 +141,18 @@ func (c *Client) Update(ctx context.Context, path string, body interface{}, opt 
 	req.SetHeaders(opt.Header)
 	req = req.SetHeader("Content-Type", "application/json")
 
-	switch opt.UpdateMethod {
+	switch opt.Method {
 	case "PATCH":
 		return req.Patch(path)
 	case "PUT":
 		return req.Put(path)
 	default:
-		return nil, fmt.Errorf("unknown create method: %s", opt.UpdateMethod)
+		return nil, fmt.Errorf("unknown update method: %s", opt.Method)
 	}
 }
 
 type DeleteOption struct {
+	Method  string
 	Query   Query
 	Header  Header
 	PollOpt *PollOption
@@ -163,7 +163,14 @@ func (c *Client) Delete(ctx context.Context, path string, opt DeleteOption) (*re
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 	req.SetHeaders(opt.Header)
 
-	return req.Delete(path)
+	switch opt.Method {
+	case "DELETE":
+		return req.Delete(path)
+	case "POST":
+		return req.Post(path)
+	default:
+		return nil, fmt.Errorf("unknown delete method: %s", opt.Method)
+	}
 }
 
 type OperationOption struct {

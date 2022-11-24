@@ -421,10 +421,11 @@ resource "restful_resource" "test" {
 func (d azureData) resourceGroupImportStateIdFunc(addr string) func(s *terraform.State) (string, error) {
 	return func(s *terraform.State) (string, error) {
 		return fmt.Sprintf(`{
-"id": %q,
+"id": %[1]q,
 "query": {
   "api-version": ["2020-06-01"]
 },
+"path": %[1]q,
 "create_method": "PUT",
 "body": {
   "location": null,
@@ -442,6 +443,7 @@ func (d azureData) resourceGroupUpdatePathImportStateIdFunc(addr string) func(s 
   "api-version": ["2020-06-01"]
 },
 "create_method": "PUT",
+"path": %[1]q,
 "update_path": %[1]q,
 "body": {
   "location": null,
@@ -454,10 +456,11 @@ func (d azureData) resourceGroupUpdatePathImportStateIdFunc(addr string) func(s 
 func (d azureData) vnetImportStateIdFunc(addr string) func(s *terraform.State) (string, error) {
 	return func(s *terraform.State) (string, error) {
 		return fmt.Sprintf(`{
-  "id": %q,
+  "id": %[1]q,
   "query": {
     "api-version": ["2021-05-01"]
   },
+  "path": %[1]q,
   "create_method": "PUT",
   "body": {
     "location": null,
