@@ -8,11 +8,11 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	tfpath "github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 
 	"github.com/magodo/terraform-provider-restful/internal/client"
-	"github.com/magodo/terraform-provider-restful/internal/validator"
 
 	"github.com/tidwall/gjson"
 
@@ -190,7 +190,9 @@ func (r *Resource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics)
 				Type:                types.StringType,
 				Optional:            true,
 				Computed:            true,
-				Validators:          []tfsdk.AttributeValidator{validator.StringInSlice("PUT", "POST")},
+				Validators: []tfsdk.AttributeValidator{
+					stringvalidator.OneOf("PUT", "POST"),
+				},
 			},
 			"update_method": {
 				Description:         "The method used to update the resource. Possible values are `PUT` and `PATCH`. This overrides the `update_method` set in the provider block (defaults to PUT).",
@@ -198,7 +200,9 @@ func (r *Resource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics)
 				Type:                types.StringType,
 				Optional:            true,
 				Computed:            true,
-				Validators:          []tfsdk.AttributeValidator{validator.StringInSlice("PUT", "PATCH")},
+				Validators: []tfsdk.AttributeValidator{
+					stringvalidator.OneOf("PUT", "PATCH"),
+				},
 			},
 			"delete_method": {
 				Description:         "The method used to delete the resource. Possible values are `DELETE` and `POST`. This overrides the `delete_method` set in the provider block (defaults to DELETE).",
@@ -206,7 +210,9 @@ func (r *Resource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics)
 				Type:                types.StringType,
 				Optional:            true,
 				Computed:            true,
-				Validators:          []tfsdk.AttributeValidator{validator.StringInSlice("DELETE", "POST")},
+				Validators: []tfsdk.AttributeValidator{
+					stringvalidator.OneOf("DELETE", "POST"),
+				},
 			},
 			"merge_patch_disabled": {
 				Description:         "Whether to use a JSON Merge Patch as the request body in the PATCH update? This is only effective when `update_method` is set to `PATCH`. This overrides the `merge_patch_disabled` set in the provider block (defaults to `false`).",

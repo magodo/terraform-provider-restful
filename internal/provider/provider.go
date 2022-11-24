@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/magodo/terraform-provider-restful/internal/client"
-	"github.com/magodo/terraform-provider-restful/internal/validator"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
@@ -125,7 +125,7 @@ func (*Provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 										MarkdownDescription: fmt.Sprintf("The type of the authentication scheme. Possible values are `%s`, `%s`.", client.HTTPAuthTypeBasic, client.HTTPAuthTypeBearer),
 										Required:            true,
 										Type:                types.StringType,
-										Validators: []tfsdk.AttributeValidator{validator.StringInSlice(
+										Validators: []tfsdk.AttributeValidator{stringvalidator.OneOf(
 											string(client.HTTPAuthTypeBasic),
 											string(client.HTTPAuthTypeBearer),
 										)},
@@ -179,7 +179,7 @@ func (*Provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 										Required: true,
 										Type:     types.StringType,
 										Validators: []tfsdk.AttributeValidator{
-											validator.StringInSlice(
+											stringvalidator.OneOf(
 												string(client.APIKeyAuthInHeader),
 												string(client.APIKeyAuthInQuery),
 												string(client.APIKeyAuthInCookie),
@@ -246,7 +246,7 @@ func (*Provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 										MarkdownDescription: fmt.Sprintf("Specifies how is th client ID & secret sent. Possible values are `%s` and `%s`. If absent, the style used will be auto detected.",
 											client.OAuth2AuthStyleInParams, client.OAuth2AuthStyleInHeader),
 										Optional:   true,
-										Validators: []tfsdk.AttributeValidator{validator.StringInSlice(string(client.OAuth2AuthStyleInParams), string(client.OAuth2AuthStyleInHeader))},
+										Validators: []tfsdk.AttributeValidator{stringvalidator.OneOf(string(client.OAuth2AuthStyleInParams), string(client.OAuth2AuthStyleInHeader))},
 									},
 								},
 							),
@@ -261,7 +261,9 @@ func (*Provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 				Optional:            true,
 				// Need a way to set the default value, plan modifier doesn't work here even it is Optional+Computed, because it is at provider level?
 				// Currently, we are setting the default value during the provider configuration.
-				Validators: []tfsdk.AttributeValidator{validator.StringInSlice("PUT", "POST")},
+				Validators: []tfsdk.AttributeValidator{
+					stringvalidator.OneOf("PUT", "POST"),
+				},
 			},
 			"update_method": {
 				Type:                types.StringType,
@@ -270,7 +272,9 @@ func (*Provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 				Optional:            true,
 				// Need a way to set the default value, plan modifier doesn't work here even it is Optional+Computed, because it is at provider level?
 				// Currently, we are setting the default value during the provider configuration.
-				Validators: []tfsdk.AttributeValidator{validator.StringInSlice("PUT", "PATCH")},
+				Validators: []tfsdk.AttributeValidator{
+					stringvalidator.OneOf("PUT", "PATCH"),
+				},
 			},
 			"delete_method": {
 				Type:                types.StringType,
@@ -279,7 +283,9 @@ func (*Provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 				Optional:            true,
 				// Need a way to set the default value, plan modifier doesn't work here even it is Optional+Computed, because it is at provider level?
 				// Currently, we are setting the default value during the provider configuration.
-				Validators: []tfsdk.AttributeValidator{validator.StringInSlice("DELETE", "POST")},
+				Validators: []tfsdk.AttributeValidator{
+					stringvalidator.OneOf("DELETE", "POST"),
+				},
 			},
 			"merge_patch_disabled": {
 				Type:                types.BoolType,

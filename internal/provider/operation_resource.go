@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"path"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/magodo/terraform-provider-restful/internal/client"
-	"github.com/magodo/terraform-provider-restful/internal/validator"
 )
 
 type OperationResource struct {
@@ -63,7 +63,9 @@ func (r *OperationResource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Dia
 				MarkdownDescription: "The HTTP method of the API call. Possible values are `PUT`, `POST`, `PATCH` and `DELETE`.",
 				Type:                types.StringType,
 				Required:            true,
-				Validators:          []tfsdk.AttributeValidator{validator.StringInSlice("PUT", "POST", "PATCH", "DELETE")},
+				Validators: []tfsdk.AttributeValidator{
+					stringvalidator.OneOf("PUT", "POST", "PATCH", "DELETE"),
+				},
 				PlanModifiers: []tfsdk.AttributePlanModifier{
 					resource.RequiresReplace(),
 				},
