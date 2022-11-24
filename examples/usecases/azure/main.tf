@@ -57,13 +57,13 @@ resource "restful_resource" "rg" {
 
 locals {
   vnet_poll = {
-    status_locator = "body[status]"
+    status_locator = "body.status"
     status = {
       success = "Succeeded"
       failure = "Failed"
       pending = ["Pending"]
     }
-    url_locator = "header[azure-asyncoperation]"
+    url_locator = "header.azure-asyncoperation"
   }
 }
 

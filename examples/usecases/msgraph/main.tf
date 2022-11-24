@@ -33,7 +33,7 @@ provider "restful" {
 
 resource "restful_resource" "group" {
   path      = "/groups"
-  name_path = "id"
+  read_path = "$(path)/$(body.id)"
   body = jsonencode({
     description = "Self help community for library"
     displayName = "Library Assist"
@@ -48,7 +48,7 @@ resource "restful_resource" "group" {
 
 resource "restful_resource" "user" {
   path      = "/users"
-  name_path = "id"
+  read_path = "$(path)/$(body.id)"
   body = jsonencode({
     accountEnabled    = true
     mailNickname      = "AdeleV"

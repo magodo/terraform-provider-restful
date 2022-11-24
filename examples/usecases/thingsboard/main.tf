@@ -46,7 +46,7 @@ data "restful_resource" "user" {
 
 resource "restful_resource" "customer" {
   path      = "/customer"
-  name_path = "id.id"
+  read_path = "$(path)/$(body.id.id)"
   body = jsonencode({
     title = "Example Company"
     tenantId = {
@@ -66,7 +66,7 @@ resource "restful_resource" "customer" {
 
 resource "restful_resource" "device_profile" {
   path      = "/deviceProfile"
-  name_path = "id.id"
+  read_path = "$(path)/$(body.id.id)"
   body = jsonencode({
     tenantId = {
       id         = jsondecode(data.restful_resource.user.output).tenantId.id
@@ -101,7 +101,7 @@ resource "restful_resource" "device_profile" {
 
 resource "restful_resource" "device" {
   path      = "/device"
-  name_path = "id.id"
+  read_path = "$(path)/$(body.id.id)"
   body = jsonencode({
     tenantId = {
       id         = jsondecode(data.restful_resource.user.output).tenantId.id
@@ -204,7 +204,7 @@ locals {
 
 resource "restful_resource" "dashboard" {
   path      = "/dashboard"
-  name_path = "id.id"
+  read_path = "$(path)/$(body.id.id)"
   body = jsonencode({
     tenantId = {
       id         = jsondecode(data.restful_resource.user.output).tenantId.id
