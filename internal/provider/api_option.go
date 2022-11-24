@@ -24,7 +24,7 @@ func parseLocator(locator string) (client.ValueLocator, error) {
 	if locator == "code" {
 		return client.CodeLocator{}, nil
 	}
-	p := regexp.MustCompile(`^(.+)\[(.+)\]$`)
+	p := regexp.MustCompile(`^(\w+)\.(.+)$`)
 	matches := p.FindAllStringSubmatch(locator, 1)
 	if len(matches) != 1 {
 		return nil, fmt.Errorf("invalid locator: %s", locator)

@@ -85,8 +85,8 @@ func pollAttribute(attr, s string) tfsdk.Attribute {
 		Optional:            true,
 		Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
 			"status_locator": {
-				Description:         "Specifies how to discover the status property. The format is either `code` or `<scope>[<path>]`, where `<scope>` can be either `header` or `body`, and the `<path>` is using the gjson syntax.",
-				MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `<scope>[<path>]`, where `<scope>` can be either `header` or `body`, and the `<path>` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).",
+				Description:         "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the gjson syntax.",
+				MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).",
 				Required:            true,
 				Type:                types.StringType,
 			},
@@ -110,8 +110,8 @@ func pollAttribute(attr, s string) tfsdk.Attribute {
 				}),
 			},
 			"url_locator": {
-				Description:         "Specifies how to discover the polling url. The format is as `<k>[<v>]`, which can be one of `header[path]` (use the property at `path` in response header), `body[path]` (use the property at `path` in response body) or `exact[value]` (use the exact `value`). When absent, the resource's path is used for polling.",
-				MarkdownDescription: "Specifies how to discover the polling url. The format is as `<k>[<v>]`, which can be one of `header[path]` (use the property at `path` in response header), `body[path]` (use the property at `path` in response body) or `exact[value]` (use the exact `value`). When absent, the resource's path is used for polling.",
+				Description:         "Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the resource's path is used for polling.",
+				MarkdownDescription: "Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the resource's path is used for polling.",
 				Optional:            true,
 				Type:                types.StringType,
 			},

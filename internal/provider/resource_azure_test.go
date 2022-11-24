@@ -292,7 +292,7 @@ resource "restful_resource" "test" {
       success = "200"
       pending = ["202"]
     }
-    url_locator = "header[location]"
+    url_locator = "header.location"
   }
 }
 `, d.url, d.clientId, d.clientSecret, d.tenantId, d.subscriptionId, d.rd)
@@ -331,7 +331,7 @@ resource "restful_resource" "test" {
       success = "200"
       pending = ["202"]
     }
-    url_locator = "header[location]"
+    url_locator = "header.location"
   }
 }
 `, d.url, d.clientId, d.clientSecret, d.tenantId, d.subscriptionId, d.rd)
@@ -370,7 +370,7 @@ resource "restful_resource" "test" {
       success = "200"
       pending = ["202"]
     }
-    url_locator = "header[location]"
+    url_locator = "header.location"
   }
 }
 `, d.url, d.clientId, d.clientSecret, d.tenantId, d.subscriptionId, d.rd, d.subscriptionId, d.rd)
@@ -412,7 +412,7 @@ resource "restful_resource" "test" {
       success = "200"
       pending = ["202"]
     }
-    url_locator = "header[location]"
+    url_locator = "header.location"
   }
 }
 `, d.url, d.clientId, d.clientSecret, d.tenantId, d.subscriptionId, d.rd, d.subscriptionId, d.rd)
@@ -512,7 +512,7 @@ resource "restful_resource" "rg" {
       success = "200"
       pending = ["202"]
     }
-    url_locator = "header[location]"
+    url_locator = "header.location"
   }
 }
 
@@ -525,12 +525,12 @@ func (d azureData) vnet() string {
 
 locals {
   vnet_poll = {
-    status_locator = "body[status]"
+    status_locator = "body.status"
     status = {
       success = "Succeeded"
       pending = ["Pending"]
     }
-    url_locator = "header[azure-asyncoperation]"
+    url_locator = "header.azure-asyncoperation"
   }
 }
 
@@ -576,12 +576,12 @@ func (d azureData) vnet_update() string {
 
 locals {
   vnet_poll = {
-    status_locator = "body[status]"
+    status_locator = "body.status"
     status = {
       success = "Succeeded"
       pending = ["Pending"]
     }
-    url_locator = "header[azure-asyncoperation]"
+    url_locator = "header.azure-asyncoperation"
   }
 }
 
@@ -661,14 +661,14 @@ resource "restful_resource" "test" {
   }
 
   poll_create = {
-    status_locator = "body[properties.provisioningState]"
+    status_locator = "body.properties.provisioningState"
     status = {
       success = "Succeeded"
       pending = ["Updating"]
     }
   }
   poll_update = {
-    status_locator = "body[properties.provisioningState]"
+    status_locator = "body.properties.provisioningState"
     status = {
       success = "Succeeded"
       pending = ["Updating"]
@@ -719,14 +719,14 @@ resource "restful_resource" "test" {
   }
 
   poll_create = {
-    status_locator = "body[properties.provisioningState]"
+    status_locator = "body.properties.provisioningState"
     status = {
       success = "Succeeded"
       pending = ["Updating"]
     }
   }
   poll_update = {
-    status_locator = "body[properties.provisioningState]"
+    status_locator = "body.properties.provisioningState"
     status = {
       success = "Succeeded"
       pending = ["Updating"]
@@ -781,8 +781,8 @@ resource "restful_operation" "test" {
   }
   method = "POST"
   poll = {
-	url_locator = "exact[/subscriptions/%[5]s/providers/%[6]s?api-version=2014-04-01-preview]"
-    status_locator = "body[registrationState]"
+	url_locator = "exact./subscriptions/%[5]s/providers/%[6]s?api-version=2014-04-01-preview"
+    status_locator = "body.registrationState"
     status = {
       success = "Registered"
       pending = ["Registering"]
@@ -813,8 +813,8 @@ resource "restful_operation" "test" {
   }
   method = "POST"
   poll = {
-	url_locator = "exact[/subscriptions/%[5]s/providers/%[6]s?api-version=2014-04-01-preview]"
-    status_locator = "body[registrationState]"
+	url_locator = "exact./subscriptions/%[5]s/providers/%[6]s?api-version=2014-04-01-preview"
+    status_locator = "body.registrationState"
     status = {
       success = "Unregistered"
       pending = ["Unregistering"]

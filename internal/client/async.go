@@ -23,7 +23,7 @@ func (loc ExactLocator) locateValueInResp(_ resty.Response) string {
 	return string(loc)
 }
 func (loc ExactLocator) String() string {
-	return fmt.Sprintf(`exact[%s]`, string(loc))
+	return fmt.Sprintf(`exact.%s`, string(loc))
 }
 
 type HeaderLocator string
@@ -32,7 +32,7 @@ func (loc HeaderLocator) locateValueInResp(resp resty.Response) string {
 	return resp.Header().Get(string(loc))
 }
 func (loc HeaderLocator) String() string {
-	return fmt.Sprintf(`header[%s]`, string(loc))
+	return fmt.Sprintf(`header.%s`, string(loc))
 }
 
 type BodyLocator string
@@ -42,7 +42,7 @@ func (loc BodyLocator) locateValueInResp(resp resty.Response) string {
 	return result.String()
 }
 func (loc BodyLocator) String() string {
-	return fmt.Sprintf(`body[%s]`, string(loc))
+	return fmt.Sprintf(`body.%s`, string(loc))
 }
 
 type CodeLocator struct{}
