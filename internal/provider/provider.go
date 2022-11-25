@@ -3,14 +3,14 @@ package provider
 import (
 	"context"
 	"fmt"
-	"net/url"
-	"strings"
 
 	"github.com/magodo/terraform-provider-restful/internal/client"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/schemavalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -19,7 +19,6 @@ import (
 
 type ProviderInterface interface {
 	provider.ProviderWithMetadata
-	provider.ProviderWithValidateConfig
 }
 
 var _ ProviderInterface = &Provider{}
@@ -47,27 +46,62 @@ type securityData struct {
 }
 
 type httpData struct {
-	Type     string  `tfsdk:"type"`
-	Username *string `tfsdk:"username"`
-	Password *string `tfsdk:"password"`
-	Token    *string `tfsdk:"token"`
+	Basic *httpBasicData `tfsdk:"basic"`
+	Token *httpTokenData `tfsdk:"token"`
 }
 
-type oauth2Data struct {
-	ClientID       *string             `tfsdk:"client_id"`
-	ClientSecret   *string             `tfsdk:"client_secret"`
-	Username       *string             `tfsdk:"username"`
-	Password       *string             `tfsdk:"password"`
-	TokenUrl       string              `tfsdk:"token_url"`
-	Scopes         []string            `tfsdk:"scopes"`
-	EndpointParams map[string][]string `tfsdk:"endpoint_params"`
-	In             *string             `tfsdk:"in"`
+type httpBasicData struct {
+	Username *string `tfsdk:"username"`
+	Password *string `tfsdk:"password"`
+}
+
+type httpTokenData struct {
+	Token  *string `tfsdk:"token"`
+	Scheme *string `tfsdk:"scheme"`
 }
 
 type apikeyData struct {
 	Name  string `tfsdk:"name"`
 	In    string `tfsdk:"in"`
 	Value string `tfsdk:"value"`
+}
+
+type oauth2Data struct {
+	Password          *oauth2PasswordData          `tfsdk:"password"`
+	ClientCredentials *oauth2ClientCredentialsData `tfsdk:"client_credentials"`
+	RefreshToken      *oauth2RefreshTokenData      `tfsdk:"refresh_token"`
+}
+
+type oauth2PasswordData struct {
+	TokenUrl string `tfsdk:"token_url"`
+	Username string `tfsdk:"username"`
+	Password string `tfsdk:"password"`
+
+	ClientID     *string  `tfsdk:"client_id"`
+	ClientSecret *string  `tfsdk:"client_secret"`
+	Scopes       []string `tfsdk:"scopes"`
+	In           *string  `tfsdk:"in"`
+}
+
+type oauth2ClientCredentialsData struct {
+	TokenUrl     string `tfsdk:"token_url"`
+	ClientID     string `tfsdk:"client_id"`
+	ClientSecret string `tfsdk:"client_secret"`
+
+	EndpointParams map[string][]string `tfsdk:"endpoint_params"`
+	Scopes         []string            `tfsdk:"scopes"`
+	In             *string             `tfsdk:"in"`
+}
+
+type oauth2RefreshTokenData struct {
+	TokenUrl     string `tfsdk:"token_url"`
+	RefreshToken string `tfsdk:"refresh_token"`
+
+	ClientID     *string  `tfsdk:"client_id"`
+	ClientSecret *string  `tfsdk:"client_secret"`
+	Scopes       []string `tfsdk:"scopes"`
+	In           *string  `tfsdk:"in"`
+	TokenType    *string  `tfsdk:"token_type"`
 }
 
 func New() provider.Provider {
@@ -109,49 +143,76 @@ func (*Provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 				Required:            true,
 			},
 			"security": {
-				Description:         "The OpenAPI security scheme that is be used for auth.",
-				MarkdownDescription: "The OpenAPI security scheme that is be used for auth.",
+				Description:         "The OpenAPI security scheme that is be used for auth. Only one of `http`, `apikey` and `oauth2` can be specified.",
+				MarkdownDescription: "The OpenAPI security scheme that is be used for auth. Only one of `http`, `apikey` and `oauth2` can be specified.",
 				Optional:            true,
 				Attributes: tfsdk.SingleNestedAttributes(
 					map[string]tfsdk.Attribute{
 						"http": {
-							Description:         "Configuration for the HTTP authentication scheme.",
-							MarkdownDescription: "Configuration for the HTTP authentication scheme.",
+							Description:         "Configuration for the HTTP authentication scheme. Exactly one of `basic` and `token` must be specified.",
+							MarkdownDescription: "Configuration for the HTTP authentication scheme. Exactly one of `basic` and `token` must be specified.",
 							Optional:            true,
 							Attributes: tfsdk.SingleNestedAttributes(
 								map[string]tfsdk.Attribute{
-									"type": {
-										Description:         fmt.Sprintf("The type of the authentication scheme. Possible values are `%s`, `%s`.", client.HTTPAuthTypeBasic, client.HTTPAuthTypeBearer),
-										MarkdownDescription: fmt.Sprintf("The type of the authentication scheme. Possible values are `%s`, `%s`.", client.HTTPAuthTypeBasic, client.HTTPAuthTypeBearer),
-										Required:            true,
-										Type:                types.StringType,
-										Validators: []tfsdk.AttributeValidator{stringvalidator.OneOf(
-											string(client.HTTPAuthTypeBasic),
-											string(client.HTTPAuthTypeBearer),
+									"basic": {
+										Description:         "Basic authentication",
+										MarkdownDescription: "Basic authentication",
+										Optional:            true,
+										Attributes: tfsdk.SingleNestedAttributes(
+											map[string]tfsdk.Attribute{
+												"username": {
+													Description:         "The username",
+													MarkdownDescription: "The username",
+													Type:                types.StringType,
+													Required:            true,
+												},
+												"password": {
+													Description:         "The password",
+													MarkdownDescription: "The password",
+													Type:                types.StringType,
+													Required:            true,
+													Sensitive:           true,
+												},
+											},
+										),
+										Validators: []tfsdk.AttributeValidator{schemavalidator.ExactlyOneOf(
+											path.MatchRoot("security").AtName("http").AtName("basic"),
+											path.MatchRoot("security").AtName("http").AtName("token"),
 										)},
 									},
-									"username": {
-										Description:         fmt.Sprintf("The username, required when `type` is `%s`.", client.HTTPAuthTypeBasic),
-										MarkdownDescription: fmt.Sprintf("The username, required when `type` is `%s`.", client.HTTPAuthTypeBasic),
-										Type:                types.StringType,
-										Optional:            true,
-									},
-									"password": {
-										Description:         fmt.Sprintf("The password, required when `type` is `%s`.", client.HTTPAuthTypeBasic),
-										MarkdownDescription: fmt.Sprintf("The password, required when `type` is `%s`.", client.HTTPAuthTypeBasic),
-										Type:                types.StringType,
-										Optional:            true,
-										Sensitive:           true,
-									},
 									"token": {
-										Description:         fmt.Sprintf("The value of the token, required when `type` is `%s`.", client.HTTPAuthTypeBearer),
-										MarkdownDescription: fmt.Sprintf("The value of the token, required when `type` is `%s`.", client.HTTPAuthTypeBearer),
-										Type:                types.StringType,
+										Description:         "Auth token (e.g. Bearer).",
+										MarkdownDescription: "Auth token (e.g. Bearer).",
 										Optional:            true,
-										Sensitive:           true,
+										Attributes: tfsdk.SingleNestedAttributes(
+											map[string]tfsdk.Attribute{
+												"token": {
+													Description:         "The value of the token.",
+													MarkdownDescription: "The value of the token.",
+													Type:                types.StringType,
+													Required:            true,
+													Sensitive:           true,
+												},
+												"scheme": {
+													Description:         "The auth scheme. Defaults to `Bearer`.",
+													MarkdownDescription: "The auth scheme. Defaults to `Bearer`.",
+													Type:                types.StringType,
+													Optional:            true,
+												},
+											},
+										),
+										Validators: []tfsdk.AttributeValidator{schemavalidator.ExactlyOneOf(
+											path.MatchRoot("security").AtName("http").AtName("basic"),
+											path.MatchRoot("security").AtName("http").AtName("token"),
+										)},
 									},
 								},
 							),
+							Validators: []tfsdk.AttributeValidator{schemavalidator.ExactlyOneOf(
+								path.MatchRoot("security").AtName("http"),
+								path.MatchRoot("security").AtName("apikey"),
+								path.MatchRoot("security").AtName("oauth2"),
+							)},
 						},
 						"apikey": {
 							Description:         "Configuration for the API Key authentication scheme.",
@@ -188,68 +249,201 @@ func (*Provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 									},
 								},
 							),
+							Validators: []tfsdk.AttributeValidator{schemavalidator.ExactlyOneOf(
+								path.MatchRoot("security").AtName("http"),
+								path.MatchRoot("security").AtName("apikey"),
+								path.MatchRoot("security").AtName("oauth2"),
+							)},
 						},
 						"oauth2": {
-							Description:         "Configuration for the OAuth2 authentication scheme.",
-							MarkdownDescription: "Configuration for the OAuth2 authentication scheme.",
+							Description:         "Configuration for the OAuth2 authentication scheme. Exactly one of `password`, `client_credentials` and `refresh_token` must be specified.",
+							MarkdownDescription: "Configuration for the OAuth2 authentication scheme. Exactly one of `password`, `client_credentials` and `refresh_token` must be specified.",
 							Optional:            true,
 							Attributes: tfsdk.SingleNestedAttributes(
 								map[string]tfsdk.Attribute{
-									"token_url": {
-										Type:                types.StringType,
-										Description:         "The token URL to be used for this flow.",
-										MarkdownDescription: "The token URL to be used for this flow.",
-										Required:            true,
-									},
-									"client_id": {
-										Type:                types.StringType,
-										Description:         "The application's ID (client credential flow only).",
-										MarkdownDescription: "The application's ID (client credential flow only).",
-										Optional:            true,
-									},
-									"client_secret": {
-										Type:                types.StringType,
-										Sensitive:           true,
-										Description:         "The application's secret (client credential flow only).",
-										MarkdownDescription: "The application's secret (client credential flow only).",
-										Optional:            true,
-									},
-									"username": {
-										Type:                types.StringType,
-										Description:         "The username (password credential flow only).",
-										MarkdownDescription: "The username (password credential flow only).",
-										Optional:            true,
-									},
 									"password": {
-										Type:                types.StringType,
-										Sensitive:           true,
-										Description:         "The password (password credential flow only).",
-										MarkdownDescription: "The password (password credential flow only).",
+										Description:         "Resource owner password credential.",
+										MarkdownDescription: "[Resource owner password credential](https://www.rfc-editor.org/rfc/rfc6749#section-4.3).",
 										Optional:            true,
+										Attributes: tfsdk.SingleNestedAttributes(
+											map[string]tfsdk.Attribute{
+												"token_url": {
+													Type:                types.StringType,
+													Description:         "The token URL to be used for this flow.",
+													MarkdownDescription: "The token URL to be used for this flow.",
+													Required:            true,
+												},
+												"username": {
+													Type:                types.StringType,
+													Description:         "The username.",
+													MarkdownDescription: "The username.",
+													Required:            true,
+												},
+												"password": {
+													Type:                types.StringType,
+													Sensitive:           true,
+													Description:         "The password.",
+													MarkdownDescription: "The password.",
+													Required:            true,
+												},
+												"client_id": {
+													Type:                types.StringType,
+													Description:         "The application's ID.",
+													MarkdownDescription: "The application's ID.",
+													Optional:            true,
+												},
+												"client_secret": {
+													Type:                types.StringType,
+													Sensitive:           true,
+													Description:         "The application's secret.",
+													MarkdownDescription: "The application's secret.",
+													Optional:            true,
+												},
+												"in": {
+													Type: types.StringType,
+													Description: fmt.Sprintf("Specifies how is the client ID & secret sent. Possible values are `%s` and `%s`. If absent, the style used will be auto detected.",
+														client.OAuth2AuthStyleInParams, client.OAuth2AuthStyleInHeader),
+													MarkdownDescription: fmt.Sprintf("Specifies how is th client ID & secret sent. Possible values are `%s` and `%s`. If absent, the style used will be auto detected.",
+														client.OAuth2AuthStyleInParams, client.OAuth2AuthStyleInHeader),
+													Optional:   true,
+													Validators: []tfsdk.AttributeValidator{stringvalidator.OneOf(string(client.OAuth2AuthStyleInParams), string(client.OAuth2AuthStyleInHeader))},
+												},
+												"scopes": {
+													Type:                types.ListType{ElemType: types.StringType},
+													Description:         "The optional requested permissions.",
+													MarkdownDescription: "The optional requested permissions.",
+													Optional:            true,
+												},
+											},
+										),
+										Validators: []tfsdk.AttributeValidator{schemavalidator.ExactlyOneOf(
+											path.MatchRoot("security").AtName("oauth2").AtName("password"),
+											path.MatchRoot("security").AtName("oauth2").AtName("client_credentials"),
+											path.MatchRoot("security").AtName("oauth2").AtName("refresh_token"),
+										)},
 									},
-									"scopes": {
-										Type:                types.ListType{ElemType: types.StringType},
-										Description:         "The optional requested permissions.",
-										MarkdownDescription: "The optional requested permissions.",
+									"client_credentials": {
+										Description:         "Client credentials.",
+										MarkdownDescription: "[Client credentials](https://www.rfc-editor.org/rfc/rfc6749#section-4.4).",
 										Optional:            true,
+										Attributes: tfsdk.SingleNestedAttributes(
+											map[string]tfsdk.Attribute{
+												"token_url": {
+													Type:                types.StringType,
+													Description:         "The token URL to be used for this flow.",
+													MarkdownDescription: "The token URL to be used for this flow.",
+													Required:            true,
+												},
+												"client_id": {
+													Type:                types.StringType,
+													Description:         "The application's ID.",
+													MarkdownDescription: "The application's ID.",
+													Required:            true,
+												},
+												"client_secret": {
+													Type:                types.StringType,
+													Sensitive:           true,
+													Description:         "The application's secret.",
+													MarkdownDescription: "The application's secret.",
+													Required:            true,
+												},
+												"in": {
+													Type: types.StringType,
+													Description: fmt.Sprintf("Specifies how is the client ID & secret sent. Possible values are `%s` and `%s`. If absent, the style used will be auto detected.",
+														client.OAuth2AuthStyleInParams, client.OAuth2AuthStyleInHeader),
+													MarkdownDescription: fmt.Sprintf("Specifies how is th client ID & secret sent. Possible values are `%s` and `%s`. If absent, the style used will be auto detected.",
+														client.OAuth2AuthStyleInParams, client.OAuth2AuthStyleInHeader),
+													Optional:   true,
+													Validators: []tfsdk.AttributeValidator{stringvalidator.OneOf(string(client.OAuth2AuthStyleInParams), string(client.OAuth2AuthStyleInHeader))},
+												},
+												"scopes": {
+													Type:                types.ListType{ElemType: types.StringType},
+													Description:         "The optional requested permissions.",
+													MarkdownDescription: "The optional requested permissions.",
+													Optional:            true,
+												},
+												"endpoint_params": {
+													Type:                types.MapType{ElemType: types.ListType{ElemType: types.StringType}},
+													Description:         "The additional parameters for requests to the token endpoint.",
+													MarkdownDescription: "The additional parameters for requests to the token endpoint.",
+													Optional:            true,
+												},
+											},
+										),
+										Validators: []tfsdk.AttributeValidator{schemavalidator.ExactlyOneOf(
+											path.MatchRoot("security").AtName("oauth2").AtName("password"),
+											path.MatchRoot("security").AtName("oauth2").AtName("client_credentials"),
+											path.MatchRoot("security").AtName("oauth2").AtName("refresh_token"),
+										)},
 									},
-									"endpoint_params": {
-										Type:                types.MapType{ElemType: types.ListType{ElemType: types.StringType}},
-										Description:         "The additional parameters for requests to the token endpoint (client credential flow only).",
-										MarkdownDescription: "The additional parameters for requests to the token endpoint (client credential flow only).",
+									"refresh_token": {
+										Description:         "Refresh token.",
+										MarkdownDescription: "[Refresh token](https://www.rfc-editor.org/rfc/rfc6749#section-6).",
 										Optional:            true,
-									},
-									"in": {
-										Type: types.StringType,
-										Description: fmt.Sprintf("Specifies how is the client ID & secret sent. Possible values are `%s` and `%s`. If absent, the style used will be auto detected.",
-											client.OAuth2AuthStyleInParams, client.OAuth2AuthStyleInHeader),
-										MarkdownDescription: fmt.Sprintf("Specifies how is th client ID & secret sent. Possible values are `%s` and `%s`. If absent, the style used will be auto detected.",
-											client.OAuth2AuthStyleInParams, client.OAuth2AuthStyleInHeader),
-										Optional:   true,
-										Validators: []tfsdk.AttributeValidator{stringvalidator.OneOf(string(client.OAuth2AuthStyleInParams), string(client.OAuth2AuthStyleInHeader))},
+										Attributes: tfsdk.SingleNestedAttributes(
+											map[string]tfsdk.Attribute{
+												"token_url": {
+													Type:                types.StringType,
+													Description:         "The token URL to be used for this flow.",
+													MarkdownDescription: "The token URL to be used for this flow.",
+													Required:            true,
+												},
+												"refresh_token": {
+													Type:                types.StringType,
+													Description:         "The refresh token.",
+													MarkdownDescription: "The refresh token.",
+													Sensitive:           true,
+													Required:            true,
+												},
+												"client_id": {
+													Type:                types.StringType,
+													Description:         "The application's ID.",
+													MarkdownDescription: "The application's ID.",
+													Optional:            true,
+												},
+												"client_secret": {
+													Type:                types.StringType,
+													Sensitive:           true,
+													Description:         "The application's secret.",
+													MarkdownDescription: "The application's secret.",
+													Optional:            true,
+												},
+												"scopes": {
+													Type:                types.ListType{ElemType: types.StringType},
+													Description:         "The optional requested permissions.",
+													MarkdownDescription: "The optional requested permissions.",
+													Optional:            true,
+												},
+												"in": {
+													Type: types.StringType,
+													Description: fmt.Sprintf("Specifies how is the client ID & secret sent. Possible values are `%s` and `%s`. If absent, the style used will be auto detected.",
+														client.OAuth2AuthStyleInParams, client.OAuth2AuthStyleInHeader),
+													MarkdownDescription: fmt.Sprintf("Specifies how is th client ID & secret sent. Possible values are `%s` and `%s`. If absent, the style used will be auto detected.",
+														client.OAuth2AuthStyleInParams, client.OAuth2AuthStyleInHeader),
+													Optional:   true,
+													Validators: []tfsdk.AttributeValidator{stringvalidator.OneOf(string(client.OAuth2AuthStyleInParams), string(client.OAuth2AuthStyleInHeader))},
+												},
+												"token_type": {
+													Type:                types.StringType,
+													Description:         `The type of the access token.`,
+													MarkdownDescription: `The type of the access token.`,
+													Optional:            true,
+												},
+											},
+										),
+										Validators: []tfsdk.AttributeValidator{schemavalidator.ExactlyOneOf(
+											path.MatchRoot("security").AtName("oauth2").AtName("password"),
+											path.MatchRoot("security").AtName("oauth2").AtName("client_credentials"),
+											path.MatchRoot("security").AtName("oauth2").AtName("refresh_token"),
+										)},
 									},
 								},
 							),
+							Validators: []tfsdk.AttributeValidator{schemavalidator.ExactlyOneOf(
+								path.MatchRoot("security").AtName("http"),
+								path.MatchRoot("security").AtName("apikey"),
+								path.MatchRoot("security").AtName("oauth2"),
+							)},
 						},
 					},
 				),
@@ -309,161 +503,6 @@ func (*Provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 	}, nil
 }
 
-func (*Provider) ValidateConfig(ctx context.Context, req provider.ValidateConfigRequest, resp *provider.ValidateConfigResponse) {
-	type pt struct {
-		BaseURL            types.String `tfsdk:"base_url"`
-		Security           types.Object `tfsdk:"security"`
-		CreateMethod       types.String `tfsdk:"create_method"`
-		UpdateMethod       types.String `tfsdk:"update_method"`
-		DeleteMethod       types.String `tfsdk:"delete_method"`
-		MergePatchDisabled types.Bool   `tfsdk:"merge_patch_disabled"`
-		Query              types.Map    `tfsdk:"query"`
-		Header             types.Map    `tfsdk:"header"`
-	}
-
-	var config pt
-	diags := req.Config.Get(ctx, &config)
-	resp.Diagnostics.Append(diags...)
-	if diags.HasError() {
-		return
-	}
-
-	if !config.BaseURL.IsUnknown() {
-		if _, err := url.Parse(config.BaseURL.ValueString()); err != nil {
-			resp.Diagnostics.AddError(
-				"Invalid configuration",
-				"The `base_url` is not a valid URL",
-			)
-			return
-		}
-	}
-
-	if !config.Security.IsUnknown() && !config.Security.IsNull() {
-		httpObj := config.Security.Attributes()["http"].(types.Object)
-		apikeyObj := config.Security.Attributes()["apikey"].(types.Set)
-		oauth2Obj := config.Security.Attributes()["oauth2"].(types.Object)
-
-		l := []string{}
-		if !httpObj.IsNull() && !httpObj.IsUnknown() {
-			l = append(l, "http")
-			type httpData struct {
-				Type     types.String `tfsdk:"type"`
-				Username types.String `tfsdk:"username"`
-				Password types.String `tfsdk:"password"`
-				Token    types.String `tfsdk:"token"`
-			}
-			var d httpData
-			if diags := httpObj.As(ctx, &d, types.ObjectAsOptions{}); diags.HasError() {
-				resp.Diagnostics.Append(diags...)
-				return
-			}
-			if !d.Username.IsUnknown() && !d.Password.IsUnknown() && !d.Token.IsUnknown() {
-				if !d.Type.IsUnknown() {
-					switch d.Type.ValueString() {
-					case string(client.HTTPAuthTypeBasic):
-						if d.Username.IsNull() {
-							resp.Diagnostics.AddError(
-								"Invalid configuration: `security.http`",
-								fmt.Sprintf("`username` is required when `type` is %s", client.HTTPAuthTypeBasic),
-							)
-						}
-						if d.Password.IsNull() {
-							resp.Diagnostics.AddError(
-								"Invalid configuration: `security.http`",
-								fmt.Sprintf("`password` is required when `type` is %s", client.HTTPAuthTypeBasic),
-							)
-						}
-						if !d.Token.IsNull() {
-							resp.Diagnostics.AddError(
-								"Invalid configuration: `security.http`",
-								fmt.Sprintf("`token` can't be specified when `type` is %s", client.HTTPAuthTypeBasic),
-							)
-						}
-					case string(client.HTTPAuthTypeBearer):
-						if !d.Username.IsNull() {
-							resp.Diagnostics.AddError(
-								"Invalid configuration: `security.http`",
-								fmt.Sprintf("`username` can't be specified when `type` is %s", client.HTTPAuthTypeBearer),
-							)
-						}
-						if !d.Password.IsNull() {
-							resp.Diagnostics.AddError(
-								"Invalid configuration: `security.http`",
-								fmt.Sprintf("`password` can't be specified when `type` is %s", client.HTTPAuthTypeBearer),
-							)
-						}
-						if d.Token.IsNull() {
-							resp.Diagnostics.AddError(
-								"Invalid configuration: `security.http`",
-								fmt.Sprintf("`token` is required when `type` is %s", client.HTTPAuthTypeBearer),
-							)
-						}
-					}
-					if resp.Diagnostics.HasError() {
-						return
-					}
-				}
-
-				if !(d.Username.IsNull() && d.Password.IsNull() && !d.Token.IsNull()) && !(!d.Username.IsNull() && !d.Password.IsNull() && d.Token.IsNull()) {
-					resp.Diagnostics.AddError(
-						"Invalid configuration: `security.http`",
-						"Either `username` & `password`, or `token` should be specified",
-					)
-					return
-				}
-			}
-		}
-		if !oauth2Obj.IsNull() && !oauth2Obj.IsUnknown() {
-			l = append(l, "oauth2")
-			type oauth2Data struct {
-				TokenUrl       types.String `tfsdk:"token_url"`
-				ClientId       types.String `tfsdk:"client_id"`
-				ClientSecret   types.String `tfsdk:"client_secret"`
-				Username       types.String `tfsdk:"username"`
-				Password       types.String `tfsdk:"password"`
-				Scopes         types.List   `tfsdk:"scopes"`
-				EndpointParams types.Map    `tfsdk:"endpoint_params"`
-				In             types.String `tfsdk:"in"`
-			}
-			var d oauth2Data
-			if diags := oauth2Obj.As(ctx, &d, types.ObjectAsOptions{}); diags.HasError() {
-				resp.Diagnostics.Append(diags...)
-				return
-			}
-			if !d.ClientId.IsUnknown() && !d.ClientSecret.IsUnknown() && !d.Username.IsUnknown() && !d.Password.IsUnknown() {
-				if !(d.ClientId.IsNull() && d.ClientSecret.IsNull() && !d.Username.IsNull() && !d.Password.IsNull()) && !(!d.ClientId.IsNull() && !d.ClientSecret.IsNull() && d.Username.IsNull() && d.Password.IsNull()) {
-					resp.Diagnostics.AddError(
-						"Invalid configuration: `security.oauth2`",
-						"Either `username` & `password`, or `client_id` & `client_secret` should be specified",
-					)
-					return
-				}
-			}
-		}
-		if !apikeyObj.IsNull() && !apikeyObj.IsUnknown() {
-			l = append(l, "apikey")
-		}
-
-		// In case any of the block is unknown, we don't know whether it will evaluate into null or not.
-		// Here, we do best effort to ensure at least one of them is set.
-		if httpObj.IsNull() && oauth2Obj.IsNull() && apikeyObj.IsNull() {
-			resp.Diagnostics.AddError(
-				"Invalid configuration: `security`",
-				"There is no security scheme specified",
-			)
-			return
-		}
-
-		if len(l) > 1 {
-			resp.Diagnostics.AddError(
-				"Invalid configuration: `security`",
-				"More than one scheme is specified: "+strings.Join(l, ", "),
-			)
-			return
-		}
-	}
-}
-
 func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	var config providerData
 	diags := req.Config.Get(ctx, &config)
@@ -476,65 +515,102 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 	if sec := config.Security; sec != nil {
 		switch {
 		case sec.HTTP != nil:
-			sopt := client.HTTPAuthOption{
-				Type: client.HTTPAuthType(sec.HTTP.Type),
+			switch {
+			case sec.HTTP.Basic != nil:
+				opt := client.HTTPBasicOption{
+					Username: *sec.HTTP.Basic.Username,
+					Password: *sec.HTTP.Basic.Password,
+				}
+				clientOpt.Security = opt
+			case sec.HTTP.Token != nil:
+				opt := client.HTTPTokenOption{
+					Token: *sec.HTTP.Token.Token,
+				}
+				if scheme := sec.HTTP.Token.Scheme; scheme != nil {
+					opt.Scheme = *scheme
+				}
+				clientOpt.Security = opt
+			default:
+				panic("`security.http` unhandled, this implies error in the provider schema definition")
 			}
-			if sec.HTTP.Username != nil {
-				sopt.Username = *sec.HTTP.Username
-			}
-			if sec.HTTP.Password != nil {
-				sopt.Password = *sec.HTTP.Password
-			}
-			if sec.HTTP.Token != nil {
-				sopt.Token = *sec.HTTP.Token
-			}
-			clientOpt.Security = sopt
 		case sec.APIKey != nil:
-			sopt := client.APIKeyAuthOption{}
+			opt := client.APIKeyAuthOption{}
 			for _, apikey := range sec.APIKey {
-				sopt = append(sopt, client.APIKeyAuthOpt{
+				opt = append(opt, client.APIKeyAuthOpt{
 					Name:  apikey.Name,
 					In:    client.APIKeyAuthIn(apikey.In),
 					Value: apikey.Value,
 				})
 			}
-			clientOpt.Security = sopt
+			clientOpt.Security = opt
 		case sec.OAuth2 != nil:
-			if sec.OAuth2.Username == nil {
-				sopt := client.OAuth2ClientCredentialOption{
-					ClientID:       *sec.OAuth2.ClientID,
-					ClientSecret:   *sec.OAuth2.ClientSecret,
-					TokenURL:       sec.OAuth2.TokenUrl,
-					Scopes:         sec.OAuth2.Scopes,
-					EndpointParams: sec.OAuth2.EndpointParams,
+			switch {
+			case sec.OAuth2.Password != nil:
+				opt := client.OAuth2PasswordOption{
+					TokenURL: sec.OAuth2.Password.TokenUrl,
+					Username: sec.OAuth2.Password.Username,
+					Password: sec.OAuth2.Password.Password,
 				}
-				if sec.OAuth2.In != nil {
-					sopt.AuthStyle = client.OAuth2AuthStyle(*sec.OAuth2.In)
+				if v := sec.OAuth2.Password.ClientID; v != nil {
+					opt.ClientId = *v
 				}
-				clientOpt.Security = sopt
-			} else {
-				sopt := client.OAuth2PasswordOption{
-					Username: *sec.OAuth2.Username,
-					Password: *sec.OAuth2.Password,
-					TokenURL: sec.OAuth2.TokenUrl,
-					Scopes:   sec.OAuth2.Scopes,
+				if v := sec.OAuth2.Password.ClientSecret; v != nil {
+					opt.ClientSecret = *v
 				}
-				if sec.OAuth2.In != nil {
-					sopt.AuthStyle = client.OAuth2AuthStyle(*sec.OAuth2.In)
+				if v := sec.OAuth2.Password.In; v != nil {
+					opt.AuthStyle = client.OAuth2AuthStyle(*v)
 				}
-				clientOpt.Security = sopt
+				if v := sec.OAuth2.Password.Scopes; len(v) != 0 {
+					opt.Scopes = v
+				}
+				clientOpt.Security = opt
+			case sec.OAuth2.ClientCredentials != nil:
+				opt := client.OAuth2ClientCredentialOption{
+					TokenURL:     sec.OAuth2.ClientCredentials.TokenUrl,
+					ClientId:     sec.OAuth2.ClientCredentials.ClientID,
+					ClientSecret: sec.OAuth2.ClientCredentials.ClientSecret,
+				}
+				if v := sec.OAuth2.ClientCredentials.Scopes; len(v) != 0 {
+					opt.Scopes = v
+				}
+				if v := sec.OAuth2.ClientCredentials.EndpointParams; len(v) != 0 {
+					opt.EndpointParams = v
+				}
+				if v := sec.OAuth2.ClientCredentials.In; v != nil {
+					opt.AuthStyle = client.OAuth2AuthStyle(*v)
+				}
+				clientOpt.Security = opt
+			case sec.OAuth2.RefreshToken != nil:
+				opt := client.OAuth2RefreshTokenOption{
+					TokenURL:     sec.OAuth2.RefreshToken.TokenUrl,
+					RefreshToken: sec.OAuth2.RefreshToken.RefreshToken,
+				}
+				if v := sec.OAuth2.Password.ClientID; v != nil {
+					opt.ClientId = *v
+				}
+				if v := sec.OAuth2.RefreshToken.ClientSecret; v != nil {
+					opt.RefreshToken = *v
+				}
+				if v := sec.OAuth2.RefreshToken.In; v != nil {
+					opt.AuthStyle = client.OAuth2AuthStyle(*v)
+				}
+				if v := sec.OAuth2.RefreshToken.TokenType; v != nil {
+					opt.TokenType = *v
+				}
+				if v := sec.OAuth2.RefreshToken.Scopes; len(v) != 0 {
+					opt.Scopes = v
+				}
+				clientOpt.Security = opt
+			default:
+				panic("`security.oauth2` unhandled, this implies error in the provider schema definition")
 			}
 		default:
-			resp.Diagnostics.AddError(
-				"Failed to configure provider",
-				"There is no security scheme specified",
-			)
-			return
+			panic("`security` unhandled, this implies error in the provider schema definition")
 		}
 	}
 
 	var err error
-	p.client, err = client.New(config.BaseURL, &clientOpt)
+	p.client, err = client.New(ctx, config.BaseURL, &clientOpt)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Failed to configure provider",

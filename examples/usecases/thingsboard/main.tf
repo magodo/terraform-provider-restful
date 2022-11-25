@@ -11,7 +11,8 @@ terraform {
 
 // This should be the URL of the thingsbaord-api-proxy (see: https://github.com/magodo/thingsboard-api-proxy), e.g. http://localhost:12345/api
 variable "base_url" {
-  type = string
+  type    = string
+  default = "http://0.0.0.0:12345/api"
 }
 
 variable "username" {
@@ -28,9 +29,11 @@ provider "restful" {
   base_url = var.base_url
   security = {
     oauth2 = {
-      token_url = format("%s/auth/login", var.base_url)
-      username  = var.username
-      password  = var.password
+      password = {
+        token_url = format("%s/auth/login", var.base_url)
+        username  = var.username
+        password  = var.password
+      }
     }
   }
 }

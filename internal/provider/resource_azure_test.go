@@ -233,9 +233,9 @@ func TestOperationResource_Azure_Register_RP(t *testing.T) {
 
 func (d azureData) CheckDestroy(addr string) func(*terraform.State) error {
 	return func(s *terraform.State) error {
-		c, err := client.New(d.url, &client.BuildOption{
+		c, err := client.New(context.TODO(), d.url, &client.BuildOption{
 			Security: client.OAuth2ClientCredentialOption{
-				ClientID:     d.clientId,
+				ClientId:     d.clientId,
 				ClientSecret: d.clientSecret,
 				TokenURL:     fmt.Sprintf("https://login.microsoftonline.com/%s/oauth2/v2.0/token", d.tenantId),
 				Scopes: []string{
@@ -267,10 +267,12 @@ provider "restful" {
   base_url = %q
   security = {
     oauth2 = {
-      client_id     = %q
-      client_secret = %q
-      token_url     = "https://login.microsoftonline.com/%s/oauth2/v2.0/token"
-      scopes        = ["https://management.azure.com/.default"]
+	  client_credentials = {
+		client_id     = %q
+		client_secret = %q
+		token_url     = "https://login.microsoftonline.com/%s/oauth2/v2.0/token"
+		scopes        = ["https://management.azure.com/.default"]
+	  }
     }
   }
 }
@@ -303,10 +305,12 @@ provider "restful" {
   base_url = %q
   security = {
     oauth2 = {
-      client_id     = %q
-      client_secret = %q
-      token_url     = "https://login.microsoftonline.com/%s/oauth2/v2.0/token"
-      scopes        = ["https://management.azure.com/.default"]
+	  client_credentials = {
+		client_id     = %q
+		client_secret = %q
+		token_url     = "https://login.microsoftonline.com/%s/oauth2/v2.0/token"
+		scopes        = ["https://management.azure.com/.default"]
+	  }
     }
   }
 }
@@ -343,10 +347,12 @@ provider "restful" {
   base_url = %q
   security = {
     oauth2 = {
-      client_id     = %q
-      client_secret = %q
-      token_url     = "https://login.microsoftonline.com/%s/oauth2/v2.0/token"
-      scopes        = ["https://management.azure.com/.default"]
+	  client_credentials = {
+		client_id     = %q
+		client_secret = %q
+		token_url     = "https://login.microsoftonline.com/%s/oauth2/v2.0/token"
+		scopes        = ["https://management.azure.com/.default"]
+	  }
     }
   }
 }
@@ -382,10 +388,12 @@ provider "restful" {
   base_url = %q
   security = {
     oauth2 = {
-      client_id     = %q
-      client_secret = %q
-      token_url     = "https://login.microsoftonline.com/%s/oauth2/v2.0/token"
-      scopes        = ["https://management.azure.com/.default"]
+	  client_credentials = {
+		client_id     = %q
+		client_secret = %q
+		token_url     = "https://login.microsoftonline.com/%s/oauth2/v2.0/token"
+		scopes        = ["https://management.azure.com/.default"]
+	  }
     }
   }
 }
@@ -488,10 +496,12 @@ provider "restful" {
   base_url = %q
   security = {
     oauth2 = {
-      client_id     = %q
-      client_secret = %q
-      token_url     = "https://login.microsoftonline.com/%s/oauth2/v2.0/token"
-      scopes        = ["https://management.azure.com/.default"]
+	  client_credentials = {
+		client_id     = %q
+		client_secret = %q
+		token_url     = "https://login.microsoftonline.com/%s/oauth2/v2.0/token"
+		scopes        = ["https://management.azure.com/.default"]
+	  }
     }
   }
   create_method = "PUT"
@@ -621,10 +631,12 @@ provider "restful" {
   base_url = %q
   security = {
     oauth2 = {
-      client_id     = %q
-      client_secret = %q
-      token_url     = "https://login.microsoftonline.com/%s/oauth2/v2.0/token"
-      scopes        = ["https://management.azure.com/.default"]
+	  client_credentials = {
+		client_id     = %q
+		client_secret = %q
+		token_url     = "https://login.microsoftonline.com/%s/oauth2/v2.0/token"
+		scopes        = ["https://management.azure.com/.default"]
+	  }
     }
   }
   create_method = "PUT"
@@ -798,10 +810,12 @@ provider "restful" {
   base_url = %[1]q
   security = {
     oauth2 = {
-      client_id     = %[2]q
-      client_secret = %[3]q
-      token_url     = "https://login.microsoftonline.com/%[4]s/oauth2/v2.0/token"
-      scopes        = ["https://management.azure.com/.default"]
+	  client_credentials = {
+        client_id     = %[2]q
+        client_secret = %[3]q
+        token_url     = "https://login.microsoftonline.com/%[4]s/oauth2/v2.0/token"
+        scopes        = ["https://management.azure.com/.default"]
+	  }
     }
   }
 }
