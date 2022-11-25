@@ -585,7 +585,7 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 					TokenURL:     sec.OAuth2.RefreshToken.TokenUrl,
 					RefreshToken: sec.OAuth2.RefreshToken.RefreshToken,
 				}
-				if v := sec.OAuth2.Password.ClientID; v != nil {
+				if v := sec.OAuth2.RefreshToken.ClientID; v != nil {
 					opt.ClientId = *v
 				}
 				if v := sec.OAuth2.RefreshToken.ClientSecret; v != nil {
