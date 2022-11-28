@@ -160,7 +160,7 @@ func TestResource_JSONServer_FullPath(t *testing.T) {
 
 func (d jsonServerData) CheckDestroy(addr string) func(*terraform.State) error {
 	return func(s *terraform.State) error {
-		c, err := client.New(d.url, nil)
+		c, err := client.New(context.TODO(), d.url, nil)
 		if err != nil {
 			return err
 		}

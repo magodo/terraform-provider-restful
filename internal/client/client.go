@@ -73,14 +73,18 @@ type Client struct {
 	*resty.Client
 }
 
-func New(baseURL string, opt *BuildOption) (*Client, error) {
+func New(ctx context.Context, baseURL string, opt *BuildOption) (*Client, error) {
 	if opt == nil {
 		opt = &BuildOption{}
 	}
 
 	client := resty.New()
 	if opt.Security != nil {
-		client = opt.Security.newClient()
+		var err error
+		client, err = opt.Security.newClient(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if _, err := url.Parse(baseURL); err != nil {

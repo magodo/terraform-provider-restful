@@ -14,15 +14,73 @@ The restful provider provides resource and data source to interact with a platfo
 
 ```terraform
 provider "restful" {
+  base_url = "http://localhost:3000"
+  alias    = "no auth"
+}
+
+provider "restful" {
+  base_url = "http://localhost:3000"
+  security = {
+    http = {
+      basic = {
+        username = "foo"
+        password = "bar"
+      }
+    }
+  }
+}
+
+provider "restful" {
+  base_url = "http://localhost:3000"
+  security = {
+    http = {
+      token = {
+        token = "MYTOKEN"
+      }
+    }
+  }
+}
+
+provider "restful" {
   base_url = "https://management.azure.com"
   security = {
     oauth2 = {
-      client_id     = var.client_id
-      client_secret = var.client_secret
-      token_url     = format("https://login.microsoftonline.com/%s/oauth2/v2.0/token", var.tenant_id)
-      scopes        = ["https://management.azure.com/.default"]
+      client_credentials = {
+        client_id     = var.client_id
+        client_secret = var.client_secret
+        token_url     = format("https://login.microsoftonline.com/%s/oauth2/v2.0/token", var.tenant_id)
+        scopes        = ["https://management.azure.com/.default"]
+      }
     }
   }
+  alias = "oauth2_client_credentials"
+}
+
+provider "restful" {
+  base_url = var.base_url
+  security = {
+    oauth2 = {
+      password = {
+        token_url = format("%s/auth/login", var.base_url)
+        username  = var.username
+        password  = var.password
+      }
+    }
+  }
+  alias = "oauth2_password"
+}
+
+provider "restful" {
+  base_url = "https://management.azure.com"
+  security = {
+    oauth2 = {
+      refresh_token = {
+        token_url     = format("https://login.microsoftonline.com/%s/oauth2/v2.0/token", var.tenant_id)
+        refresh_token = var.refresh_token
+      }
+    }
+  }
+  alias = "oauth2_refresh_token"
 }
 ```
 
@@ -40,7 +98,7 @@ provider "restful" {
 - `header` (Map of String) The header parameters that are applied to each request.
 - `merge_patch_disabled` (Boolean) Whether to use a JSON Merge Patch as the request body in the PATCH update? Defaults to `false`. This is only effective when `update_method` is set to `PATCH`.
 - `query` (Map of List of String) The query parameters that are applied to each request.
-- `security` (Attributes) The OpenAPI security scheme that is be used for auth. (see [below for nested schema](#nestedatt--security))
+- `security` (Attributes) The OpenAPI security scheme that is be used for auth. Only one of `http`, `apikey` and `oauth2` can be specified. (see [below for nested schema](#nestedatt--security))
 - `update_method` (String) The method used to update the resource. Possible values are `PUT` and `PATCH`. Defaults to `PUT`.
 
 <a id="nestedatt--security"></a>
@@ -49,8 +107,8 @@ provider "restful" {
 Optional:
 
 - `apikey` (Attributes Set) Configuration for the API Key authentication scheme. (see [below for nested schema](#nestedatt--security--apikey))
-- `http` (Attributes) Configuration for the HTTP authentication scheme. (see [below for nested schema](#nestedatt--security--http))
-- `oauth2` (Attributes) Configuration for the OAuth2 authentication scheme. (see [below for nested schema](#nestedatt--security--oauth2))
+- `http` (Attributes) Configuration for the HTTP authentication scheme. Exactly one of `basic` and `token` must be specified. (see [below for nested schema](#nestedatt--security--http))
+- `oauth2` (Attributes) Configuration for the OAuth2 authentication scheme. Exactly one of `password`, `client_credentials` and `refresh_token` must be specified. (see [below for nested schema](#nestedatt--security--oauth2))
 
 <a id="nestedatt--security--apikey"></a>
 ### Nested Schema for `security.apikey`
@@ -65,30 +123,87 @@ Required:
 <a id="nestedatt--security--http"></a>
 ### Nested Schema for `security.http`
 
+Optional:
+
+- `basic` (Attributes) Basic authentication (see [below for nested schema](#nestedatt--security--http--basic))
+- `token` (Attributes) Auth token (e.g. Bearer). (see [below for nested schema](#nestedatt--security--http--token))
+
+<a id="nestedatt--security--http--basic"></a>
+### Nested Schema for `security.http.basic`
+
 Required:
 
-- `type` (String) The type of the authentication scheme. Possible values are `Basic`, `Bearer`.
+- `password` (String, Sensitive) The password
+- `username` (String) The username
+
+
+<a id="nestedatt--security--http--token"></a>
+### Nested Schema for `security.http.token`
+
+Required:
+
+- `token` (String, Sensitive) The value of the token.
 
 Optional:
 
-- `password` (String, Sensitive) The password, required when `type` is `Basic`.
-- `token` (String, Sensitive) The value of the token, required when `type` is `Bearer`.
-- `username` (String) The username, required when `type` is `Basic`.
+- `scheme` (String) The auth scheme. Defaults to `Bearer`.
+
 
 
 <a id="nestedatt--security--oauth2"></a>
 ### Nested Schema for `security.oauth2`
 
+Optional:
+
+- `client_credentials` (Attributes) [Client credentials](https://www.rfc-editor.org/rfc/rfc6749#section-4.4). (see [below for nested schema](#nestedatt--security--oauth2--client_credentials))
+- `password` (Attributes) [Resource owner password credential](https://www.rfc-editor.org/rfc/rfc6749#section-4.3). (see [below for nested schema](#nestedatt--security--oauth2--password))
+- `refresh_token` (Attributes) [Refresh token](https://www.rfc-editor.org/rfc/rfc6749#section-6). (see [below for nested schema](#nestedatt--security--oauth2--refresh_token))
+
+<a id="nestedatt--security--oauth2--client_credentials"></a>
+### Nested Schema for `security.oauth2.client_credentials`
+
 Required:
 
+- `client_id` (String) The application's ID.
+- `client_secret` (String, Sensitive) The application's secret.
 - `token_url` (String) The token URL to be used for this flow.
 
 Optional:
 
-- `client_id` (String) The application's ID (client credential flow only).
-- `client_secret` (String, Sensitive) The application's secret (client credential flow only).
-- `endpoint_params` (Map of List of String) The additional parameters for requests to the token endpoint (client credential flow only).
+- `endpoint_params` (Map of List of String) The additional parameters for requests to the token endpoint.
 - `in` (String) Specifies how is th client ID & secret sent. Possible values are `params` and `header`. If absent, the style used will be auto detected.
-- `password` (String, Sensitive) The password (password credential flow only).
 - `scopes` (List of String) The optional requested permissions.
-- `username` (String) The username (password credential flow only).
+
+
+<a id="nestedatt--security--oauth2--password"></a>
+### Nested Schema for `security.oauth2.password`
+
+Required:
+
+- `password` (String, Sensitive) The password.
+- `token_url` (String) The token URL to be used for this flow.
+- `username` (String) The username.
+
+Optional:
+
+- `client_id` (String) The application's ID.
+- `client_secret` (String, Sensitive) The application's secret.
+- `in` (String) Specifies how is th client ID & secret sent. Possible values are `params` and `header`. If absent, the style used will be auto detected.
+- `scopes` (List of String) The optional requested permissions.
+
+
+<a id="nestedatt--security--oauth2--refresh_token"></a>
+### Nested Schema for `security.oauth2.refresh_token`
+
+Required:
+
+- `refresh_token` (String, Sensitive) The refresh token.
+- `token_url` (String) The token URL to be used for this flow.
+
+Optional:
+
+- `client_id` (String) The application's ID.
+- `client_secret` (String, Sensitive) The application's secret.
+- `in` (String) Specifies how is th client ID & secret sent. Possible values are `params` and `header`. If absent, the style used will be auto detected.
+- `scopes` (List of String) The optional requested permissions.
+- `token_type` (String) The type of the access token.
