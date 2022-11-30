@@ -57,7 +57,7 @@ resource "restful_resource" "test" {
   body = jsonencode({
   	foo = "bar"
 })
-  name_path = "id"
+  read_path = "$(path)/$(body.id)"
 }
 
 data "restful_resource" "test" {
@@ -78,7 +78,7 @@ resource "restful_resource" "test" {
   body = jsonencode({
   	foo = "bar"
 })
-  name_path = "id"
+  read_path = "$(path)/$(body.id)"
 }
 
 data "restful_resource" "test" {
