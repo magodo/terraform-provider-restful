@@ -469,7 +469,6 @@ func (d azureData) vnetImportStateIdFunc(addr string) func(s *terraform.State) (
     "api-version": ["2021-05-01"]
   },
   "path": %[1]q,
-  "create_method": "PUT",
   "body": {
     "location": null,
     "properties": {
@@ -778,10 +777,12 @@ provider "restful" {
   base_url = %[1]q
   security = {
     oauth2 = {
-      client_id     = %[2]q
-      client_secret = %[3]q
-      token_url     = "https://login.microsoftonline.com/%[4]s/oauth2/v2.0/token"
-      scopes        = ["https://management.azure.com/.default"]
+	  client_credentials = {
+		  client_id     = %[2]q
+		  client_secret = %[3]q
+		  token_url     = "https://login.microsoftonline.com/%[4]s/oauth2/v2.0/token"
+		  scopes        = ["https://management.azure.com/.default"]
+	  }
     }
   }
 }
