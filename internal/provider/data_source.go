@@ -45,21 +45,18 @@ func (d *DataSource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostic
 				MarkdownDescription: "The query parameters that are applied to each request. This overrides the `query` set in the provider block.",
 				Type:                types.MapType{ElemType: types.ListType{ElemType: types.StringType}},
 				Optional:            true,
-				Computed:            true,
 			},
 			"header": {
 				Description:         "The header parameters that are applied to each request. This overrides the `header` set in the provider block.",
 				MarkdownDescription: "The header parameters that are applied to each request. This overrides the `header` set in the provider block.",
 				Type:                types.MapType{ElemType: types.StringType},
 				Optional:            true,
-				Computed:            true,
 			},
 			"selector": {
 				Description:         "A selector in gjson query syntax, that is used when `id` represents a collection of resources, to select exactly one member resource of from it",
 				MarkdownDescription: "A selector in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries), that is used when `id` represents a collection of resources, to select exactly one member resource of from it",
 				Type:                types.StringType,
 				Optional:            true,
-				Computed:            true,
 			},
 			"output": {
 				Description:         "The response body after reading the resource.",
@@ -134,8 +131,8 @@ func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp 
 
 	state := dataSourceData{
 		ID:       config.ID,
-		Query:    opt.Query.ToTFValue(),
-		Header:   opt.Header.ToTFValue(),
+		Query:    config.Query,
+		Header:   config.Header,
 		Selector: config.Selector,
 		Output:   types.StringValue(string(b)),
 	}

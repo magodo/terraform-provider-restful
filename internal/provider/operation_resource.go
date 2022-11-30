@@ -81,14 +81,12 @@ func (r *OperationResource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Dia
 				MarkdownDescription: "The query parameters that are applied to each request. This overrides the `query` set in the provider block.",
 				Type:                types.MapType{ElemType: types.ListType{ElemType: types.StringType}},
 				Optional:            true,
-				Computed:            true,
 			},
 			"header": {
 				Description:         "The header parameters that are applied to each request. This overrides the `header` set in the provider block.",
 				MarkdownDescription: "The header parameters that are applied to each request. This overrides the `header` set in the provider block.",
 				Type:                types.MapType{ElemType: types.StringType},
 				Optional:            true,
-				Computed:            true,
 			},
 			"poll": pollAttribute("poll", "API"),
 			"output": {
@@ -190,10 +188,6 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 			return
 		}
 	}
-
-	// Set overridable attributes from option to state
-	plan.Query = opt.Query.ToTFValue()
-	plan.Header = opt.Header.ToTFValue()
 
 	// Set resource ID to state
 	plan.ID = types.StringValue(resourceId)
