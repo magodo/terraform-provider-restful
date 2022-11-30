@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/magodo/terraform-provider-restful/internal/client"
 	"github.com/tidwall/gjson"
 )
 
@@ -22,6 +23,7 @@ type dataSourceData struct {
 	Query    types.Map    `tfsdk:"query"`
 	Header   types.Map    `tfsdk:"header"`
 	Selector types.String `tfsdk:"selector"`
+	Precheck types.Object `tfsdk:"precheck"`
 	Output   types.String `tfsdk:"output"`
 }
 
@@ -58,6 +60,7 @@ func (d *DataSource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostic
 				Type:                types.StringType,
 				Optional:            true,
 			},
+			"precheck": precheckAttribute("Read", false, "By default, the `id` of this resource is used."),
 			"output": {
 				Description:         "The response body after reading the resource.",
 				MarkdownDescription: "The response body after reading the resource.",
@@ -86,10 +89,29 @@ func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp 
 
 	c := d.p.client
 
-	opt, diags := d.p.apiOpt.ForDataSourceRead(ctx, config)
+	opt, precheckOpt, diags := d.p.apiOpt.ForDataSourceRead(ctx, config)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
+	}
+
+	// Precheck
+	if precheckOpt != nil {
+		p, err := client.NewPollable(*precheckOpt)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Data source: Failed to build poller for precheck",
+				err.Error(),
+			)
+			return
+		}
+		if err := p.PollUntilDone(ctx, c); err != nil {
+			resp.Diagnostics.AddError(
+				"Data source: Pre-checking failure",
+				err.Error(),
+			)
+			return
+		}
 	}
 
 	response, err := c.Read(ctx, config.ID.ValueString(), *opt)

@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"regexp"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 )
 
 type apiOption struct {
+	BaseURL            url.URL
 	CreateMethod       string
 	UpdateMethod       string
 	DeleteMethod       string
@@ -43,11 +45,54 @@ func parseLocator(locator string) (client.ValueLocator, error) {
 	}
 }
 
-func convertPollObject(ctx context.Context, obj types.Object) (*client.PollOption, diag.Diagnostics) {
+func newPollOptionFromPrecheckObject(ctx context.Context, base url.URL, id string, obj types.Object) (*client.PollOption, diag.Diagnostics) {
 	if obj.IsNull() {
 		return nil, nil
 	}
-	popt := &client.PollOption{}
+
+	// We are converting the precheckDataGo to pollDataGo here to reuse the newPollOptionFromPollDataGo().
+	var pck precheckDataGo
+	diags := obj.As(ctx, &pck, types.ObjectAsOptions{})
+	if diags != nil {
+		return nil, diags
+	}
+
+	pd := pollDataGo{
+		StatusLocator: pck.StatusLocator,
+		Status:        pck.Status,
+		DefaultDelay:  pck.DefaultDelay,
+	}
+
+	uRL := base
+
+	path := id
+	if pck.Path != nil {
+		path = *pck.Path
+	}
+
+	var err error
+	uRL.Path, err = url.JoinPath(uRL.Path, path)
+	if err != nil {
+		diags.Append(diag.NewErrorDiagnostic("failed to convert precheck object", fmt.Sprintf("joining url: %v", err)))
+		return nil, diags
+	}
+
+	if !pck.Query.IsNull() {
+		var q url.Values
+		pck.Query.ElementsAs(ctx, &q, false)
+		uRL.RawQuery = q.Encode()
+	}
+
+	urlLocator := "exact." + uRL.String()
+	pd.UrlLocator = &urlLocator
+
+	return newPollOptionFromPollDataGo(pd)
+}
+
+func newPollOptionFromPollObject(ctx context.Context, obj types.Object) (*client.PollOption, diag.Diagnostics) {
+	if obj.IsNull() {
+		return nil, nil
+	}
 
 	var pd pollDataGo
 	diags := obj.As(ctx, &pd, types.ObjectAsOptions{})
@@ -55,6 +100,12 @@ func convertPollObject(ctx context.Context, obj types.Object) (*client.PollOptio
 		return nil, diags
 	}
 
+	return newPollOptionFromPollDataGo(pd)
+}
+
+func newPollOptionFromPollDataGo(pd pollDataGo) (*client.PollOption, diag.Diagnostics) {
+	popt := &client.PollOption{}
+	var diags diag.Diagnostics
 	loc, err := parseLocator(pd.StatusLocator)
 	if err != nil {
 		diags.AddError(
@@ -89,15 +140,7 @@ func convertPollObject(ctx context.Context, obj types.Object) (*client.PollOptio
 	return popt, nil
 }
 
-func (opt apiOption) ForDataSourceRead(ctx context.Context, d dataSourceData) (*client.ReadOption, diag.Diagnostics) {
-	out := client.ReadOption{
-		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
-		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
-	}
-	return &out, nil
-}
-
-func (opt apiOption) ForResourceCreate(ctx context.Context, d resourceData) (*client.CreateOption, diag.Diagnostics) {
+func (opt apiOption) ForResourceCreate(ctx context.Context, d resourceData) (*client.CreateOption, *client.PollOption, *client.PollOption, diag.Diagnostics) {
 	out := client.CreateOption{
 		Method: opt.CreateMethod,
 		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
@@ -106,23 +149,30 @@ func (opt apiOption) ForResourceCreate(ctx context.Context, d resourceData) (*cl
 	if !d.CreateMethod.IsUnknown() && !d.CreateMethod.IsNull() {
 		out.Method = d.CreateMethod.ValueString()
 	}
-	var diags diag.Diagnostics
-	out.PollOpt, diags = convertPollObject(ctx, d.PollCreate)
+	precheckOpt, diags := newPollOptionFromPrecheckObject(ctx, opt.BaseURL, d.ID.String(), d.PrecheckCreate)
 	if diags.HasError() {
-		return nil, diags
+		return nil, nil, nil, diags
 	}
-	return &out, nil
+	pollOpt, diags := newPollOptionFromPollObject(ctx, d.PollCreate)
+	if diags.HasError() {
+		return nil, nil, nil, diags
+	}
+	return &out, precheckOpt, pollOpt, nil
 }
 
-func (opt apiOption) ForResourceRead(ctx context.Context, d resourceData) (*client.ReadOption, diag.Diagnostics) {
+func (opt apiOption) ForResourceRead(ctx context.Context, d resourceData) (*client.ReadOption, *client.PollOption, diag.Diagnostics) {
 	out := client.ReadOption{
 		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
 		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
 	}
-	return &out, nil
+	precheckOpt, diags := newPollOptionFromPrecheckObject(ctx, opt.BaseURL, d.ID.String(), d.PrecheckRead)
+	if diags.HasError() {
+		return nil, nil, diags
+	}
+	return &out, precheckOpt, nil
 }
 
-func (opt apiOption) ForResourceUpdate(ctx context.Context, d resourceData) (*client.UpdateOption, diag.Diagnostics) {
+func (opt apiOption) ForResourceUpdate(ctx context.Context, d resourceData) (*client.UpdateOption, *client.PollOption, *client.PollOption, diag.Diagnostics) {
 	out := client.UpdateOption{
 		Method:             opt.UpdateMethod,
 		MergePatchDisabled: opt.MergePatchDisabled,
@@ -135,16 +185,19 @@ func (opt apiOption) ForResourceUpdate(ctx context.Context, d resourceData) (*cl
 	if !d.MergePatchDisabled.IsUnknown() && !d.MergePatchDisabled.IsNull() {
 		out.MergePatchDisabled = d.MergePatchDisabled.ValueBool()
 	}
-
-	var diags diag.Diagnostics
-	out.PollOpt, diags = convertPollObject(ctx, d.PollUpdate)
+	precheckOpt, diags := newPollOptionFromPrecheckObject(ctx, opt.BaseURL, d.ID.String(), d.PrecheckUpdate)
 	if diags.HasError() {
-		return nil, diags
+		return nil, nil, nil, diags
 	}
-	return &out, nil
+	pollOpt, diags := newPollOptionFromPollObject(ctx, d.PollUpdate)
+	if diags.HasError() {
+		return nil, nil, nil, diags
+	}
+
+	return &out, precheckOpt, pollOpt, nil
 }
 
-func (opt apiOption) ForResourceDelete(ctx context.Context, d resourceData) (*client.DeleteOption, diag.Diagnostics) {
+func (opt apiOption) ForResourceDelete(ctx context.Context, d resourceData) (*client.DeleteOption, *client.PollOption, *client.PollOption, diag.Diagnostics) {
 	out := client.DeleteOption{
 		Method: opt.DeleteMethod,
 		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
@@ -154,25 +207,42 @@ func (opt apiOption) ForResourceDelete(ctx context.Context, d resourceData) (*cl
 	if !d.DeleteMethod.IsUnknown() && !d.DeleteMethod.IsNull() {
 		out.Method = d.DeleteMethod.ValueString()
 	}
-
-	var diags diag.Diagnostics
-	out.PollOpt, diags = convertPollObject(ctx, d.PollDelete)
+	precheckOpt, diags := newPollOptionFromPrecheckObject(ctx, opt.BaseURL, d.ID.String(), d.PrecheckDelete)
 	if diags.HasError() {
-		return nil, diags
+		return nil, nil, nil, diags
 	}
-	return &out, nil
+	pollOpt, diags := newPollOptionFromPollObject(ctx, d.PollDelete)
+	if diags.HasError() {
+		return nil, nil, nil, diags
+	}
+	return &out, precheckOpt, pollOpt, nil
 }
 
-func (opt apiOption) ForResourceOperation(ctx context.Context, d operationResourceData) (*client.OperationOption, diag.Diagnostics) {
+func (opt apiOption) ForDataSourceRead(ctx context.Context, d dataSourceData) (*client.ReadOption, *client.PollOption, diag.Diagnostics) {
+	out := client.ReadOption{
+		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
+		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
+	}
+	precheckOpt, diags := newPollOptionFromPrecheckObject(ctx, opt.BaseURL, d.ID.String(), d.Precheck)
+	if diags.HasError() {
+		return nil, nil, diags
+	}
+	return &out, precheckOpt, nil
+}
+
+func (opt apiOption) ForResourceOperation(ctx context.Context, d operationResourceData) (*client.OperationOption, *client.PollOption, *client.PollOption, diag.Diagnostics) {
 	out := client.OperationOption{
 		Method: d.Method.ValueString(),
 		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
 		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
 	}
-	var diags diag.Diagnostics
-	out.PollOpt, diags = convertPollObject(ctx, d.Poll)
+	precheckOpt, diags := newPollOptionFromPrecheckObject(ctx, opt.BaseURL, d.Path.String(), d.Precheck)
 	if diags.HasError() {
-		return nil, diags
+		return nil, nil, nil, diags
 	}
-	return &out, nil
+	pollOpt, diags := newPollOptionFromPollObject(ctx, d.Poll)
+	if diags.HasError() {
+		return nil, nil, nil, diags
+	}
+	return &out, precheckOpt, pollOpt, nil
 }

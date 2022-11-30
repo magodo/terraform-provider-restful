@@ -3,8 +3,10 @@ package provider
 import (
 	"context"
 	"fmt"
+	"net/url"
 
 	"github.com/magodo/terraform-provider-restful/internal/client"
+	"github.com/magodo/terraform-provider-restful/internal/validator"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/schemavalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -141,6 +143,12 @@ func (*Provider) GetSchema(context.Context) (tfsdk.Schema, diag.Diagnostics) {
 				Description:         "The base URL of the API provider.",
 				MarkdownDescription: "The base URL of the API provider.",
 				Required:            true,
+				Validators: []tfsdk.AttributeValidator{
+					validator.StringIsParsable("HTTP url", func(s string) error {
+						_, err := url.Parse(s)
+						return err
+					}),
+				},
 			},
 			"security": {
 				Description:         "The OpenAPI security scheme that is be used for auth. Only one of `http`, `apikey` and `oauth2` can be specified.",
@@ -618,7 +626,16 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 		)
 	}
 
+	uRL, err := url.Parse(config.BaseURL)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Failed to configure provider",
+			fmt.Sprintf("Parsing the base url %q: %v", config.BaseURL, err),
+		)
+	}
+
 	p.apiOpt = apiOption{
+		BaseURL:            *uRL,
 		CreateMethod:       "POST",
 		UpdateMethod:       "PUT",
 		DeleteMethod:       "DELETE",

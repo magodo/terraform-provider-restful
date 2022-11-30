@@ -96,10 +96,9 @@ func New(ctx context.Context, baseURL string, opt *BuildOption) (*Client, error)
 }
 
 type CreateOption struct {
-	Method  string
-	Query   Query
-	Header  Header
-	PollOpt *PollOption
+	Method string
+	Query  Query
+	Header Header
 }
 
 func (c *Client) Create(ctx context.Context, path string, body interface{}, opt CreateOption) (*resty.Response, error) {
@@ -136,7 +135,6 @@ type UpdateOption struct {
 	MergePatchDisabled bool
 	Query              Query
 	Header             Header
-	PollOpt            *PollOption
 }
 
 func (c *Client) Update(ctx context.Context, path string, body interface{}, opt UpdateOption) (*resty.Response, error) {
@@ -178,10 +176,9 @@ func (c *Client) Delete(ctx context.Context, path string, opt DeleteOption) (*re
 }
 
 type OperationOption struct {
-	Method  string
-	Query   Query
-	Header  Header
-	PollOpt *PollOption
+	Method string
+	Query  Query
+	Header Header
 }
 
 func (c *Client) Operation(ctx context.Context, path string, body interface{}, opt OperationOption) (*resty.Response, error) {
