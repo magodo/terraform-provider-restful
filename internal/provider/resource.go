@@ -45,7 +45,6 @@ type resourceData struct {
 	DeleteMethod types.String `tfsdk:"delete_method"`
 
 	PrecheckCreate types.Object `tfsdk:"precheck_create"`
-	PrecheckRead   types.Object `tfsdk:"precheck_read"`
 	PrecheckUpdate types.Object `tfsdk:"precheck_update"`
 	PrecheckDelete types.Object `tfsdk:"precheck_delete"`
 
@@ -270,7 +269,6 @@ func (r *Resource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics)
 			"poll_delete": pollAttribute("Delete"),
 
 			"precheck_create": precheckAttribute("Create", true, ""),
-			"precheck_read":   precheckAttribute("Read", false, "By default, the `id` of this resource is used."),
 			"precheck_update": precheckAttribute("Update", false, "By default, the `id` of this resource is used."),
 			"precheck_delete": precheckAttribute("Delete", false, "By default, the `id` of this resource is used."),
 
@@ -387,7 +385,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	// Existance check for resources whose create method is `PUT`, in which case the `path` is the same as its ID.
 	// It is not possible to query the resource prior creation for resources whose create method is `POST`, since the `path` in this case is not enough for a `GET`.
 	if opt.Method == "PUT" {
-		opt, _, diags := r.p.apiOpt.ForResourceRead(ctx, plan)
+		opt, diags := r.p.apiOpt.ForResourceRead(ctx, plan)
 		resp.Diagnostics.Append(diags...)
 		if diags.HasError() {
 			return
@@ -521,29 +519,10 @@ func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *reso
 
 	c := r.p.client
 
-	opt, precheckOpt, diags := r.p.apiOpt.ForResourceRead(ctx, state)
+	opt, diags := r.p.apiOpt.ForResourceRead(ctx, state)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
-	}
-
-	// Precheck
-	if precheckOpt != nil {
-		p, err := client.NewPollable(*precheckOpt)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Read: Failed to build poller for precheck",
-				err.Error(),
-			)
-			return
-		}
-		if err := p.PollUntilDone(ctx, c); err != nil {
-			resp.Diagnostics.AddError(
-				"Read: Pre-checking failure",
-				err.Error(),
-			)
-			return
-		}
 	}
 
 	response, err := c.Read(ctx, state.ID.ValueString(), *opt)

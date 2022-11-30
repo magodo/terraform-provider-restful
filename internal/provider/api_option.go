@@ -160,16 +160,12 @@ func (opt apiOption) ForResourceCreate(ctx context.Context, d resourceData) (*cl
 	return &out, precheckOpt, pollOpt, nil
 }
 
-func (opt apiOption) ForResourceRead(ctx context.Context, d resourceData) (*client.ReadOption, *client.PollOption, diag.Diagnostics) {
+func (opt apiOption) ForResourceRead(ctx context.Context, d resourceData) (*client.ReadOption, diag.Diagnostics) {
 	out := client.ReadOption{
 		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
 		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
 	}
-	precheckOpt, diags := newPollOptionFromPrecheckObject(ctx, opt.BaseURL, d.ID.String(), d.PrecheckRead)
-	if diags.HasError() {
-		return nil, nil, diags
-	}
-	return &out, precheckOpt, nil
+	return &out, nil
 }
 
 func (opt apiOption) ForResourceUpdate(ctx context.Context, d resourceData) (*client.UpdateOption, *client.PollOption, *client.PollOption, diag.Diagnostics) {
@@ -218,16 +214,12 @@ func (opt apiOption) ForResourceDelete(ctx context.Context, d resourceData) (*cl
 	return &out, precheckOpt, pollOpt, nil
 }
 
-func (opt apiOption) ForDataSourceRead(ctx context.Context, d dataSourceData) (*client.ReadOption, *client.PollOption, diag.Diagnostics) {
+func (opt apiOption) ForDataSourceRead(ctx context.Context, d dataSourceData) (*client.ReadOption, diag.Diagnostics) {
 	out := client.ReadOption{
 		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
 		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
 	}
-	precheckOpt, diags := newPollOptionFromPrecheckObject(ctx, opt.BaseURL, d.ID.String(), d.Precheck)
-	if diags.HasError() {
-		return nil, nil, diags
-	}
-	return &out, precheckOpt, nil
+	return &out, nil
 }
 
 func (opt apiOption) ForResourceOperation(ctx context.Context, d operationResourceData) (*client.OperationOption, *client.PollOption, *client.PollOption, diag.Diagnostics) {

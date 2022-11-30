@@ -28,37 +28,11 @@ data "restful_resource" "test" {
 ### Optional
 
 - `header` (Map of String) The header parameters that are applied to each request. This overrides the `header` set in the provider block.
-- `precheck` (Attributes) The precheck that is prior to the "Read" operation. (see [below for nested schema](#nestedatt--precheck))
 - `query` (Map of List of String) The query parameters that are applied to each request. This overrides the `query` set in the provider block.
 - `selector` (String) A selector in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries), that is used when `id` represents a collection of resources, to select exactly one member resource of from it
 
 ### Read-Only
 
 - `output` (String) The response body after reading the resource.
-
-<a id="nestedatt--precheck"></a>
-### Nested Schema for `precheck`
-
-Required:
-
-- `status` (Attributes) The expected status sentinels for each polling state. (see [below for nested schema](#nestedatt--precheck--status))
-- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).
-
-Optional:
-
-- `default_delay_sec` (Number) The interval between two pollings if there is no `Retry-After` in the response header, in second.
-- `path` (String) The path used to query readiness, relative to the `base_url` of the provider. By default, the `id` of this resource is used.
-- `query` (Map of List of String) The query parameters.
-
-<a id="nestedatt--precheck--status"></a>
-### Nested Schema for `precheck.status`
-
-Required:
-
-- `success` (String) The expected status sentinel for suceess status.
-
-Optional:
-
-- `pending` (List of String) The expected status sentinels for pending status.
 
 

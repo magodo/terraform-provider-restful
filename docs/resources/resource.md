@@ -55,7 +55,6 @@ resource "restful_resource" "rg" {
 - `poll_update` (Attributes) The polling option for the "Update" operation (see [below for nested schema](#nestedatt--poll_update))
 - `precheck_create` (Attributes) The precheck that is prior to the "Create" operation. (see [below for nested schema](#nestedatt--precheck_create))
 - `precheck_delete` (Attributes) The precheck that is prior to the "Delete" operation. (see [below for nested schema](#nestedatt--precheck_delete))
-- `precheck_read` (Attributes) The precheck that is prior to the "Read" operation. (see [below for nested schema](#nestedatt--precheck_read))
 - `precheck_update` (Attributes) The precheck that is prior to the "Update" operation. (see [below for nested schema](#nestedatt--precheck_update))
 - `query` (Map of List of String) The query parameters that are applied to each request. This overrides the `query` set in the provider block.
 - `read_path` (String) The API path used to read the resource, which is used as the `id`. The `path` is used as the `id` instead if `read_path` is absent. The path can be string literal, or combined by followings: `$(path)` expanded to `path`, `$(body.x.y.z)` expands to the `x.y.z` property in API body, `#(body.id)` expands to the `id` property, with `base_url` prefix trimmed.
@@ -189,33 +188,6 @@ Optional:
 
 <a id="nestedatt--precheck_delete--status"></a>
 ### Nested Schema for `precheck_delete.status`
-
-Required:
-
-- `success` (String) The expected status sentinel for suceess status.
-
-Optional:
-
-- `pending` (List of String) The expected status sentinels for pending status.
-
-
-
-<a id="nestedatt--precheck_read"></a>
-### Nested Schema for `precheck_read`
-
-Required:
-
-- `status` (Attributes) The expected status sentinels for each polling state. (see [below for nested schema](#nestedatt--precheck_read--status))
-- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).
-
-Optional:
-
-- `default_delay_sec` (Number) The interval between two pollings if there is no `Retry-After` in the response header, in second.
-- `path` (String) The path used to query readiness, relative to the `base_url` of the provider. By default, the `id` of this resource is used.
-- `query` (Map of List of String) The query parameters.
-
-<a id="nestedatt--precheck_read--status"></a>
-### Nested Schema for `precheck_read.status`
 
 Required:
 
