@@ -3,7 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
-	"path"
+	"net/url"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -122,15 +122,25 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 
 	c := r.p.client
 
-	opt, precheckOpt, pollOpt, diags := r.p.apiOpt.ForResourceOperation(ctx, plan)
+	opt, diags := r.p.apiOpt.ForResourceOperation(ctx, plan)
 	diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
 	}
 
 	// Precheck
-	if precheckOpt != nil {
-		p, err := client.NewPollable(*precheckOpt)
+	if !plan.Precheck.IsNull() {
+		var d precheckData
+		if diags := plan.Precheck.As(ctx, &d, types.ObjectAsOptions{}); diags.HasError() {
+			diagnostics.Append(diags...)
+			return
+		}
+		opt, diags := r.p.apiOpt.ForPrecheck(ctx, plan.Path.ValueString(), opt.Header, opt.Query, d)
+		if diags.HasError() {
+			diagnostics.Append(diags...)
+			return
+		}
+		p, err := client.NewPollable(*opt)
 		if err != nil {
 			diagnostics.AddError(
 				"Operation: Failed to build poller for precheck",
@@ -168,13 +178,23 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 	resourceId := plan.Path.ValueString()
 
 	// For LRO, wait for completion
-	if pollOpt != nil {
-		if pollOpt.UrlLocator == nil {
+	if !plan.Poll.IsNull() {
+		var d pollData
+		if diags := plan.Poll.As(ctx, &d, types.ObjectAsOptions{}); diags.HasError() {
+			diagnostics.Append(diags...)
+			return
+		}
+		opt, diags := r.p.apiOpt.ForPoll(ctx, opt.Header, d)
+		if diags.HasError() {
+			diagnostics.Append(diags...)
+			return
+		}
+		if opt.UrlLocator == nil {
 			// Update the request URL to pointing to the resource path, which is mainly for resources whose create method is POST.
 			// As it will be used to poll the resource status.
-			response.Request.URL = path.Join(r.p.apiOpt.BaseURL.String(), resourceId)
+			response.Request.RawRequest.URL.Path, _ = url.JoinPath(r.p.apiOpt.BaseURL.String(), resourceId)
 		}
-		p, err := client.NewPollableFromResp(*response, *pollOpt)
+		p, err := client.NewPollableFromResp(*response, *opt)
 		if err != nil {
 			diagnostics.AddError(
 				"Operation: Failed to build poller from the response of the initiated request",

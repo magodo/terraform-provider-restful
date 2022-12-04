@@ -70,17 +70,17 @@ type PollOption struct {
 	// If it is nil, the original request URL is used for polling.
 	UrlLocator ValueLocator
 
+	Header Header
+
 	// DefaultDelay specifies the interval between two pollings. The `Retry-After` in the response header takes higher precedence than this.
 	DefaultDelay time.Duration
 }
 
 func NewPollableFromResp(resp resty.Response, opt PollOption) (*Pollable, error) {
-	p := Pollable{}
-
-	if opt.DefaultDelay == 0 {
-		opt.DefaultDelay = 10 * time.Second
+	p := Pollable{
+		DefaultDelay: opt.DefaultDelay,
+		Header:       opt.Header,
 	}
-	p.DefaultDelay = opt.DefaultDelay
 
 	if opt.Status.Success == "" {
 		return nil, fmt.Errorf("Status.Success is required but not set")
@@ -114,12 +114,10 @@ func NewPollableFromResp(resp resty.Response, opt PollOption) (*Pollable, error)
 }
 
 func NewPollable(opt PollOption) (*Pollable, error) {
-	p := Pollable{}
-
-	if opt.DefaultDelay == 0 {
-		opt.DefaultDelay = 10 * time.Second
+	p := Pollable{
+		DefaultDelay: opt.DefaultDelay,
+		Header:       opt.Header,
 	}
-	p.DefaultDelay = opt.DefaultDelay
 
 	if opt.Status.Success == "" {
 		return nil, fmt.Errorf("Status.Success is required but not set")
@@ -146,6 +144,7 @@ func NewPollable(opt PollOption) (*Pollable, error) {
 type Pollable struct {
 	InitDelay     time.Duration
 	URL           string
+	Header        Header
 	Status        PollingStatus
 	StatusLocator ValueLocator
 	DefaultDelay  time.Duration
@@ -156,7 +155,7 @@ func (f *Pollable) PollUntilDone(ctx context.Context, client *Client) error {
 PollingLoop:
 	for {
 		// There is no need to retry here as resty client has embedded retry logic (by default 3 max retries).
-		req := client.R().SetContext(ctx)
+		req := client.R().SetContext(ctx).SetHeaders(f.Header)
 		resp, err := req.Get(f.URL)
 		if err != nil {
 			return fmt.Errorf("polling %s: %v", f.URL, err)

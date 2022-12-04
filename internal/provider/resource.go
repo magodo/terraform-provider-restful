@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 
 	"github.com/magodo/terraform-provider-restful/internal/client"
+	"github.com/magodo/terraform-provider-restful/internal/planmodifier"
 	"github.com/magodo/terraform-provider-restful/internal/validator"
 
 	"github.com/tidwall/gjson"
@@ -62,25 +63,26 @@ type resourceData struct {
 	Output types.String `tfsdk:"output"`
 }
 
-type pollDataGo struct {
-	StatusLocator string `tfsdk:"status_locator"`
-	Status        struct {
-		Success string   `tfsdk:"success"`
-		Pending []string `tfsdk:"pending"`
-	} `tfsdk:"status"`
-	UrlLocator   *string `tfsdk:"url_locator"`
-	DefaultDelay *int64  `tfsdk:"default_delay_sec"`
+type pollData struct {
+	StatusLocator types.String `tfsdk:"status_locator"`
+	Status        types.Object `tfsdk:"status"`
+	UrlLocator    types.String `tfsdk:"url_locator"`
+	Header        types.Map    `tfsdk:"header"`
+	DefaultDelay  types.Int64  `tfsdk:"default_delay_sec"`
 }
 
-type precheckDataGo struct {
-	StatusLocator string `tfsdk:"status_locator"`
-	Status        struct {
-		Success string   `tfsdk:"success"`
-		Pending []string `tfsdk:"pending"`
-	} `tfsdk:"status"`
-	Path         *string   `tfsdk:"path"`
-	Query        types.Map `tfsdk:"query"`
-	DefaultDelay *int64    `tfsdk:"default_delay_sec"`
+type precheckData struct {
+	StatusLocator types.String `tfsdk:"status_locator"`
+	Status        types.Object `tfsdk:"status"`
+	Path          types.String `tfsdk:"path"`
+	Query         types.Map    `tfsdk:"query"`
+	Header        types.Map    `tfsdk:"header"`
+	DefaultDelay  types.Int64  `tfsdk:"default_delay_sec"`
+}
+
+type pollStatusGo struct {
+	Success string   `tfsdk:"success"`
+	Pending []string `tfsdk:"pending"`
 }
 
 func (r *Resource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -137,16 +139,26 @@ func precheckAttribute(s string, pathIsRequired bool, suffixDesc string) tfsdk.A
 				Optional:            !pathIsRequired,
 			},
 			"query": {
-				Description:         "The query parameters.",
-				MarkdownDescription: "The query parameters.",
+				Description:         "The query parameters. This overrides the `query` set in the resource block.",
+				MarkdownDescription: "The query parameters. This overrides the `query` set in the resource block.",
 				Type:                types.MapType{ElemType: types.ListType{ElemType: types.StringType}},
+				Optional:            true,
+			},
+			"header": {
+				Description:         "The header parameters. This overrides the `header` set in the resource block.",
+				MarkdownDescription: "The header parameters. This overrides the `header` set in the resource block.",
+				Type:                types.MapType{ElemType: types.StringType},
 				Optional:            true,
 			},
 			"default_delay_sec": {
 				Description:         "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
 				MarkdownDescription: "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
 				Optional:            true,
+				Computed:            true,
 				Type:                types.Int64Type,
+				PlanModifiers: []tfsdk.AttributePlanModifier{
+					planmodifier.DefaultAttribute(types.Int64Value(10)),
+				},
 			},
 		}),
 	}
@@ -201,11 +213,21 @@ func pollAttribute(s string) tfsdk.Attribute {
 					}),
 				},
 			},
+			"header": {
+				Description:         "The header parameters. This overrides the `header` set in the resource block.",
+				MarkdownDescription: "The header parameters. This overrides the `header` set in the resource block.",
+				Type:                types.MapType{ElemType: types.StringType},
+				Optional:            true,
+			},
 			"default_delay_sec": {
 				Description:         "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
 				MarkdownDescription: "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
 				Optional:            true,
+				Computed:            true,
 				Type:                types.Int64Type,
+				PlanModifiers: []tfsdk.AttributePlanModifier{
+					planmodifier.DefaultAttribute(types.Int64Value(10)),
+				},
 			},
 		}),
 	}
@@ -376,7 +398,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 
 	c := r.p.client
 
-	opt, precheckOpt, pollOpt, diags := r.p.apiOpt.ForResourceCreate(ctx, plan)
+	opt, diags := r.p.apiOpt.ForResourceCreate(ctx, plan)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
@@ -408,8 +430,18 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	}
 
 	// Precheck
-	if precheckOpt != nil {
-		p, err := client.NewPollable(*precheckOpt)
+	if !plan.PrecheckCreate.IsNull() {
+		var d precheckData
+		if diags := plan.PrecheckCreate.As(ctx, &d, types.ObjectAsOptions{}); diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
+		opt, diags := r.p.apiOpt.ForPrecheck(ctx, "", opt.Header, opt.Query, d)
+		if diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
+		p, err := client.NewPollable(*opt)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Create: Failed to build poller for precheck",
@@ -470,13 +502,23 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	}
 
 	// For LRO, wait for completion
-	if pollOpt != nil {
-		if pollOpt.UrlLocator == nil {
+	if !plan.PollCreate.IsNull() {
+		var d pollData
+		if diags := plan.PollCreate.As(ctx, &d, types.ObjectAsOptions{}); diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
+		opt, diags := r.p.apiOpt.ForPoll(ctx, opt.Header, d)
+		if diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
+		if opt.UrlLocator == nil {
 			// Update the request URL to pointing to the resource path, which is mainly for resources whose create method is POST.
 			// As it will be used to poll the resource status.
 			response.Request.RawRequest.URL.Path = resourceId
 		}
-		p, err := client.NewPollableFromResp(*response, *pollOpt)
+		p, err := client.NewPollableFromResp(*response, *opt)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Create: Failed to build poller from the response of the initiated request",
@@ -599,7 +641,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 
 	c := r.p.client
 
-	opt, precheckOpt, pollOpt, diags := r.p.apiOpt.ForResourceUpdate(ctx, plan)
+	opt, diags := r.p.apiOpt.ForResourceUpdate(ctx, plan)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
@@ -609,8 +651,18 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 	if state.Body.ValueString() != plan.Body.ValueString() {
 
 		// Precheck
-		if precheckOpt != nil {
-			p, err := client.NewPollable(*precheckOpt)
+		if !plan.PrecheckUpdate.IsNull() {
+			var d precheckData
+			if diags := plan.PrecheckUpdate.As(ctx, &d, types.ObjectAsOptions{}); diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			}
+			opt, diags := r.p.apiOpt.ForPrecheck(ctx, state.ID.ValueString(), opt.Header, opt.Query, d)
+			if diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			}
+			p, err := client.NewPollable(*opt)
 			if err != nil {
 				resp.Diagnostics.AddError(
 					"Update: Failed to build poller for precheck",
@@ -670,8 +722,18 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 		}
 
 		// For LRO, wait for completion
-		if pollOpt != nil {
-			p, err := client.NewPollableFromResp(*response, *pollOpt)
+		if !plan.PollUpdate.IsNull() {
+			var d pollData
+			if diags := plan.PollUpdate.As(ctx, &d, types.ObjectAsOptions{}); diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			}
+			opt, diags := r.p.apiOpt.ForPoll(ctx, opt.Header, d)
+			if diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			}
+			p, err := client.NewPollableFromResp(*response, *opt)
 			if err != nil {
 				resp.Diagnostics.AddError(
 					"Update: Failed to build poller from the response of the initiated request",
@@ -721,15 +783,25 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 
 	c := r.p.client
 
-	opt, precheckOpt, pollOpt, diags := r.p.apiOpt.ForResourceDelete(ctx, state)
+	opt, diags := r.p.apiOpt.ForResourceDelete(ctx, state)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
 	}
 
 	// Precheck
-	if precheckOpt != nil {
-		p, err := client.NewPollable(*precheckOpt)
+	if !state.PrecheckDelete.IsNull() {
+		var d precheckData
+		if diags := state.PrecheckDelete.As(ctx, &d, types.ObjectAsOptions{}); diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
+		opt, diags := r.p.apiOpt.ForPrecheck(ctx, state.ID.ValueString(), opt.Header, opt.Query, d)
+		if diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
+		p, err := client.NewPollable(*opt)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Delete: Failed to build poller for precheck",
@@ -780,8 +852,18 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 	}
 
 	// For LRO, wait for completion
-	if pollOpt != nil {
-		p, err := client.NewPollableFromResp(*response, *pollOpt)
+	if !state.PollDelete.IsNull() {
+		var d pollData
+		if diags := state.PollDelete.As(ctx, &d, types.ObjectAsOptions{}); diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
+		opt, diags := r.p.apiOpt.ForPoll(ctx, opt.Header, d)
+		if diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
+		p, err := client.NewPollableFromResp(*response, *opt)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Delete: Failed to build poller from the response of the initiated request",
