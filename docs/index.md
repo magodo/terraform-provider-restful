@@ -93,6 +93,7 @@ provider "restful" {
 
 ### Optional
 
+- `cookie_enabled` (Boolean) Save cookies during API contracting. Defaults to `false`.
 - `create_method` (String) The method used to create the resource. Possible values are `PUT` and `POST`. Defaults to `POST`.
 - `delete_method` (String) The method used to delete the resource. Possible values are `DELETE` and `POST`. Defaults to `DELETE`.
 - `header` (Map of String) The header parameters that are applied to each request.
