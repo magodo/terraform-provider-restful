@@ -2,9 +2,8 @@ package provider
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"path"
+	"net/url"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -12,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/magodo/terraform-provider-restful/internal/client"
+	"github.com/magodo/terraform-provider-restful/internal/validator"
 )
 
 type OperationResource struct {
@@ -21,14 +21,15 @@ type OperationResource struct {
 var _ resource.Resource = &OperationResource{}
 
 type operationResourceData struct {
-	ID     types.String `tfsdk:"id"`
-	Path   types.String `tfsdk:"path"`
-	Method types.String `tfsdk:"method"`
-	Body   types.String `tfsdk:"body"`
-	Query  types.Map    `tfsdk:"query"`
-	Header types.Map    `tfsdk:"header"`
-	Poll   types.Object `tfsdk:"poll"`
-	Output types.String `tfsdk:"output"`
+	ID       types.String `tfsdk:"id"`
+	Path     types.String `tfsdk:"path"`
+	Method   types.String `tfsdk:"method"`
+	Body     types.String `tfsdk:"body"`
+	Query    types.Map    `tfsdk:"query"`
+	Header   types.Map    `tfsdk:"header"`
+	Precheck types.Object `tfsdk:"precheck"`
+	Poll     types.Object `tfsdk:"poll"`
+	Output   types.String `tfsdk:"output"`
 }
 
 func (r *OperationResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -75,6 +76,9 @@ func (r *OperationResource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Dia
 				MarkdownDescription: "The payload of the API call.",
 				Type:                types.StringType,
 				Optional:            true,
+				Validators: []tfsdk.AttributeValidator{
+					validator.StringIsJSON(),
+				},
 			},
 			"query": {
 				Description:         "The query parameters that are applied to each request. This overrides the `query` set in the provider block.",
@@ -88,7 +92,8 @@ func (r *OperationResource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Dia
 				Type:                types.MapType{ElemType: types.StringType},
 				Optional:            true,
 			},
-			"poll": pollAttribute("poll", "API"),
+			"precheck": precheckAttribute("API", false, "By default, the `path` of this resource is used."),
+			"poll":     pollAttribute("API"),
 			"output": {
 				Description:         "The response body.",
 				MarkdownDescription: "The response body.",
@@ -107,27 +112,6 @@ func (r *OperationResource) Configure(ctx context.Context, req resource.Configur
 	return
 }
 
-func (r *OperationResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
-	var config operationResourceData
-	diags := req.Config.Get(ctx, &config)
-	resp.Diagnostics.Append(diags...)
-	if diags.HasError() {
-		return
-	}
-
-	validatePoll(ctx, config.Poll, "poll", resp)
-
-	if !config.Body.IsUnknown() && !config.Body.IsNull() {
-		var body map[string]interface{}
-		if err := json.Unmarshal([]byte(config.Body.ValueString()), &body); err != nil {
-			resp.Diagnostics.AddError(
-				"Invalid configuration",
-				fmt.Sprintf(`Failed to unmarshal "body": %s: %s`, err.Error(), config.Body.String()),
-			)
-		}
-	}
-}
-
 func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Plan, state *tfsdk.State, diagnostics *diag.Diagnostics) {
 	var plan operationResourceData
 	diags := tfplan.Get(ctx, &plan)
@@ -142,6 +126,35 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 	diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
+	}
+
+	// Precheck
+	if !plan.Precheck.IsNull() {
+		var d precheckData
+		if diags := plan.Precheck.As(ctx, &d, types.ObjectAsOptions{}); diags.HasError() {
+			diagnostics.Append(diags...)
+			return
+		}
+		opt, diags := r.p.apiOpt.ForPrecheck(ctx, plan.Path.ValueString(), opt.Header, opt.Query, d)
+		if diags.HasError() {
+			diagnostics.Append(diags...)
+			return
+		}
+		p, err := client.NewPollable(*opt)
+		if err != nil {
+			diagnostics.AddError(
+				"Operation: Failed to build poller for precheck",
+				err.Error(),
+			)
+			return
+		}
+		if err := p.PollUntilDone(ctx, c); err != nil {
+			diagnostics.AddError(
+				"Operation: Pre-checking failure",
+				err.Error(),
+			)
+			return
+		}
 	}
 
 	response, err := c.Operation(ctx, plan.Path.ValueString(), plan.Body.ValueString(), *opt)
@@ -162,17 +175,26 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 
 	b := response.Body()
 
-	// For POST create method, generate the resource id by combining the path and the id in response.
 	resourceId := plan.Path.ValueString()
 
 	// For LRO, wait for completion
-	if opt.PollOpt != nil {
-		if opt.PollOpt.UrlLocator == nil {
+	if !plan.Poll.IsNull() {
+		var d pollData
+		if diags := plan.Poll.As(ctx, &d, types.ObjectAsOptions{}); diags.HasError() {
+			diagnostics.Append(diags...)
+			return
+		}
+		opt, diags := r.p.apiOpt.ForPoll(ctx, opt.Header, d)
+		if diags.HasError() {
+			diagnostics.Append(diags...)
+			return
+		}
+		if opt.UrlLocator == nil {
 			// Update the request URL to pointing to the resource path, which is mainly for resources whose create method is POST.
 			// As it will be used to poll the resource status.
-			response.Request.URL = path.Join(c.BaseURL, resourceId)
+			response.Request.RawRequest.URL.Path, _ = url.JoinPath(r.p.apiOpt.BaseURL.String(), resourceId)
 		}
-		p, err := client.NewPollable(*response, *opt.PollOpt)
+		p, err := client.NewPollableFromResp(*response, *opt)
 		if err != nil {
 			diagnostics.AddError(
 				"Operation: Failed to build poller from the response of the initiated request",

@@ -70,17 +70,17 @@ type PollOption struct {
 	// If it is nil, the original request URL is used for polling.
 	UrlLocator ValueLocator
 
+	Header Header
+
 	// DefaultDelay specifies the interval between two pollings. The `Retry-After` in the response header takes higher precedence than this.
 	DefaultDelay time.Duration
 }
 
-func NewPollable(resp resty.Response, opt PollOption) (*Pollable, error) {
-	p := Pollable{}
-
-	if opt.DefaultDelay == 0 {
-		opt.DefaultDelay = 10 * time.Second
+func NewPollableFromResp(resp resty.Response, opt PollOption) (*Pollable, error) {
+	p := Pollable{
+		DefaultDelay: opt.DefaultDelay,
+		Header:       opt.Header,
 	}
-	p.DefaultDelay = opt.DefaultDelay
 
 	if opt.Status.Success == "" {
 		return nil, fmt.Errorf("Status.Success is required but not set")
@@ -113,9 +113,38 @@ func NewPollable(resp resty.Response, opt PollOption) (*Pollable, error) {
 	return &p, nil
 }
 
+func NewPollable(opt PollOption) (*Pollable, error) {
+	p := Pollable{
+		DefaultDelay: opt.DefaultDelay,
+		Header:       opt.Header,
+	}
+
+	if opt.Status.Success == "" {
+		return nil, fmt.Errorf("Status.Success is required but not set")
+	}
+	p.Status = opt.Status
+
+	if opt.StatusLocator == nil {
+		return nil, fmt.Errorf("StatusLocator is required but not set")
+	}
+	p.StatusLocator = opt.StatusLocator
+
+	if opt.UrlLocator == nil {
+		return nil, fmt.Errorf("UrlLocator is required but not set")
+	}
+	eloc, ok := opt.UrlLocator.(ExactLocator)
+	if !ok {
+		return nil, fmt.Errorf("expect UrlLocator to be ExactLocator, but got %T", opt.UrlLocator)
+	}
+	p.URL = string(eloc)
+
+	return &p, nil
+}
+
 type Pollable struct {
 	InitDelay     time.Duration
 	URL           string
+	Header        Header
 	Status        PollingStatus
 	StatusLocator ValueLocator
 	DefaultDelay  time.Duration
@@ -126,7 +155,7 @@ func (f *Pollable) PollUntilDone(ctx context.Context, client *Client) error {
 PollingLoop:
 	for {
 		// There is no need to retry here as resty client has embedded retry logic (by default 3 max retries).
-		req := client.R().SetContext(ctx)
+		req := client.R().SetContext(ctx).SetHeaders(f.Header)
 		resp, err := req.Get(f.URL)
 		if err != nil {
 			return fmt.Errorf("polling %s: %v", f.URL, err)

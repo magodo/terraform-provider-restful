@@ -13,6 +13,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 
 	"github.com/magodo/terraform-provider-restful/internal/client"
+	"github.com/magodo/terraform-provider-restful/internal/planmodifier"
+	"github.com/magodo/terraform-provider-restful/internal/validator"
 
 	"github.com/tidwall/gjson"
 
@@ -43,6 +45,10 @@ type resourceData struct {
 	UpdateMethod types.String `tfsdk:"update_method"`
 	DeleteMethod types.String `tfsdk:"delete_method"`
 
+	PrecheckCreate types.Object `tfsdk:"precheck_create"`
+	PrecheckUpdate types.Object `tfsdk:"precheck_update"`
+	PrecheckDelete types.Object `tfsdk:"precheck_delete"`
+
 	Body                types.String `tfsdk:"body"`
 	WriteOnlyAttributes types.List   `tfsdk:"write_only_attrs"`
 
@@ -61,24 +67,104 @@ type pollData struct {
 	StatusLocator types.String `tfsdk:"status_locator"`
 	Status        types.Object `tfsdk:"status"`
 	UrlLocator    types.String `tfsdk:"url_locator"`
+	Header        types.Map    `tfsdk:"header"`
 	DefaultDelay  types.Int64  `tfsdk:"default_delay_sec"`
 }
 
-type pollDataGo struct {
-	StatusLocator string `tfsdk:"status_locator"`
-	Status        struct {
-		Success string   `tfsdk:"success"`
-		Pending []string `tfsdk:"pending"`
-	} `tfsdk:"status"`
-	UrlLocator   *string `tfsdk:"url_locator"`
-	DefaultDelay *int64  `tfsdk:"default_delay_sec"`
+type precheckData struct {
+	StatusLocator types.String `tfsdk:"status_locator"`
+	Status        types.Object `tfsdk:"status"`
+	Path          types.String `tfsdk:"path"`
+	Query         types.Map    `tfsdk:"query"`
+	Header        types.Map    `tfsdk:"header"`
+	DefaultDelay  types.Int64  `tfsdk:"default_delay_sec"`
+}
+
+type pollStatusGo struct {
+	Success string   `tfsdk:"success"`
+	Pending []string `tfsdk:"pending"`
 }
 
 func (r *Resource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_resource"
 }
 
-func pollAttribute(attr, s string) tfsdk.Attribute {
+func precheckAttribute(s string, pathIsRequired bool, suffixDesc string) tfsdk.Attribute {
+	pathDesc := "The path used to query readiness, relative to the `base_url` of the provider."
+	if suffixDesc != "" {
+		pathDesc += " " + suffixDesc
+	}
+
+	return tfsdk.Attribute{
+		Description:         fmt.Sprintf("The precheck that is prior to the %q operation.", s),
+		MarkdownDescription: fmt.Sprintf("The precheck that is prior to the %q operation.", s),
+		Optional:            true,
+		Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+			"status_locator": {
+				Description:         "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the gjson syntax.",
+				MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).",
+				Required:            true,
+				Type:                types.StringType,
+				Validators: []tfsdk.AttributeValidator{
+					validator.StringIsParsable("locator", func(s string) error {
+						_, err := parseLocator(s)
+						return err
+					}),
+				},
+			},
+			"status": {
+				Description:         "The expected status sentinels for each polling state.",
+				MarkdownDescription: "The expected status sentinels for each polling state.",
+				Required:            true,
+				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
+					"success": {
+						Description:         "The expected status sentinel for suceess status.",
+						MarkdownDescription: "The expected status sentinel for suceess status.",
+						Required:            true,
+						Type:                types.StringType,
+					},
+					"pending": {
+						Description:         "The expected status sentinels for pending status.",
+						MarkdownDescription: "The expected status sentinels for pending status.",
+						Optional:            true,
+						Type:                types.ListType{ElemType: types.StringType},
+					},
+				}),
+			},
+			"path": {
+				Description:         pathDesc,
+				MarkdownDescription: pathDesc,
+				Type:                types.StringType,
+				Required:            pathIsRequired,
+				Optional:            !pathIsRequired,
+			},
+			"query": {
+				Description:         "The query parameters. This overrides the `query` set in the resource block.",
+				MarkdownDescription: "The query parameters. This overrides the `query` set in the resource block.",
+				Type:                types.MapType{ElemType: types.ListType{ElemType: types.StringType}},
+				Optional:            true,
+			},
+			"header": {
+				Description:         "The header parameters. This overrides the `header` set in the resource block.",
+				MarkdownDescription: "The header parameters. This overrides the `header` set in the resource block.",
+				Type:                types.MapType{ElemType: types.StringType},
+				Optional:            true,
+			},
+			"default_delay_sec": {
+				Description:         "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
+				MarkdownDescription: "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
+				Optional:            true,
+				Computed:            true,
+				Type:                types.Int64Type,
+				PlanModifiers: []tfsdk.AttributePlanModifier{
+					planmodifier.DefaultAttribute(types.Int64Value(10)),
+				},
+			},
+		}),
+	}
+}
+
+func pollAttribute(s string) tfsdk.Attribute {
 	return tfsdk.Attribute{
 		Description:         fmt.Sprintf("The polling option for the %q operation", s),
 		MarkdownDescription: fmt.Sprintf("The polling option for the %q operation", s),
@@ -89,6 +175,12 @@ func pollAttribute(attr, s string) tfsdk.Attribute {
 				MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).",
 				Required:            true,
 				Type:                types.StringType,
+				Validators: []tfsdk.AttributeValidator{
+					validator.StringIsParsable("locator", func(s string) error {
+						_, err := parseLocator(s)
+						return err
+					}),
+				},
 			},
 			"status": {
 				Description:         "The expected status sentinels for each polling state.",
@@ -114,19 +206,35 @@ func pollAttribute(attr, s string) tfsdk.Attribute {
 				MarkdownDescription: "Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the resource's path is used for polling.",
 				Optional:            true,
 				Type:                types.StringType,
+				Validators: []tfsdk.AttributeValidator{
+					validator.StringIsParsable("locator", func(s string) error {
+						_, err := parseLocator(s)
+						return err
+					}),
+				},
+			},
+			"header": {
+				Description:         "The header parameters. This overrides the `header` set in the resource block.",
+				MarkdownDescription: "The header parameters. This overrides the `header` set in the resource block.",
+				Type:                types.MapType{ElemType: types.StringType},
+				Optional:            true,
 			},
 			"default_delay_sec": {
 				Description:         "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
 				MarkdownDescription: "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
 				Optional:            true,
+				Computed:            true,
 				Type:                types.Int64Type,
+				PlanModifiers: []tfsdk.AttributePlanModifier{
+					planmodifier.DefaultAttribute(types.Int64Value(10)),
+				},
 			},
 		}),
 	}
 }
 
 func (r *Resource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	pathDescription := "The path can be string literal, or combined by followings: `$(path)` expanded to `path`, `$(body.x.y.z)` expands to the `x.y.z` property in API body, `#(body.id)` expands to the `id` property, with `base_url` prefix trimmed."
+	const pathDescription = "The path can be string literal, or combined by followings: `$(path)` expanded to `path`, `$(body.x.y.z)` expands to the `x.y.z` property in API body, `#(body.id)` expands to the `id` property, with `base_url` prefix trimmed."
 	return tfsdk.Schema{
 		Description:         "`restful_resource` manages a restful resource.",
 		MarkdownDescription: "`restful_resource` manages a restful resource.",
@@ -173,10 +281,18 @@ func (r *Resource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics)
 				MarkdownDescription: "The properties of the resource.",
 				Type:                types.StringType,
 				Required:            true,
+				Validators: []tfsdk.AttributeValidator{
+					validator.StringIsJSON(),
+				},
 			},
-			"poll_create": pollAttribute("poll_create", "Create"),
-			"poll_update": pollAttribute("poll_update", "Update"),
-			"poll_delete": pollAttribute("poll_delete", "Delete"),
+
+			"poll_create": pollAttribute("Create"),
+			"poll_update": pollAttribute("Update"),
+			"poll_delete": pollAttribute("Delete"),
+
+			"precheck_create": precheckAttribute("Create", true, ""),
+			"precheck_update": precheckAttribute("Update", false, "By default, the `id` of this resource is used."),
+			"precheck_delete": precheckAttribute("Delete", false, "By default, the `id` of this resource is used."),
 
 			"write_only_attrs": {
 				Description:         "A list of paths (in gjson syntax) to the attributes that are only settable, but won't be read in GET response.",
@@ -239,36 +355,6 @@ func (r *Resource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics)
 	}, nil
 }
 
-func validatePoll(ctx context.Context, pollObj types.Object, attrName string, resp *resource.ValidateConfigResponse) {
-	if pollObj.IsNull() || pollObj.IsUnknown() {
-		return
-	}
-	var pd pollData
-	diags := pollObj.As(ctx, &pd, types.ObjectAsOptions{})
-	if diags.HasError() {
-		resp.Diagnostics.Append(diags...)
-		return
-	}
-
-	if !pd.StatusLocator.IsUnknown() && !pd.StatusLocator.IsNull() {
-		if _, err := parseLocator(pd.StatusLocator.ValueString()); err != nil {
-			resp.Diagnostics.AddError(
-				"Invalid configuration",
-				fmt.Sprintf("Failed to parse status locator for %q: %s", attrName, err.Error()),
-			)
-		}
-	}
-
-	if !pd.UrlLocator.IsUnknown() && !pd.UrlLocator.IsNull() {
-		if _, err := parseLocator(pd.UrlLocator.ValueString()); err != nil {
-			resp.Diagnostics.AddError(
-				"Invalid configuration",
-				fmt.Sprintf("Failed to parse url locator for %q: %s", attrName, err.Error()),
-			)
-		}
-	}
-}
-
 func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
 	var config resourceData
 	diags := req.Config.Get(ctx, &config)
@@ -277,19 +363,7 @@ func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConf
 		return
 	}
 
-	validatePoll(ctx, config.PollCreate, "poll_create", resp)
-	validatePoll(ctx, config.PollUpdate, "poll_update", resp)
-	validatePoll(ctx, config.PollDelete, "poll_delete", resp)
-
 	if !config.Body.IsUnknown() {
-		var body map[string]interface{}
-		if err := json.Unmarshal([]byte(config.Body.ValueString()), &body); err != nil {
-			resp.Diagnostics.AddError(
-				"Invalid configuration",
-				fmt.Sprintf(`Failed to unmarshal "body": %s: %s`, err.Error(), config.Body.String()),
-			)
-		}
-
 		if !config.WriteOnlyAttributes.IsUnknown() && !config.WriteOnlyAttributes.IsNull() {
 			for _, ie := range config.WriteOnlyAttributes.Elements() {
 				ie := ie.(types.String)
@@ -355,6 +429,35 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 		}
 	}
 
+	// Precheck
+	if !plan.PrecheckCreate.IsNull() {
+		var d precheckData
+		if diags := plan.PrecheckCreate.As(ctx, &d, types.ObjectAsOptions{}); diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
+		opt, diags := r.p.apiOpt.ForPrecheck(ctx, "", opt.Header, opt.Query, d)
+		if diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
+		p, err := client.NewPollable(*opt)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Create: Failed to build poller for precheck",
+				err.Error(),
+			)
+			return
+		}
+		if err := p.PollUntilDone(ctx, c); err != nil {
+			resp.Diagnostics.AddError(
+				"Create: Pre-checking failure",
+				err.Error(),
+			)
+			return
+		}
+	}
+
 	// Create the resource
 	response, err := c.Create(ctx, plan.Path.ValueString(), plan.Body.ValueString(), *opt)
 	if err != nil {
@@ -377,7 +480,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	// Construct the resource id, which is used as the path to read the resource later on. By default, it is the same as the "path", unless "read_path" is specified.
 	resourceId := plan.Path.ValueString()
 	if !plan.ReadPath.IsNull() {
-		resourceId, err = BuildPath(plan.ReadPath.ValueString(), r.p.client.BaseURL, plan.Path.ValueString(), b)
+		resourceId, err = BuildPath(plan.ReadPath.ValueString(), r.p.apiOpt.BaseURL.String(), plan.Path.ValueString(), b)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				fmt.Sprintf("Failed to build the path for reading the resource"),
@@ -399,18 +502,29 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	}
 
 	// For LRO, wait for completion
-	if opt.PollOpt != nil {
-		if opt.PollOpt.UrlLocator == nil {
+	if !plan.PollCreate.IsNull() {
+		var d pollData
+		if diags := plan.PollCreate.As(ctx, &d, types.ObjectAsOptions{}); diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
+		opt, diags := r.p.apiOpt.ForPoll(ctx, opt.Header, d)
+		if diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
+		if opt.UrlLocator == nil {
 			// Update the request URL to pointing to the resource path, which is mainly for resources whose create method is POST.
 			// As it will be used to poll the resource status.
 			response.Request.RawRequest.URL.Path = resourceId
 		}
-		p, err := client.NewPollable(*response, *opt.PollOpt)
+		p, err := client.NewPollableFromResp(*response, *opt)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Create: Failed to build poller from the response of the initiated request",
 				err.Error(),
 			)
+			return
 		}
 		if err := p.PollUntilDone(ctx, c); err != nil {
 			resp.Diagnostics.AddError(
@@ -535,6 +649,36 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 
 	// Invoke API to Update the resource only when there are changes in the body.
 	if state.Body.ValueString() != plan.Body.ValueString() {
+
+		// Precheck
+		if !plan.PrecheckUpdate.IsNull() {
+			var d precheckData
+			if diags := plan.PrecheckUpdate.As(ctx, &d, types.ObjectAsOptions{}); diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			}
+			opt, diags := r.p.apiOpt.ForPrecheck(ctx, state.ID.ValueString(), opt.Header, opt.Query, d)
+			if diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			}
+			p, err := client.NewPollable(*opt)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Update: Failed to build poller for precheck",
+					err.Error(),
+				)
+				return
+			}
+			if err := p.PollUntilDone(ctx, c); err != nil {
+				resp.Diagnostics.AddError(
+					"Update: Pre-checking failure",
+					err.Error(),
+				)
+				return
+			}
+		}
+
 		body := plan.Body.ValueString()
 		if opt.Method == "PATCH" && !opt.MergePatchDisabled {
 			b, err := jsonpatch.CreateMergePatch([]byte(state.Body.ValueString()), []byte(plan.Body.ValueString()))
@@ -551,7 +695,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 		path := plan.ID.ValueString()
 		if !plan.UpdatePath.IsNull() {
 			var err error
-			path, err = BuildPath(plan.UpdatePath.ValueString(), r.p.client.BaseURL, plan.Path.ValueString(), []byte(state.Output.ValueString()))
+			path, err = BuildPath(plan.UpdatePath.ValueString(), r.p.apiOpt.BaseURL.String(), plan.Path.ValueString(), []byte(state.Output.ValueString()))
 			if err != nil {
 				resp.Diagnostics.AddError(
 					fmt.Sprintf("Failed to build the path for updating the resource"),
@@ -578,19 +722,31 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 		}
 
 		// For LRO, wait for completion
-		if opt.PollOpt != nil {
-			p, err := client.NewPollable(*response, *opt.PollOpt)
+		if !plan.PollUpdate.IsNull() {
+			var d pollData
+			if diags := plan.PollUpdate.As(ctx, &d, types.ObjectAsOptions{}); diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			}
+			opt, diags := r.p.apiOpt.ForPoll(ctx, opt.Header, d)
+			if diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			}
+			p, err := client.NewPollableFromResp(*response, *opt)
 			if err != nil {
 				resp.Diagnostics.AddError(
 					"Update: Failed to build poller from the response of the initiated request",
 					err.Error(),
 				)
+				return
 			}
 			if err := p.PollUntilDone(ctx, c); err != nil {
 				resp.Diagnostics.AddError(
 					"Update: Polling failure",
 					err.Error(),
 				)
+				return
 			}
 		}
 	}
@@ -633,10 +789,39 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 		return
 	}
 
+	// Precheck
+	if !state.PrecheckDelete.IsNull() {
+		var d precheckData
+		if diags := state.PrecheckDelete.As(ctx, &d, types.ObjectAsOptions{}); diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
+		opt, diags := r.p.apiOpt.ForPrecheck(ctx, state.ID.ValueString(), opt.Header, opt.Query, d)
+		if diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
+		p, err := client.NewPollable(*opt)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Delete: Failed to build poller for precheck",
+				err.Error(),
+			)
+			return
+		}
+		if err := p.PollUntilDone(ctx, c); err != nil {
+			resp.Diagnostics.AddError(
+				"Delete: Pre-checking failure",
+				err.Error(),
+			)
+			return
+		}
+	}
+
 	path := state.ID.ValueString()
 	if !state.DeletePath.IsNull() {
 		var err error
-		path, err = BuildPath(state.DeletePath.ValueString(), r.p.client.BaseURL, state.Path.ValueString(), []byte(state.Output.ValueString()))
+		path, err = BuildPath(state.DeletePath.ValueString(), r.p.apiOpt.BaseURL.String(), state.Path.ValueString(), []byte(state.Output.ValueString()))
 		if err != nil {
 			resp.Diagnostics.AddError(
 				fmt.Sprintf("Failed to build the path for deleting the resource"),
@@ -667,19 +852,31 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 	}
 
 	// For LRO, wait for completion
-	if opt.PollOpt != nil {
-		p, err := client.NewPollable(*response, *opt.PollOpt)
+	if !state.PollDelete.IsNull() {
+		var d pollData
+		if diags := state.PollDelete.As(ctx, &d, types.ObjectAsOptions{}); diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
+		opt, diags := r.p.apiOpt.ForPoll(ctx, opt.Header, d)
+		if diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
+		p, err := client.NewPollableFromResp(*response, *opt)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Delete: Failed to build poller from the response of the initiated request",
 				err.Error(),
 			)
+			return
 		}
 		if err := p.PollUntilDone(ctx, c); err != nil {
 			resp.Diagnostics.AddError(
 				"Delete: Polling failure",
 				err.Error(),
 			)
+			return
 		}
 	}
 
