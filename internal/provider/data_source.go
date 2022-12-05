@@ -5,8 +5,7 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/tidwall/gjson"
 )
@@ -29,43 +28,40 @@ func (d *DataSource) Metadata(ctx context.Context, req datasource.MetadataReques
 	resp.TypeName = req.ProviderTypeName + "_resource"
 }
 
-func (d *DataSource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+func (d *DataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		Description:         "`restful_resource` data source can be used to retrieve the model of a restful resource by ID.",
 		MarkdownDescription: "`restful_resource` data source can be used to retrieve the model of a restful resource by ID.",
-		Attributes: map[string]tfsdk.Attribute{
-			"id": {
+		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
 				Description:         "The ID of the Resource, i.e. The path of the data source, relative to the `base_url` of the provider.",
 				MarkdownDescription: "The ID of the Resource, i.e. The path of the data source, relative to the `base_url` of the provider.",
-				Type:                types.StringType,
 				Required:            true,
 			},
-			"query": {
+			"query": schema.MapAttribute{
 				Description:         "The query parameters that are applied to each request. This overrides the `query` set in the provider block.",
 				MarkdownDescription: "The query parameters that are applied to each request. This overrides the `query` set in the provider block.",
-				Type:                types.MapType{ElemType: types.ListType{ElemType: types.StringType}},
+				ElementType:         types.ListType{ElemType: types.StringType},
 				Optional:            true,
 			},
-			"header": {
+			"header": schema.MapAttribute{
 				Description:         "The header parameters that are applied to each request. This overrides the `header` set in the provider block.",
 				MarkdownDescription: "The header parameters that are applied to each request. This overrides the `header` set in the provider block.",
-				Type:                types.MapType{ElemType: types.StringType},
+				ElementType:         types.StringType,
 				Optional:            true,
 			},
-			"selector": {
+			"selector": schema.StringAttribute{
 				Description:         "A selector in gjson query syntax, that is used when `id` represents a collection of resources, to select exactly one member resource of from it",
 				MarkdownDescription: "A selector in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries), that is used when `id` represents a collection of resources, to select exactly one member resource of from it",
-				Type:                types.StringType,
 				Optional:            true,
 			},
-			"output": {
+			"output": schema.StringAttribute{
 				Description:         "The response body after reading the resource.",
 				MarkdownDescription: "The response body after reading the resource.",
-				Type:                types.StringType,
 				Computed:            true,
 			},
 		},
-	}, nil
+	}
 }
 
 func (d *DataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {

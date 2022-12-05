@@ -84,6 +84,7 @@ resource "restful_resource" "test" {
 data "restful_resource" "test" {
   id       = "/posts"
   selector = "#(foo==\"bar\")"
+  depends_on = [restful_resource.test]
 }
 `, d.url)
 

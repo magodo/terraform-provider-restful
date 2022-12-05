@@ -8,20 +8,19 @@ import (
 	"net/url"
 	"strings"
 
+	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	tfpath "github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-
-	"github.com/magodo/terraform-provider-restful/internal/client"
-	"github.com/magodo/terraform-provider-restful/internal/planmodifier"
-	"github.com/magodo/terraform-provider-restful/internal/validator"
-
-	"github.com/tidwall/gjson"
-
-	jsonpatch "github.com/evanphx/json-patch"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/magodo/terraform-provider-restful/internal/client"
+	myplanmodifier "github.com/magodo/terraform-provider-restful/internal/planmodifier"
+	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
+	"github.com/tidwall/gjson"
 )
 
 // Magic header used to indicate the value in the state is derived from import.
@@ -89,200 +88,186 @@ func (r *Resource) Metadata(ctx context.Context, req resource.MetadataRequest, r
 	resp.TypeName = req.ProviderTypeName + "_resource"
 }
 
-func precheckAttribute(s string, pathIsRequired bool, suffixDesc string) tfsdk.Attribute {
+func precheckAttribute(s string, pathIsRequired bool, suffixDesc string) schema.Attribute {
 	pathDesc := "The path used to query readiness, relative to the `base_url` of the provider."
 	if suffixDesc != "" {
 		pathDesc += " " + suffixDesc
 	}
 
-	return tfsdk.Attribute{
+	return schema.SingleNestedAttribute{
 		Description:         fmt.Sprintf("The precheck that is prior to the %q operation.", s),
 		MarkdownDescription: fmt.Sprintf("The precheck that is prior to the %q operation.", s),
 		Optional:            true,
-		Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-			"status_locator": {
+		Attributes: map[string]schema.Attribute{
+			"status_locator": schema.StringAttribute{
 				Description:         "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the gjson syntax.",
 				MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).",
 				Required:            true,
-				Type:                types.StringType,
-				Validators: []tfsdk.AttributeValidator{
-					validator.StringIsParsable("locator", func(s string) error {
+				Validators: []validator.String{
+					myvalidator.StringIsParsable("locator", func(s string) error {
 						_, err := parseLocator(s)
 						return err
 					}),
 				},
 			},
-			"status": {
+			"status": schema.SingleNestedAttribute{
 				Description:         "The expected status sentinels for each polling state.",
 				MarkdownDescription: "The expected status sentinels for each polling state.",
 				Required:            true,
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"success": {
+				Attributes: map[string]schema.Attribute{
+					"success": schema.StringAttribute{
 						Description:         "The expected status sentinel for suceess status.",
 						MarkdownDescription: "The expected status sentinel for suceess status.",
 						Required:            true,
-						Type:                types.StringType,
 					},
-					"pending": {
+					"pending": schema.ListAttribute{
 						Description:         "The expected status sentinels for pending status.",
 						MarkdownDescription: "The expected status sentinels for pending status.",
 						Optional:            true,
-						Type:                types.ListType{ElemType: types.StringType},
+						ElementType:         types.StringType,
 					},
-				}),
+				},
 			},
-			"path": {
+			"path": schema.StringAttribute{
 				Description:         pathDesc,
 				MarkdownDescription: pathDesc,
-				Type:                types.StringType,
 				Required:            pathIsRequired,
 				Optional:            !pathIsRequired,
 			},
-			"query": {
+			"query": schema.MapAttribute{
 				Description:         "The query parameters. This overrides the `query` set in the resource block.",
 				MarkdownDescription: "The query parameters. This overrides the `query` set in the resource block.",
-				Type:                types.MapType{ElemType: types.ListType{ElemType: types.StringType}},
+				ElementType:         types.ListType{ElemType: types.StringType},
 				Optional:            true,
 			},
-			"header": {
+			"header": schema.MapAttribute{
 				Description:         "The header parameters. This overrides the `header` set in the resource block.",
 				MarkdownDescription: "The header parameters. This overrides the `header` set in the resource block.",
-				Type:                types.MapType{ElemType: types.StringType},
+				ElementType:         types.StringType,
 				Optional:            true,
 			},
-			"default_delay_sec": {
+			"default_delay_sec": schema.Int64Attribute{
 				Description:         "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
 				MarkdownDescription: "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
 				Optional:            true,
 				Computed:            true,
-				Type:                types.Int64Type,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					planmodifier.DefaultAttribute(types.Int64Value(10)),
+				PlanModifiers: []planmodifier.Int64{
+					myplanmodifier.DefaultAttribute(types.Int64Value(10)),
 				},
 			},
-		}),
+		},
 	}
 }
 
-func pollAttribute(s string) tfsdk.Attribute {
-	return tfsdk.Attribute{
+func pollAttribute(s string) schema.Attribute {
+	return schema.SingleNestedAttribute{
 		Description:         fmt.Sprintf("The polling option for the %q operation", s),
 		MarkdownDescription: fmt.Sprintf("The polling option for the %q operation", s),
 		Optional:            true,
-		Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-			"status_locator": {
+		Attributes: map[string]schema.Attribute{
+			"status_locator": schema.StringAttribute{
 				Description:         "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the gjson syntax.",
 				MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).",
 				Required:            true,
-				Type:                types.StringType,
-				Validators: []tfsdk.AttributeValidator{
-					validator.StringIsParsable("locator", func(s string) error {
+				Validators: []validator.String{
+					myvalidator.StringIsParsable("locator", func(s string) error {
 						_, err := parseLocator(s)
 						return err
 					}),
 				},
 			},
-			"status": {
+			"status": schema.SingleNestedAttribute{
 				Description:         "The expected status sentinels for each polling state.",
 				MarkdownDescription: "The expected status sentinels for each polling state.",
 				Required:            true,
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"success": {
+				Attributes: map[string]schema.Attribute{
+					"success": schema.StringAttribute{
 						Description:         "The expected status sentinel for suceess status.",
 						MarkdownDescription: "The expected status sentinel for suceess status.",
 						Required:            true,
-						Type:                types.StringType,
 					},
-					"pending": {
+					"pending": schema.ListAttribute{
 						Description:         "The expected status sentinels for pending status.",
 						MarkdownDescription: "The expected status sentinels for pending status.",
 						Optional:            true,
-						Type:                types.ListType{ElemType: types.StringType},
+						ElementType:         types.StringType,
 					},
-				}),
+				},
 			},
-			"url_locator": {
+			"url_locator": schema.StringAttribute{
 				Description:         "Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the resource's path is used for polling.",
 				MarkdownDescription: "Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the resource's path is used for polling.",
 				Optional:            true,
-				Type:                types.StringType,
-				Validators: []tfsdk.AttributeValidator{
-					validator.StringIsParsable("locator", func(s string) error {
+				Validators: []validator.String{
+					myvalidator.StringIsParsable("locator", func(s string) error {
 						_, err := parseLocator(s)
 						return err
 					}),
 				},
 			},
-			"header": {
+			"header": schema.MapAttribute{
 				Description:         "The header parameters. This overrides the `header` set in the resource block.",
 				MarkdownDescription: "The header parameters. This overrides the `header` set in the resource block.",
-				Type:                types.MapType{ElemType: types.StringType},
+				ElementType:         types.StringType,
 				Optional:            true,
 			},
-			"default_delay_sec": {
+			"default_delay_sec": schema.Int64Attribute{
 				Description:         "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
 				MarkdownDescription: "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
 				Optional:            true,
 				Computed:            true,
-				Type:                types.Int64Type,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					planmodifier.DefaultAttribute(types.Int64Value(10)),
+				PlanModifiers: []planmodifier.Int64{
+					myplanmodifier.DefaultAttribute(types.Int64Value(10)),
 				},
 			},
-		}),
+		},
 	}
 }
 
-func (r *Resource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
+func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	const pathDescription = "The path can be string literal, or combined by followings: `$(path)` expanded to `path`, `$(body.x.y.z)` expands to the `x.y.z` property in API body, `#(body.id)` expands to the `id` property, with `base_url` prefix trimmed."
-	return tfsdk.Schema{
+	resp.Schema = schema.Schema{
 		Description:         "`restful_resource` manages a restful resource.",
 		MarkdownDescription: "`restful_resource` manages a restful resource.",
-		Attributes: map[string]tfsdk.Attribute{
-			"id": {
+		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
 				Description:         "The ID of the Resource.",
 				MarkdownDescription: "The ID of the Resource.",
-				Type:                types.StringType,
 				Computed:            true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					resource.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"path": {
+			"path": schema.StringAttribute{
 				Description:         "The path used to create the resource, relative to the `base_url` of the provider.",
 				MarkdownDescription: "The path used to create the resource, relative to the `base_url` of the provider.",
-				Type:                types.StringType,
 				Required:            true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					resource.RequiresReplace(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"read_path": {
+			"read_path": schema.StringAttribute{
 				Description:         "The API path used to read the resource, which is used as the `id`. The `path` is used as the `id` instead if `read_path` is absent. " + pathDescription,
 				MarkdownDescription: "The API path used to read the resource, which is used as the `id`. The `path` is used as the `id` instead if `read_path` is absent. " + pathDescription,
 				Optional:            true,
-				Type:                types.StringType,
 			},
-			"update_path": {
+			"update_path": schema.StringAttribute{
 				Description:         "The API path used to update the resource. The `id` is used instead if `update_path` is absent. " + pathDescription,
 				MarkdownDescription: "The API path used to update the resource. The `id` is used instead if `update_path` is absent. " + pathDescription,
 				Optional:            true,
-				Type:                types.StringType,
 			},
-			"delete_path": {
+			"delete_path": schema.StringAttribute{
 				Description:         "The API path used to delete the resource. The `id` is used instead if `delete_path` is absent. " + pathDescription,
 				MarkdownDescription: "The API path used to delete the resource. The `id` is used instead if `delete_path` is absent. " + pathDescription,
 				Optional:            true,
-				Type:                types.StringType,
 			},
 
-			"body": {
+			"body": schema.StringAttribute{
 				Description:         "The properties of the resource.",
 				MarkdownDescription: "The properties of the resource.",
-				Type:                types.StringType,
 				Required:            true,
-				Validators: []tfsdk.AttributeValidator{
-					validator.StringIsJSON(),
+				Validators: []validator.String{
+					myvalidator.StringIsJSON(),
 				},
 			},
 
@@ -294,65 +279,60 @@ func (r *Resource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics)
 			"precheck_update": precheckAttribute("Update", false, "By default, the `id` of this resource is used."),
 			"precheck_delete": precheckAttribute("Delete", false, "By default, the `id` of this resource is used."),
 
-			"write_only_attrs": {
+			"write_only_attrs": schema.ListAttribute{
 				Description:         "A list of paths (in gjson syntax) to the attributes that are only settable, but won't be read in GET response.",
 				MarkdownDescription: "A list of paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attributes that are only settable, but won't be read in GET response.",
 				Optional:            true,
-				Type:                types.ListType{ElemType: types.StringType},
+				ElementType:         types.StringType,
 			},
-			"create_method": {
+			"create_method": schema.StringAttribute{
 				Description:         "The method used to create the resource. Possible values are `PUT` and `POST`. This overrides the `create_method` set in the provider block (defaults to POST).",
 				MarkdownDescription: "The method used to create the resource. Possible values are `PUT` and `POST`. This overrides the `create_method` set in the provider block (defaults to POST).",
-				Type:                types.StringType,
 				Optional:            true,
-				Validators: []tfsdk.AttributeValidator{
+				Validators: []validator.String{
 					stringvalidator.OneOf("PUT", "POST"),
 				},
 			},
-			"update_method": {
+			"update_method": schema.StringAttribute{
 				Description:         "The method used to update the resource. Possible values are `PUT` and `PATCH`. This overrides the `update_method` set in the provider block (defaults to PUT).",
 				MarkdownDescription: "The method used to update the resource. Possible values are `PUT` and `PATCH`. This overrides the `update_method` set in the provider block (defaults to PUT).",
-				Type:                types.StringType,
 				Optional:            true,
-				Validators: []tfsdk.AttributeValidator{
+				Validators: []validator.String{
 					stringvalidator.OneOf("PUT", "PATCH"),
 				},
 			},
-			"delete_method": {
+			"delete_method": schema.StringAttribute{
 				Description:         "The method used to delete the resource. Possible values are `DELETE` and `POST`. This overrides the `delete_method` set in the provider block (defaults to DELETE).",
 				MarkdownDescription: "The method used to delete the resource. Possible values are `DELETE` and `POST`. This overrides the `delete_method` set in the provider block (defaults to DELETE).",
-				Type:                types.StringType,
 				Optional:            true,
-				Validators: []tfsdk.AttributeValidator{
+				Validators: []validator.String{
 					stringvalidator.OneOf("DELETE", "POST"),
 				},
 			},
-			"merge_patch_disabled": {
+			"merge_patch_disabled": schema.BoolAttribute{
 				Description:         "Whether to use a JSON Merge Patch as the request body in the PATCH update? This is only effective when `update_method` is set to `PATCH`. This overrides the `merge_patch_disabled` set in the provider block (defaults to `false`).",
 				MarkdownDescription: "Whether to use a JSON Merge Patch as the request body in the PATCH update? This is only effective when `update_method` is set to `PATCH`. This overrides the `merge_patch_disabled` set in the provider block (defaults to `false`).",
-				Type:                types.BoolType,
 				Optional:            true,
 			},
-			"query": {
+			"query": schema.MapAttribute{
 				Description:         "The query parameters that are applied to each request. This overrides the `query` set in the provider block.",
 				MarkdownDescription: "The query parameters that are applied to each request. This overrides the `query` set in the provider block.",
-				Type:                types.MapType{ElemType: types.ListType{ElemType: types.StringType}},
+				ElementType:         types.ListType{ElemType: types.StringType},
 				Optional:            true,
 			},
-			"header": {
+			"header": schema.MapAttribute{
 				Description:         "The header parameters that are applied to each request. This overrides the `header` set in the provider block.",
 				MarkdownDescription: "The header parameters that are applied to each request. This overrides the `header` set in the provider block.",
-				Type:                types.MapType{ElemType: types.StringType},
+				ElementType:         types.StringType,
 				Optional:            true,
 			},
-			"output": {
+			"output": schema.StringAttribute{
 				Description:         "The response body after reading the resource.",
 				MarkdownDescription: "The response body after reading the resource.",
-				Type:                types.StringType,
 				Computed:            true,
 			},
 		},
-	}, nil
+	}
 }
 
 func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {

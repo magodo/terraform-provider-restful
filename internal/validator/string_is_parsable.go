@@ -4,8 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
-	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
 type ParseFunc func(string) error
@@ -23,13 +22,8 @@ func (v stringIsParsable) MarkdownDescription(ctx context.Context) string {
 	return v.desc
 }
 
-func (v stringIsParsable) Validate(ctx context.Context, req tfsdk.ValidateAttributeRequest, resp *tfsdk.ValidateAttributeResponse) {
-	var str types.String
-	diags := tfsdk.ValueAs(ctx, req.AttributeConfig, &str)
-	resp.Diagnostics.Append(diags...)
-	if diags.HasError() {
-		return
-	}
+func (v stringIsParsable) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	str := req.ConfigValue
 
 	if str.IsUnknown() || str.IsNull() {
 		return
@@ -37,7 +31,7 @@ func (v stringIsParsable) Validate(ctx context.Context, req tfsdk.ValidateAttrib
 
 	if err := v.parse(str.ValueString()); err != nil {
 		resp.Diagnostics.AddAttributeError(
-			req.AttributePath,
+			req.Path,
 			"Invalid String",
 			fmt.Sprintf("String can't be parsed: %v", err),
 		)

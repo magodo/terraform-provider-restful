@@ -8,10 +8,14 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/magodo/terraform-provider-restful/internal/client"
-	"github.com/magodo/terraform-provider-restful/internal/validator"
+	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
 )
 
 type OperationResource struct {
@@ -36,72 +40,67 @@ func (r *OperationResource) Metadata(ctx context.Context, req resource.MetadataR
 	resp.TypeName = req.ProviderTypeName + "_operation"
 }
 
-func (r *OperationResource) GetSchema(_ context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
+func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
 		Description:         "`restful_operation` represents a one-time API call operation.",
 		MarkdownDescription: "`restful_operation` represents a one-time API call operation.",
-		Attributes: map[string]tfsdk.Attribute{
-			"id": {
+		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
 				Description:         "The ID of the operation. Same as the `path`.",
 				MarkdownDescription: "The ID of the operation. Same as the `path`.",
-				Type:                types.StringType,
 				Computed:            true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					resource.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"path": {
+			"path": schema.StringAttribute{
 				Description:         "The path of the API call, relative to the `base_url` of the provider.",
 				MarkdownDescription: "The path of the API call, relative to the `base_url` of the provider.",
-				Type:                types.StringType,
 				Required:            true,
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					resource.RequiresReplace(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"method": {
+			"method": schema.StringAttribute{
 				Description:         "The HTTP method of the API call. Possible values are `PUT`, `POST`, `PATCH` and `DELETE`.",
 				MarkdownDescription: "The HTTP method of the API call. Possible values are `PUT`, `POST`, `PATCH` and `DELETE`.",
-				Type:                types.StringType,
 				Required:            true,
-				Validators: []tfsdk.AttributeValidator{
+				Validators: []validator.String{
 					stringvalidator.OneOf("PUT", "POST", "PATCH", "DELETE"),
 				},
-				PlanModifiers: []tfsdk.AttributePlanModifier{
-					resource.RequiresReplace(),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"body": {
+			"body": schema.StringAttribute{
 				Description:         "The payload of the API call.",
 				MarkdownDescription: "The payload of the API call.",
-				Type:                types.StringType,
 				Optional:            true,
-				Validators: []tfsdk.AttributeValidator{
-					validator.StringIsJSON(),
+				Validators: []validator.String{
+					myvalidator.StringIsJSON(),
 				},
 			},
-			"query": {
+			"query": schema.MapAttribute{
 				Description:         "The query parameters that are applied to each request. This overrides the `query` set in the provider block.",
 				MarkdownDescription: "The query parameters that are applied to each request. This overrides the `query` set in the provider block.",
-				Type:                types.MapType{ElemType: types.ListType{ElemType: types.StringType}},
+				ElementType:         types.ListType{ElemType: types.StringType},
 				Optional:            true,
 			},
-			"header": {
+			"header": schema.MapAttribute{
 				Description:         "The header parameters that are applied to each request. This overrides the `header` set in the provider block.",
 				MarkdownDescription: "The header parameters that are applied to each request. This overrides the `header` set in the provider block.",
-				Type:                types.MapType{ElemType: types.StringType},
+				ElementType:         types.StringType,
 				Optional:            true,
 			},
 			"precheck": precheckAttribute("API", false, "By default, the `path` of this resource is used."),
 			"poll":     pollAttribute("API"),
-			"output": {
+			"output": schema.StringAttribute{
 				Description:         "The response body.",
 				MarkdownDescription: "The response body.",
-				Type:                types.StringType,
 				Computed:            true,
 			},
 		},
-	}, nil
+	}
 }
 
 func (r *OperationResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
