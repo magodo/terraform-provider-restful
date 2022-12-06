@@ -79,16 +79,16 @@ func New(ctx context.Context, baseURL string, opt *BuildOption) (*Client, error)
 	}
 
 	client := resty.New()
-	if !opt.CookieEnabled {
-		client.SetCookieJar(nil)
-	}
-
 	if opt.Security != nil {
 		var err error
 		client, err = opt.Security.newClient(ctx)
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	if !opt.CookieEnabled {
+		client.SetCookieJar(nil)
 	}
 
 	if _, err := url.Parse(baseURL); err != nil {
