@@ -38,6 +38,7 @@ type providerData struct {
 	MergePatchDisabled *bool               `tfsdk:"merge_patch_disabled"`
 	Query              map[string][]string `tfsdk:"query"`
 	Header             map[string]string   `tfsdk:"header"`
+	CookieEnabled      *bool               `tfsdk:"cookie_enabled"`
 }
 
 type securityData struct {
@@ -472,6 +473,11 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 				ElementType:         types.StringType,
 				Optional:            true,
 			},
+			"cookie_enabled": schema.BoolAttribute{
+				Description:         "Save cookies during API contracting. Defaults to `false`.",
+				MarkdownDescription: "Save cookies during API contracting. Defaults to `false`.",
+				Optional:            true,
+			},
 		},
 	}
 }
@@ -484,7 +490,12 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 		return
 	}
 
-	clientOpt := client.BuildOption{}
+	clientOpt := client.BuildOption{
+		CookieEnabled: false,
+	}
+	if config.CookieEnabled != nil {
+		clientOpt.CookieEnabled = *config.CookieEnabled
+	}
 	if sec := config.Security; sec != nil {
 		switch {
 		case sec.HTTP != nil:

@@ -11,7 +11,8 @@ import (
 )
 
 type BuildOption struct {
-	Security securityOption
+	Security      securityOption
+	CookieEnabled bool
 }
 
 type securityOption interface {

@@ -87,6 +87,10 @@ func New(ctx context.Context, baseURL string, opt *BuildOption) (*Client, error)
 		}
 	}
 
+	if !opt.CookieEnabled {
+		client.SetCookieJar(nil)
+	}
+
 	if _, err := url.Parse(baseURL); err != nil {
 		return nil, err
 	}
