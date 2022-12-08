@@ -30,80 +30,80 @@ type Provider struct {
 }
 
 type providerData struct {
-	BaseURL            string              `tfsdk:"base_url"`
-	Security           *securityData       `tfsdk:"security"`
-	CreateMethod       *string             `tfsdk:"create_method"`
-	UpdateMethod       *string             `tfsdk:"update_method"`
-	DeleteMethod       *string             `tfsdk:"delete_method"`
-	MergePatchDisabled *bool               `tfsdk:"merge_patch_disabled"`
-	Query              map[string][]string `tfsdk:"query"`
-	Header             map[string]string   `tfsdk:"header"`
-	CookieEnabled      *bool               `tfsdk:"cookie_enabled"`
+	BaseURL            types.String `tfsdk:"base_url"`
+	Security           types.Object `tfsdk:"security"`
+	CreateMethod       types.String `tfsdk:"create_method"`
+	UpdateMethod       types.String `tfsdk:"update_method"`
+	DeleteMethod       types.String `tfsdk:"delete_method"`
+	MergePatchDisabled types.Bool   `tfsdk:"merge_patch_disabled"`
+	Query              types.Map    `tfsdk:"query"`
+	Header             types.Map    `tfsdk:"header"`
+	CookieEnabled      types.Bool   `tfsdk:"cookie_enabled"`
 }
 
 type securityData struct {
-	HTTP   *httpData    `tfsdk:"http"`
-	OAuth2 *oauth2Data  `tfsdk:"oauth2"`
-	APIKey []apikeyData `tfsdk:"apikey"`
+	HTTP   types.Object `tfsdk:"http"`
+	OAuth2 types.Object `tfsdk:"oauth2"`
+	APIKey types.Set    `tfsdk:"apikey"`
 }
 
 type httpData struct {
-	Basic *httpBasicData `tfsdk:"basic"`
-	Token *httpTokenData `tfsdk:"token"`
+	Basic types.Object `tfsdk:"basic"`
+	Token types.Object `tfsdk:"token"`
 }
 
 type httpBasicData struct {
-	Username *string `tfsdk:"username"`
-	Password *string `tfsdk:"password"`
+	Username types.String `tfsdk:"username"`
+	Password types.String `tfsdk:"password"`
 }
 
 type httpTokenData struct {
-	Token  *string `tfsdk:"token"`
-	Scheme *string `tfsdk:"scheme"`
+	Token  types.String `tfsdk:"token"`
+	Scheme types.String `tfsdk:"scheme"`
 }
 
 type apikeyData struct {
-	Name  string `tfsdk:"name"`
-	In    string `tfsdk:"in"`
-	Value string `tfsdk:"value"`
+	Name  types.String `tfsdk:"name"`
+	In    types.String `tfsdk:"in"`
+	Value types.String `tfsdk:"value"`
 }
 
 type oauth2Data struct {
-	Password          *oauth2PasswordData          `tfsdk:"password"`
-	ClientCredentials *oauth2ClientCredentialsData `tfsdk:"client_credentials"`
-	RefreshToken      *oauth2RefreshTokenData      `tfsdk:"refresh_token"`
+	Password          types.Object `tfsdk:"password"`
+	ClientCredentials types.Object `tfsdk:"client_credentials"`
+	RefreshToken      types.Object `tfsdk:"refresh_token"`
 }
 
 type oauth2PasswordData struct {
-	TokenUrl string `tfsdk:"token_url"`
-	Username string `tfsdk:"username"`
-	Password string `tfsdk:"password"`
+	TokenUrl types.String `tfsdk:"token_url"`
+	Username types.String `tfsdk:"username"`
+	Password types.String `tfsdk:"password"`
 
-	ClientID     *string  `tfsdk:"client_id"`
-	ClientSecret *string  `tfsdk:"client_secret"`
-	Scopes       []string `tfsdk:"scopes"`
-	In           *string  `tfsdk:"in"`
+	ClientID     types.String `tfsdk:"client_id"`
+	ClientSecret types.String `tfsdk:"client_secret"`
+	Scopes       types.List   `tfsdk:"scopes"`
+	In           types.String `tfsdk:"in"`
 }
 
 type oauth2ClientCredentialsData struct {
-	TokenUrl     string `tfsdk:"token_url"`
-	ClientID     string `tfsdk:"client_id"`
-	ClientSecret string `tfsdk:"client_secret"`
+	TokenUrl     types.String `tfsdk:"token_url"`
+	ClientID     types.String `tfsdk:"client_id"`
+	ClientSecret types.String `tfsdk:"client_secret"`
 
-	EndpointParams map[string][]string `tfsdk:"endpoint_params"`
-	Scopes         []string            `tfsdk:"scopes"`
-	In             *string             `tfsdk:"in"`
+	EndpointParams types.Map    `tfsdk:"endpoint_params"`
+	Scopes         types.List   `tfsdk:"scopes"`
+	In             types.String `tfsdk:"in"`
 }
 
 type oauth2RefreshTokenData struct {
-	TokenUrl     string `tfsdk:"token_url"`
-	RefreshToken string `tfsdk:"refresh_token"`
+	TokenUrl     types.String `tfsdk:"token_url"`
+	RefreshToken types.String `tfsdk:"refresh_token"`
 
-	ClientID     *string  `tfsdk:"client_id"`
-	ClientSecret *string  `tfsdk:"client_secret"`
-	Scopes       []string `tfsdk:"scopes"`
-	In           *string  `tfsdk:"in"`
-	TokenType    *string  `tfsdk:"token_type"`
+	ClientID     types.String `tfsdk:"client_id"`
+	ClientSecret types.String `tfsdk:"client_secret"`
+	Scopes       types.List   `tfsdk:"scopes"`
+	In           types.String `tfsdk:"in"`
+	TokenType    types.String `tfsdk:"token_type"`
 }
 
 func New() provider.Provider {
@@ -408,8 +408,8 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 										Validators: []validator.String{stringvalidator.OneOf(string(client.OAuth2AuthStyleInParams), string(client.OAuth2AuthStyleInHeader))},
 									},
 									"token_type": schema.StringAttribute{
-										Description:         `The type of the access token.`,
-										MarkdownDescription: `The type of the access token.`,
+										Description:         `The type of the access token. Defaults to "Bearer".`,
+										MarkdownDescription: `The type of the access token. Defaults to "Bearer".`,
 										Optional:            true,
 									},
 								},
@@ -490,99 +490,175 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 		return
 	}
 
+	// Unknowness check. Though terraform provider framework allows deferring the provider configurations (e.g. client setup) at
+	// resource/data source operation time, as is described in: https://github.com/hashicorp/terraform-plugin-framework/issues/227.
+	// We are not going to support that at this moment. Hence, return error if any attribute in the config is unknown at this moment.
+	if !req.Config.Raw.IsFullyKnown() {
+		resp.Diagnostics.AddError("Failed to configure provider", "provider config is not fully known")
+	}
+
 	clientOpt := client.BuildOption{
 		CookieEnabled: false,
 	}
-	if config.CookieEnabled != nil {
-		clientOpt.CookieEnabled = *config.CookieEnabled
+	if !config.CookieEnabled.IsNull() {
+		clientOpt.CookieEnabled = config.CookieEnabled.ValueBool()
 	}
-	if sec := config.Security; sec != nil {
+	if secRaw := config.Security; !secRaw.IsNull() {
+		var sec securityData
+		if diags := secRaw.As(ctx, &sec, types.ObjectAsOptions{}); diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
 		switch {
-		case sec.HTTP != nil:
+		case !sec.HTTP.IsNull():
+			var http httpData
+			if diags := sec.HTTP.As(ctx, &http, types.ObjectAsOptions{}); diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			}
 			switch {
-			case sec.HTTP.Basic != nil:
+			case !http.Basic.IsNull():
+				var basic httpBasicData
+				if diags := http.Basic.As(ctx, &basic, types.ObjectAsOptions{}); diags.HasError() {
+					resp.Diagnostics.Append(diags...)
+					return
+				}
 				opt := client.HTTPBasicOption{
-					Username: *sec.HTTP.Basic.Username,
-					Password: *sec.HTTP.Basic.Password,
+					Username: basic.Username.ValueString(),
+					Password: basic.Password.ValueString(),
 				}
 				clientOpt.Security = opt
-			case sec.HTTP.Token != nil:
-				opt := client.HTTPTokenOption{
-					Token: *sec.HTTP.Token.Token,
+			case !http.Token.IsNull():
+				var token httpTokenData
+				if diags := http.Token.As(ctx, &token, types.ObjectAsOptions{}); diags.HasError() {
+					resp.Diagnostics.Append(diags...)
+					return
 				}
-				if scheme := sec.HTTP.Token.Scheme; scheme != nil {
-					opt.Scheme = *scheme
+				opt := client.HTTPTokenOption{
+					Token:  token.Token.ValueString(),
+					Scheme: token.Scheme.ValueString(),
 				}
 				clientOpt.Security = opt
 			default:
 				panic("`security.http` unhandled, this implies error in the provider schema definition")
 			}
-		case sec.APIKey != nil:
+		case !sec.APIKey.IsNull():
 			opt := client.APIKeyAuthOption{}
-			for _, apikey := range sec.APIKey {
+			for _, apikeyRaw := range sec.APIKey.Elements() {
+				apikeyObj := apikeyRaw.(types.Object)
+				if apikeyObj.IsNull() {
+					continue
+				}
+				var apikey apikeyData
+				if diags := apikeyObj.As(ctx, &apikey, types.ObjectAsOptions{}); diags.HasError() {
+					resp.Diagnostics.Append(diags...)
+					return
+				}
 				opt = append(opt, client.APIKeyAuthOpt{
-					Name:  apikey.Name,
-					In:    client.APIKeyAuthIn(apikey.In),
-					Value: apikey.Value,
+					Name:  apikey.Name.ValueString(),
+					In:    client.APIKeyAuthIn(apikey.In.ValueString()),
+					Value: apikey.Value.ValueString(),
 				})
 			}
 			clientOpt.Security = opt
-		case sec.OAuth2 != nil:
+		case !sec.OAuth2.IsNull():
+			var oauth2 oauth2Data
+			if diags := sec.OAuth2.As(ctx, &oauth2, types.ObjectAsOptions{}); diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			}
 			switch {
-			case sec.OAuth2.Password != nil:
+			case !oauth2.Password.IsNull():
+				var password oauth2PasswordData
+				if diags := oauth2.Password.As(ctx, &oauth2, types.ObjectAsOptions{}); diags.HasError() {
+					resp.Diagnostics.Append(diags...)
+					return
+				}
 				opt := client.OAuth2PasswordOption{
-					TokenURL: sec.OAuth2.Password.TokenUrl,
-					Username: sec.OAuth2.Password.Username,
-					Password: sec.OAuth2.Password.Password,
+					TokenURL:     password.TokenUrl.ValueString(),
+					Username:     password.Username.ValueString(),
+					Password:     password.Password.ValueString(),
+					ClientId:     password.ClientID.ValueString(),
+					ClientSecret: password.ClientSecret.ValueString(),
+					AuthStyle:    client.OAuth2AuthStyle(password.In.ValueString()),
 				}
-				if v := sec.OAuth2.Password.ClientID; v != nil {
-					opt.ClientId = *v
-				}
-				if v := sec.OAuth2.Password.ClientSecret; v != nil {
-					opt.ClientSecret = *v
-				}
-				if v := sec.OAuth2.Password.In; v != nil {
-					opt.AuthStyle = client.OAuth2AuthStyle(*v)
-				}
-				if v := sec.OAuth2.Password.Scopes; len(v) != 0 {
-					opt.Scopes = v
+				if !password.Scopes.IsNull() {
+					var scopes []string
+					for _, scope := range password.Scopes.Elements() {
+						scope := scope.(types.String)
+						if scope.IsNull() {
+							continue
+						}
+						scopes = append(scopes, scope.ValueString())
+					}
+					opt.Scopes = scopes
 				}
 				clientOpt.Security = opt
-			case sec.OAuth2.ClientCredentials != nil:
+			case !oauth2.ClientCredentials.IsNull():
+				var cc oauth2ClientCredentialsData
+				if diags := oauth2.ClientCredentials.As(ctx, &cc, types.ObjectAsOptions{}); diags.HasError() {
+					resp.Diagnostics.Append(diags...)
+					return
+				}
 				opt := client.OAuth2ClientCredentialOption{
-					TokenURL:     sec.OAuth2.ClientCredentials.TokenUrl,
-					ClientId:     sec.OAuth2.ClientCredentials.ClientID,
-					ClientSecret: sec.OAuth2.ClientCredentials.ClientSecret,
+					TokenURL:     cc.TokenUrl.ValueString(),
+					ClientId:     cc.ClientID.ValueString(),
+					ClientSecret: cc.ClientSecret.ValueString(),
+					AuthStyle:    client.OAuth2AuthStyle(cc.In.ValueString()),
 				}
-				if v := sec.OAuth2.ClientCredentials.Scopes; len(v) != 0 {
-					opt.Scopes = v
+				if !cc.Scopes.IsNull() {
+					var scopes []string
+					for _, scope := range cc.Scopes.Elements() {
+						scope := scope.(types.String)
+						if scope.IsNull() {
+							continue
+						}
+						scopes = append(scopes, scope.ValueString())
+					}
+					opt.Scopes = scopes
 				}
-				if v := sec.OAuth2.ClientCredentials.EndpointParams; len(v) != 0 {
-					opt.EndpointParams = v
-				}
-				if v := sec.OAuth2.ClientCredentials.In; v != nil {
-					opt.AuthStyle = client.OAuth2AuthStyle(*v)
+				if !cc.EndpointParams.IsNull() {
+					endpointParams := map[string][]string{}
+					for k, values := range cc.EndpointParams.Elements() {
+						var vs []string
+						values := values.(types.List)
+						for _, value := range values.Elements() {
+							value := value.(types.String)
+							if value.IsNull() {
+								continue
+							}
+							vs = append(vs, value.ValueString())
+						}
+						endpointParams[k] = vs
+					}
+					opt.EndpointParams = endpointParams
 				}
 				clientOpt.Security = opt
-			case sec.OAuth2.RefreshToken != nil:
+			case !oauth2.RefreshToken.IsNull():
+				var refreshToken oauth2RefreshTokenData
+				if diags := oauth2.RefreshToken.As(ctx, &refreshToken, types.ObjectAsOptions{}); diags.HasError() {
+					resp.Diagnostics.Append(diags...)
+					return
+				}
+
 				opt := client.OAuth2RefreshTokenOption{
-					TokenURL:     sec.OAuth2.RefreshToken.TokenUrl,
-					RefreshToken: sec.OAuth2.RefreshToken.RefreshToken,
+					TokenURL:     refreshToken.TokenUrl.ValueString(),
+					RefreshToken: refreshToken.RefreshToken.ValueString(),
+					ClientId:     refreshToken.ClientID.ValueString(),
+					ClientSecret: refreshToken.ClientSecret.ValueString(),
+					AuthStyle:    client.OAuth2AuthStyle(refreshToken.In.ValueString()),
+					TokenType:    refreshToken.TokenType.ValueString(),
 				}
-				if v := sec.OAuth2.RefreshToken.ClientID; v != nil {
-					opt.ClientId = *v
-				}
-				if v := sec.OAuth2.RefreshToken.ClientSecret; v != nil {
-					opt.RefreshToken = *v
-				}
-				if v := sec.OAuth2.RefreshToken.In; v != nil {
-					opt.AuthStyle = client.OAuth2AuthStyle(*v)
-				}
-				if v := sec.OAuth2.RefreshToken.TokenType; v != nil {
-					opt.TokenType = *v
-				}
-				if v := sec.OAuth2.RefreshToken.Scopes; len(v) != 0 {
-					opt.Scopes = v
+				if !refreshToken.Scopes.IsNull() {
+					var scopes []string
+					for _, scope := range refreshToken.Scopes.Elements() {
+						scope := scope.(types.String)
+						if scope.IsNull() {
+							continue
+						}
+						scopes = append(scopes, scope.ValueString())
+					}
+					opt.Scopes = scopes
 				}
 				clientOpt.Security = opt
 			default:
@@ -594,7 +670,7 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 	}
 
 	var err error
-	p.client, err = client.New(ctx, config.BaseURL, &clientOpt)
+	p.client, err = client.New(ctx, config.BaseURL.ValueString(), &clientOpt)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Failed to configure provider",
@@ -602,7 +678,7 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 		)
 	}
 
-	uRL, err := url.Parse(config.BaseURL)
+	uRL, err := url.Parse(config.BaseURL.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Failed to configure provider",
@@ -619,23 +695,44 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 		Query:              map[string][]string{},
 		Header:             map[string]string{},
 	}
-	if config.CreateMethod != nil {
-		p.apiOpt.CreateMethod = *config.CreateMethod
+	if !config.CreateMethod.IsNull() {
+		p.apiOpt.CreateMethod = config.CreateMethod.ValueString()
 	}
-	if config.UpdateMethod != nil {
-		p.apiOpt.UpdateMethod = *config.UpdateMethod
+	if !config.UpdateMethod.IsNull() {
+		p.apiOpt.UpdateMethod = config.UpdateMethod.ValueString()
 	}
-	if config.DeleteMethod != nil {
-		p.apiOpt.DeleteMethod = *config.DeleteMethod
+	if !config.DeleteMethod.IsNull() {
+		p.apiOpt.DeleteMethod = config.DeleteMethod.ValueString()
 	}
-	if config.MergePatchDisabled != nil {
-		p.apiOpt.MergePatchDisabled = *config.MergePatchDisabled
+	if !config.MergePatchDisabled.IsNull() {
+		p.apiOpt.MergePatchDisabled = config.MergePatchDisabled.ValueBool()
 	}
-	if config.Query != nil {
-		p.apiOpt.Query = config.Query
+	if !config.Query.IsNull() {
+		queries := map[string][]string{}
+		for k, values := range config.Query.Elements() {
+			var vs []string
+			values := values.(types.List)
+			for _, value := range values.Elements() {
+				value := value.(types.String)
+				if value.IsNull() {
+					continue
+				}
+				vs = append(vs, value.ValueString())
+			}
+			queries[k] = vs
+		}
+		p.apiOpt.Query = queries
 	}
-	if config.Header != nil {
-		p.apiOpt.Header = config.Header
+	if !config.Header.IsNull() {
+		headers := map[string]string{}
+		for k, value := range config.Header.Elements() {
+			value := value.(types.String)
+			if value.IsNull() {
+				continue
+			}
+			headers[k] = value.ValueString()
+		}
+		p.apiOpt.Header = headers
 	}
 
 	resp.ResourceData = p
