@@ -67,7 +67,9 @@ func (d *DataSource) Schema(ctx context.Context, req datasource.SchemaRequest, r
 func (d *DataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
 	d.p = &Provider{}
 	if req.ProviderData != nil {
-		d.p = req.ProviderData.(*Provider)
+		p, diags := req.ProviderData.(providerData).ConfigureProvider(ctx)
+		resp.Diagnostics.Append(diags...)
+		d.p = p
 	}
 	return
 }

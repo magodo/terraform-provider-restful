@@ -363,7 +363,9 @@ func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConf
 func (r *Resource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	r.p = &Provider{}
 	if req.ProviderData != nil {
-		r.p = req.ProviderData.(*Provider)
+		p, diags := req.ProviderData.(providerData).ConfigureProvider(ctx)
+		resp.Diagnostics.Append(diags...)
+		r.p = p
 	}
 	return
 }

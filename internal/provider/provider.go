@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/objectvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
@@ -490,38 +491,33 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 		return
 	}
 
-	// Unknowness check. Though terraform provider framework allows deferring the provider configurations (e.g. client setup) at
-	// resource/data source operation time, as is described in: https://github.com/hashicorp/terraform-plugin-framework/issues/227.
-	// We are not going to support that at this moment. Hence, return error if any attribute in the config is unknown at this moment.
-	if !req.Config.Raw.IsFullyKnown() {
-		resp.Diagnostics.AddError("Failed to configure provider", "provider config is not fully known")
+	resp.ResourceData = config
+	resp.DataSourceData = config
+
+	return
+}
+
+func (config providerData) ConfigureProvider(ctx context.Context) (*Provider, diag.Diagnostics) {
+	clientOpt := client.BuildOption{
+		CookieEnabled: config.CookieEnabled.ValueBool(),
 	}
 
-	clientOpt := client.BuildOption{
-		CookieEnabled: false,
-	}
-	if !config.CookieEnabled.IsNull() {
-		clientOpt.CookieEnabled = config.CookieEnabled.ValueBool()
-	}
 	if secRaw := config.Security; !secRaw.IsNull() {
 		var sec securityData
 		if diags := secRaw.As(ctx, &sec, types.ObjectAsOptions{}); diags.HasError() {
-			resp.Diagnostics.Append(diags...)
-			return
+			return nil, diags
 		}
 		switch {
 		case !sec.HTTP.IsNull():
 			var http httpData
 			if diags := sec.HTTP.As(ctx, &http, types.ObjectAsOptions{}); diags.HasError() {
-				resp.Diagnostics.Append(diags...)
-				return
+				return nil, diags
 			}
 			switch {
 			case !http.Basic.IsNull():
 				var basic httpBasicData
 				if diags := http.Basic.As(ctx, &basic, types.ObjectAsOptions{}); diags.HasError() {
-					resp.Diagnostics.Append(diags...)
-					return
+					return nil, diags
 				}
 				opt := client.HTTPBasicOption{
 					Username: basic.Username.ValueString(),
@@ -531,16 +527,13 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 			case !http.Token.IsNull():
 				var token httpTokenData
 				if diags := http.Token.As(ctx, &token, types.ObjectAsOptions{}); diags.HasError() {
-					resp.Diagnostics.Append(diags...)
-					return
+					return nil, diags
 				}
 				opt := client.HTTPTokenOption{
 					Token:  token.Token.ValueString(),
 					Scheme: token.Scheme.ValueString(),
 				}
 				clientOpt.Security = opt
-			default:
-				panic("`security.http` unhandled, this implies error in the provider schema definition")
 			}
 		case !sec.APIKey.IsNull():
 			opt := client.APIKeyAuthOption{}
@@ -551,8 +544,7 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 				}
 				var apikey apikeyData
 				if diags := apikeyObj.As(ctx, &apikey, types.ObjectAsOptions{}); diags.HasError() {
-					resp.Diagnostics.Append(diags...)
-					return
+					return nil, diags
 				}
 				opt = append(opt, client.APIKeyAuthOpt{
 					Name:  apikey.Name.ValueString(),
@@ -564,15 +556,13 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 		case !sec.OAuth2.IsNull():
 			var oauth2 oauth2Data
 			if diags := sec.OAuth2.As(ctx, &oauth2, types.ObjectAsOptions{}); diags.HasError() {
-				resp.Diagnostics.Append(diags...)
-				return
+				return nil, diags
 			}
 			switch {
 			case !oauth2.Password.IsNull():
 				var password oauth2PasswordData
 				if diags := oauth2.Password.As(ctx, &oauth2, types.ObjectAsOptions{}); diags.HasError() {
-					resp.Diagnostics.Append(diags...)
-					return
+					return nil, diags
 				}
 				opt := client.OAuth2PasswordOption{
 					TokenURL:     password.TokenUrl.ValueString(),
@@ -597,8 +587,7 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 			case !oauth2.ClientCredentials.IsNull():
 				var cc oauth2ClientCredentialsData
 				if diags := oauth2.ClientCredentials.As(ctx, &cc, types.ObjectAsOptions{}); diags.HasError() {
-					resp.Diagnostics.Append(diags...)
-					return
+					return nil, diags
 				}
 				opt := client.OAuth2ClientCredentialOption{
 					TokenURL:     cc.TokenUrl.ValueString(),
@@ -637,8 +626,7 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 			case !oauth2.RefreshToken.IsNull():
 				var refreshToken oauth2RefreshTokenData
 				if diags := oauth2.RefreshToken.As(ctx, &refreshToken, types.ObjectAsOptions{}); diags.HasError() {
-					resp.Diagnostics.Append(diags...)
-					return
+					return nil, diags
 				}
 
 				opt := client.OAuth2RefreshTokenOption{
@@ -661,29 +649,31 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 					opt.Scopes = scopes
 				}
 				clientOpt.Security = opt
-			default:
-				panic("`security.oauth2` unhandled, this implies error in the provider schema definition")
 			}
-		default:
-			panic("`security` unhandled, this implies error in the provider schema definition")
 		}
 	}
 
-	var err error
+	var (
+		p    Provider
+		diag diag.Diagnostics
+		err  error
+	)
 	p.client, err = client.New(ctx, config.BaseURL.ValueString(), &clientOpt)
 	if err != nil {
-		resp.Diagnostics.AddError(
+		diag.AddError(
 			"Failed to configure provider",
 			fmt.Sprintf("Failed to new client: %v", err),
 		)
+		return nil, diag
 	}
 
 	uRL, err := url.Parse(config.BaseURL.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddError(
+		diag.AddError(
 			"Failed to configure provider",
 			fmt.Sprintf("Parsing the base url %q: %v", config.BaseURL, err),
 		)
+		return nil, diag
 	}
 
 	p.apiOpt = apiOption{
@@ -735,8 +725,5 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 		p.apiOpt.Header = headers
 	}
 
-	resp.ResourceData = p
-	resp.DataSourceData = p
-
-	return
+	return &p, nil
 }
