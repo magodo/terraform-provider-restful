@@ -62,6 +62,7 @@ type resourceData struct {
 	MergePatchDisabled types.Bool `tfsdk:"merge_patch_disabled"`
 	Query              types.Map  `tfsdk:"query"`
 	Header             types.Map  `tfsdk:"header"`
+	CheckExistance     types.Bool `tfsdk:"check_existance"`
 
 	Output types.String `tfsdk:"output"`
 }
@@ -352,6 +353,15 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				ElementType:         types.StringType,
 				Optional:            true,
 			},
+			"check_existance": schema.BoolAttribute{
+				Description:         "Whether to check resource already existed? Defaults to `false`.",
+				MarkdownDescription: "Whether to check resource already existed? Defaults to `false`.",
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.Bool{
+					myplanmodifier.DefaultAttribute(types.BoolValue(false)),
+				},
+			},
 			"output": schema.StringAttribute{
 				Description:         "The response body after reading the resource.",
 				MarkdownDescription: "The response body after reading the resource.",
@@ -412,9 +422,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 		return
 	}
 
-	// Existance check for resources whose create method is `PUT`, in which case the `path` is the same as its ID.
-	// It is not possible to query the resource prior creation for resources whose create method is `POST`, since the `path` in this case is not enough for a `GET`.
-	if opt.Method == "PUT" {
+	if plan.CheckExistance.ValueBool() {
 		opt, diags := r.p.apiOpt.ForResourceRead(ctx, plan)
 		resp.Diagnostics.Append(diags...)
 		if diags.HasError() {
