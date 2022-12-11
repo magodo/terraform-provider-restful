@@ -207,4 +207,4 @@ Optional:
 - `client_secret` (String, Sensitive) The application's secret.
 - `in` (String) Specifies how is th client ID & secret sent. Possible values are `params` and `header`. If absent, the style used will be auto detected.
 - `scopes` (List of String) The optional requested permissions.
-- `token_type` (String) The type of the access token.
+- `token_type` (String) The type of the access token. Defaults to "Bearer".

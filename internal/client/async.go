@@ -13,13 +13,13 @@ import (
 
 // ValueLocator indicates where a value is located in a HTTP response.
 type ValueLocator interface {
-	locateValueInResp(resty.Response) string
+	LocateValueInResp(resty.Response) string
 	String() string
 }
 
 type ExactLocator string
 
-func (loc ExactLocator) locateValueInResp(_ resty.Response) string {
+func (loc ExactLocator) LocateValueInResp(_ resty.Response) string {
 	return string(loc)
 }
 func (loc ExactLocator) String() string {
@@ -28,7 +28,7 @@ func (loc ExactLocator) String() string {
 
 type HeaderLocator string
 
-func (loc HeaderLocator) locateValueInResp(resp resty.Response) string {
+func (loc HeaderLocator) LocateValueInResp(resp resty.Response) string {
 	return resp.Header().Get(string(loc))
 }
 func (loc HeaderLocator) String() string {
@@ -37,7 +37,7 @@ func (loc HeaderLocator) String() string {
 
 type BodyLocator string
 
-func (loc BodyLocator) locateValueInResp(resp resty.Response) string {
+func (loc BodyLocator) LocateValueInResp(resp resty.Response) string {
 	result := gjson.GetBytes(resp.Body(), string(loc))
 	return result.String()
 }
@@ -47,7 +47,7 @@ func (loc BodyLocator) String() string {
 
 type CodeLocator struct{}
 
-func (loc CodeLocator) locateValueInResp(resp resty.Response) string {
+func (loc CodeLocator) LocateValueInResp(resp resty.Response) string {
 	return strconv.Itoa(resp.StatusCode())
 }
 func (loc CodeLocator) String() string {
@@ -101,7 +101,7 @@ func NewPollableFromResp(resp resty.Response, opt PollOption) (*Pollable, error)
 	}
 
 	if loc := opt.UrlLocator; loc != nil {
-		url := loc.locateValueInResp(resp)
+		url := loc.LocateValueInResp(resp)
 		if url == "" {
 			return nil, fmt.Errorf("No polling URL found in %s", loc)
 		}
@@ -161,7 +161,7 @@ PollingLoop:
 			return fmt.Errorf("polling %s: %v", f.URL, err)
 		}
 
-		status := f.StatusLocator.locateValueInResp(*resp)
+		status := f.StatusLocator.LocateValueInResp(*resp)
 		if status == "" {
 			return fmt.Errorf("No status value found from %s", f.StatusLocator)
 		}
