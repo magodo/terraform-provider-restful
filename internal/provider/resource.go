@@ -17,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/magodo/terraform-provider-restful/internal/buildpath"
 	"github.com/magodo/terraform-provider-restful/internal/client"
 	myplanmodifier "github.com/magodo/terraform-provider-restful/internal/planmodifier"
 	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
@@ -35,7 +36,10 @@ var _ resource.Resource = &Resource{}
 type resourceData struct {
 	ID types.String `tfsdk:"id"`
 
-	Path       types.String `tfsdk:"path"`
+	Path types.String `tfsdk:"path"`
+
+	ReadBodyLocator types.String `tfsdk:"read_body_locator"`
+
 	ReadPath   types.String `tfsdk:"read_path"`
 	UpdatePath types.String `tfsdk:"update_path"`
 	DeletePath types.String `tfsdk:"delete_path"`
@@ -246,20 +250,42 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
+
+			"read_body_locator": schema.StringAttribute{
+				Description:         "Specifies how to locate the resource body in the read response. The format is `body.path`, where the `path` is using the gjson syntax.",
+				MarkdownDescription: "Specifies how to locate the resource body in the read response. The format is `body.path`, where the `path` is using the gjson syntax[gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).",
+				Optional:            true,
+				Validators: []validator.String{
+					myvalidator.StringIsParsable("locator", func(s string) error {
+						_, err := parseLocator(s)
+						return err
+					}),
+				},
+			},
+
 			"read_path": schema.StringAttribute{
 				Description:         "The API path used to read the resource, which is used as the `id`. The `path` is used as the `id` instead if `read_path` is absent. " + pathDescription,
 				MarkdownDescription: "The API path used to read the resource, which is used as the `id`. The `path` is used as the `id` instead if `read_path` is absent. " + pathDescription,
 				Optional:            true,
+				Validators: []validator.String{
+					myvalidator.StringIsPathBuilder(),
+				},
 			},
 			"update_path": schema.StringAttribute{
 				Description:         "The API path used to update the resource. The `id` is used instead if `update_path` is absent. " + pathDescription,
 				MarkdownDescription: "The API path used to update the resource. The `id` is used instead if `update_path` is absent. " + pathDescription,
 				Optional:            true,
+				Validators: []validator.String{
+					myvalidator.StringIsPathBuilder(),
+				},
 			},
 			"delete_path": schema.StringAttribute{
 				Description:         "The API path used to delete the resource. The `id` is used instead if `delete_path` is absent. " + pathDescription,
 				MarkdownDescription: "The API path used to delete the resource. The `id` is used instead if `delete_path` is absent. " + pathDescription,
 				Optional:            true,
+				Validators: []validator.String{
+					myvalidator.StringIsPathBuilder(),
+				},
 			},
 
 			"body": schema.StringAttribute{
@@ -462,11 +488,11 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	// Construct the resource id, which is used as the path to read the resource later on. By default, it is the same as the "path", unless "read_path" is specified.
 	resourceId := plan.Path.ValueString()
 	if !plan.ReadPath.IsNull() {
-		resourceId, err = BuildPath(plan.ReadPath.ValueString(), r.p.apiOpt.BaseURL.String(), plan.Path.ValueString(), b)
+		resourceId, err = buildpath.BuildPath(plan.ReadPath.ValueString(), r.p.apiOpt.BaseURL.String(), plan.Path.ValueString(), b)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				fmt.Sprintf("Failed to build the path for reading the resource"),
-				fmt.Sprintf("Can't build resource id with `read_path`: %q, `path`: %q, `body`: %q", plan.ReadPath.ValueString(), plan.Path.ValueString(), string(b)),
+				fmt.Sprintf("Can't build resource id with `read_path`: %q, `path`: %q, `body`: %q: %v", plan.ReadPath.ValueString(), plan.Path.ValueString(), string(b), err),
 			)
 			return
 		}
@@ -570,6 +596,12 @@ func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *reso
 	}
 
 	b := response.Body()
+
+	if loc := state.ReadBodyLocator.ValueString(); loc != "" {
+		// Guaranteed by schema
+		bodyLocator, _ := parseLocator(loc)
+		b = []byte(bodyLocator.LocateValueInResp(*response))
+	}
 
 	var writeOnlyAttributes []string
 	diags = state.WriteOnlyAttributes.ElementsAs(ctx, &writeOnlyAttributes, false)
@@ -677,7 +709,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 		path := plan.ID.ValueString()
 		if !plan.UpdatePath.IsNull() {
 			var err error
-			path, err = BuildPath(plan.UpdatePath.ValueString(), r.p.apiOpt.BaseURL.String(), plan.Path.ValueString(), []byte(state.Output.ValueString()))
+			path, err = buildpath.BuildPath(plan.UpdatePath.ValueString(), r.p.apiOpt.BaseURL.String(), plan.Path.ValueString(), []byte(state.Output.ValueString()))
 			if err != nil {
 				resp.Diagnostics.AddError(
 					fmt.Sprintf("Failed to build the path for updating the resource"),
@@ -803,7 +835,7 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 	path := state.ID.ValueString()
 	if !state.DeletePath.IsNull() {
 		var err error
-		path, err = BuildPath(state.DeletePath.ValueString(), r.p.apiOpt.BaseURL.String(), state.Path.ValueString(), []byte(state.Output.ValueString()))
+		path, err = buildpath.BuildPath(state.DeletePath.ValueString(), r.p.apiOpt.BaseURL.String(), state.Path.ValueString(), []byte(state.Output.ValueString()))
 		if err != nil {
 			resp.Diagnostics.AddError(
 				fmt.Sprintf("Failed to build the path for deleting the resource"),
