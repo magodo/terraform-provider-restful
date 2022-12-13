@@ -1,4 +1,4 @@
-package provider
+package buildpath
 
 import (
 	"testing"
@@ -34,6 +34,18 @@ func TestBuildPath(t *testing.T) {
 			path:    "collections",
 			body:    `{"name": "abc"}`,
 			expect:  "collections/abc",
+		},
+		{
+			name:    "Body value contains special chars",
+			pattern: "$(body.name)",
+			body:    `{"name": "a/b/c"}`,
+			expect:  `a%2Fb%2Fc`,
+		},
+		{
+			name:    "Body value contains special chars, but explictly plain",
+			pattern: "$plain(body.name)",
+			body:    `{"name": "a/b/c"}`,
+			expect:  `a/b/c`,
 		},
 		{
 			name:    "Body doesn't contain the expected property",

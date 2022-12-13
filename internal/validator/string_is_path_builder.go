@@ -38,13 +38,13 @@ func (_ stringsIsPathBuilder) ValidateString(ctx context.Context, req validator.
 						fmt.Sprintf("unknown function: %s", fname),
 					)
 				}
-			}
-			if value != "path" && !strings.HasPrefix(value, "body.") {
-				return diag.NewAttributeErrorDiagnostic(
-					req.Path,
-					"Invalid String",
-					fmt.Sprintf("value isn't a path or a body reference"),
-				)
+				if !strings.HasPrefix(value, "body.") {
+					return diag.NewAttributeErrorDiagnostic(
+						req.Path,
+						"Invalid String",
+						fmt.Sprintf("value isn't a body reference"),
+					)
+				}
 			}
 		}
 		return nil
