@@ -15,15 +15,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/magodo/terraform-provider-restful/internal/client"
 	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
 )
 
-type ProviderInterface interface {
-	provider.ProviderWithMetadata
-}
-
-var _ ProviderInterface = &Provider{}
+var _ provider.Provider = &Provider{}
 
 type Provider struct {
 	client *client.Client
@@ -504,19 +501,19 @@ func (config providerData) ConfigureProvider(ctx context.Context) (*Provider, di
 
 	if secRaw := config.Security; !secRaw.IsNull() {
 		var sec securityData
-		if diags := secRaw.As(ctx, &sec, types.ObjectAsOptions{}); diags.HasError() {
+		if diags := secRaw.As(ctx, &sec, basetypes.ObjectAsOptions{}); diags.HasError() {
 			return nil, diags
 		}
 		switch {
 		case !sec.HTTP.IsNull():
 			var http httpData
-			if diags := sec.HTTP.As(ctx, &http, types.ObjectAsOptions{}); diags.HasError() {
+			if diags := sec.HTTP.As(ctx, &http, basetypes.ObjectAsOptions{}); diags.HasError() {
 				return nil, diags
 			}
 			switch {
 			case !http.Basic.IsNull():
 				var basic httpBasicData
-				if diags := http.Basic.As(ctx, &basic, types.ObjectAsOptions{}); diags.HasError() {
+				if diags := http.Basic.As(ctx, &basic, basetypes.ObjectAsOptions{}); diags.HasError() {
 					return nil, diags
 				}
 				opt := client.HTTPBasicOption{
@@ -526,7 +523,7 @@ func (config providerData) ConfigureProvider(ctx context.Context) (*Provider, di
 				clientOpt.Security = opt
 			case !http.Token.IsNull():
 				var token httpTokenData
-				if diags := http.Token.As(ctx, &token, types.ObjectAsOptions{}); diags.HasError() {
+				if diags := http.Token.As(ctx, &token, basetypes.ObjectAsOptions{}); diags.HasError() {
 					return nil, diags
 				}
 				opt := client.HTTPTokenOption{
@@ -543,7 +540,7 @@ func (config providerData) ConfigureProvider(ctx context.Context) (*Provider, di
 					continue
 				}
 				var apikey apikeyData
-				if diags := apikeyObj.As(ctx, &apikey, types.ObjectAsOptions{}); diags.HasError() {
+				if diags := apikeyObj.As(ctx, &apikey, basetypes.ObjectAsOptions{}); diags.HasError() {
 					return nil, diags
 				}
 				opt = append(opt, client.APIKeyAuthOpt{
@@ -555,13 +552,13 @@ func (config providerData) ConfigureProvider(ctx context.Context) (*Provider, di
 			clientOpt.Security = opt
 		case !sec.OAuth2.IsNull():
 			var oauth2 oauth2Data
-			if diags := sec.OAuth2.As(ctx, &oauth2, types.ObjectAsOptions{}); diags.HasError() {
+			if diags := sec.OAuth2.As(ctx, &oauth2, basetypes.ObjectAsOptions{}); diags.HasError() {
 				return nil, diags
 			}
 			switch {
 			case !oauth2.Password.IsNull():
 				var password oauth2PasswordData
-				if diags := oauth2.Password.As(ctx, &oauth2, types.ObjectAsOptions{}); diags.HasError() {
+				if diags := oauth2.Password.As(ctx, &oauth2, basetypes.ObjectAsOptions{}); diags.HasError() {
 					return nil, diags
 				}
 				opt := client.OAuth2PasswordOption{
@@ -586,7 +583,7 @@ func (config providerData) ConfigureProvider(ctx context.Context) (*Provider, di
 				clientOpt.Security = opt
 			case !oauth2.ClientCredentials.IsNull():
 				var cc oauth2ClientCredentialsData
-				if diags := oauth2.ClientCredentials.As(ctx, &cc, types.ObjectAsOptions{}); diags.HasError() {
+				if diags := oauth2.ClientCredentials.As(ctx, &cc, basetypes.ObjectAsOptions{}); diags.HasError() {
 					return nil, diags
 				}
 				opt := client.OAuth2ClientCredentialOption{
@@ -625,7 +622,7 @@ func (config providerData) ConfigureProvider(ctx context.Context) (*Provider, di
 				clientOpt.Security = opt
 			case !oauth2.RefreshToken.IsNull():
 				var refreshToken oauth2RefreshTokenData
-				if diags := oauth2.RefreshToken.As(ctx, &refreshToken, types.ObjectAsOptions{}); diags.HasError() {
+				if diags := oauth2.RefreshToken.As(ctx, &refreshToken, basetypes.ObjectAsOptions{}); diags.HasError() {
 					return nil, diags
 				}
 

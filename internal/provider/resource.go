@@ -17,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/magodo/terraform-provider-restful/internal/buildpath"
 	"github.com/magodo/terraform-provider-restful/internal/client"
 	myplanmodifier "github.com/magodo/terraform-provider-restful/internal/planmodifier"
@@ -444,7 +445,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	// Precheck
 	if !plan.PrecheckCreate.IsNull() {
 		var d precheckData
-		if diags := plan.PrecheckCreate.As(ctx, &d, types.ObjectAsOptions{}); diags.HasError() {
+		if diags := plan.PrecheckCreate.As(ctx, &d, basetypes.ObjectAsOptions{}); diags.HasError() {
 			resp.Diagnostics.Append(diags...)
 			return
 		}
@@ -516,7 +517,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	// For LRO, wait for completion
 	if !plan.PollCreate.IsNull() {
 		var d pollData
-		if diags := plan.PollCreate.As(ctx, &d, types.ObjectAsOptions{}); diags.HasError() {
+		if diags := plan.PollCreate.As(ctx, &d, basetypes.ObjectAsOptions{}); diags.HasError() {
 			resp.Diagnostics.Append(diags...)
 			return
 		}
@@ -671,7 +672,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 		// Precheck
 		if !plan.PrecheckUpdate.IsNull() {
 			var d precheckData
-			if diags := plan.PrecheckUpdate.As(ctx, &d, types.ObjectAsOptions{}); diags.HasError() {
+			if diags := plan.PrecheckUpdate.As(ctx, &d, basetypes.ObjectAsOptions{}); diags.HasError() {
 				resp.Diagnostics.Append(diags...)
 				return
 			}
@@ -742,7 +743,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 		// For LRO, wait for completion
 		if !plan.PollUpdate.IsNull() {
 			var d pollData
-			if diags := plan.PollUpdate.As(ctx, &d, types.ObjectAsOptions{}); diags.HasError() {
+			if diags := plan.PollUpdate.As(ctx, &d, basetypes.ObjectAsOptions{}); diags.HasError() {
 				resp.Diagnostics.Append(diags...)
 				return
 			}
@@ -810,7 +811,7 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 	// Precheck
 	if !state.PrecheckDelete.IsNull() {
 		var d precheckData
-		if diags := state.PrecheckDelete.As(ctx, &d, types.ObjectAsOptions{}); diags.HasError() {
+		if diags := state.PrecheckDelete.As(ctx, &d, basetypes.ObjectAsOptions{}); diags.HasError() {
 			resp.Diagnostics.Append(diags...)
 			return
 		}
@@ -872,7 +873,7 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 	// For LRO, wait for completion
 	if !state.PollDelete.IsNull() {
 		var d pollData
-		if diags := state.PollDelete.As(ctx, &d, types.ObjectAsOptions{}); diags.HasError() {
+		if diags := state.PollDelete.As(ctx, &d, basetypes.ObjectAsOptions{}); diags.HasError() {
 			resp.Diagnostics.Append(diags...)
 			return
 		}

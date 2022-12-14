@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/magodo/terraform-provider-restful/internal/client"
 )
 
@@ -116,7 +116,7 @@ func (opt apiOption) ForPoll(ctx context.Context, defaultHeader client.Header, d
 	var diags diag.Diagnostics
 
 	var status pollStatusGo
-	if d := d.Status.As(ctx, &status, types.ObjectAsOptions{}); d.HasError() {
+	if d := d.Status.As(ctx, &status, basetypes.ObjectAsOptions{}); d.HasError() {
 		diags.Append(d...)
 		return nil, diags
 	}
@@ -161,7 +161,7 @@ func (opt apiOption) ForPrecheck(ctx context.Context, defaultPath string, defaul
 	var diags diag.Diagnostics
 
 	var status pollStatusGo
-	if d := d.Status.As(ctx, &status, types.ObjectAsOptions{}); d.HasError() {
+	if d := d.Status.As(ctx, &status, basetypes.ObjectAsOptions{}); d.HasError() {
 		diags.Append(d...)
 		return nil, diags
 	}

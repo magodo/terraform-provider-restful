@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/magodo/terraform-provider-restful/internal/client"
 	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
 )
@@ -132,7 +133,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 	// Precheck
 	if !plan.Precheck.IsNull() {
 		var d precheckData
-		if diags := plan.Precheck.As(ctx, &d, types.ObjectAsOptions{}); diags.HasError() {
+		if diags := plan.Precheck.As(ctx, &d, basetypes.ObjectAsOptions{}); diags.HasError() {
 			diagnostics.Append(diags...)
 			return
 		}
@@ -181,7 +182,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 	// For LRO, wait for completion
 	if !plan.Poll.IsNull() {
 		var d pollData
-		if diags := plan.Poll.As(ctx, &d, types.ObjectAsOptions{}); diags.HasError() {
+		if diags := plan.Poll.As(ctx, &d, basetypes.ObjectAsOptions{}); diags.HasError() {
 			diagnostics.Append(diags...)
 			return
 		}
