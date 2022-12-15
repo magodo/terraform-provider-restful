@@ -152,6 +152,8 @@ func (c *Client) Update(ctx context.Context, path string, body interface{}, opt 
 		return req.Patch(path)
 	case "PUT":
 		return req.Put(path)
+	case "POST":
+		return req.Post(path)
 	default:
 		return nil, fmt.Errorf("unknown update method: %s", opt.Method)
 	}

@@ -322,11 +322,11 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				},
 			},
 			"update_method": schema.StringAttribute{
-				Description:         "The method used to update the resource. Possible values are `PUT` and `PATCH`. This overrides the `update_method` set in the provider block (defaults to PUT).",
-				MarkdownDescription: "The method used to update the resource. Possible values are `PUT` and `PATCH`. This overrides the `update_method` set in the provider block (defaults to PUT).",
+				Description:         "The method used to update the resource. Possible values are `PUT`, `POST` and `PATCH`. This overrides the `update_method` set in the provider block (defaults to PUT).",
+				MarkdownDescription: "The method used to update the resource. Possible values are `PUT`, `POST`, and `PATCH`. This overrides the `update_method` set in the provider block (defaults to PUT).",
 				Optional:            true,
 				Validators: []validator.String{
-					stringvalidator.OneOf("PUT", "PATCH"),
+					stringvalidator.OneOf("PUT", "PATCH", "POST"),
 				},
 			},
 			"delete_method": schema.StringAttribute{
