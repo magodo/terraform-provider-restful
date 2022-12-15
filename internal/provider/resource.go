@@ -65,7 +65,7 @@ type resourceData struct {
 	Header             types.Map  `tfsdk:"header"`
 
 	CheckExistance types.Bool `tfsdk:"check_existance"`
-	ForceNewAttrs  types.Bool `tfsdk:"force_new_attrs"`
+	ForceNewAttrs  types.Set  `tfsdk:"force_new_attrs"`
 
 	Output types.String `tfsdk:"output"`
 }
@@ -362,8 +362,8 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				Optional:            true,
 			},
 			"force_new_attrs": schema.SetAttribute{
-				Description:         "A set of `body` attribute paths whose value once changed, will trigger a replace of this resource. Note this only take effects when the `body` is a unknown before apply",
-				MarkdownDescription: "A set of `body` attribute paths whose value once changed, will trigger a replace of this resource. Note this only take effects when the `body` is a unknown before apply",
+				Description:         "A set of `body` attribute paths (in gjson syntax) whose value once changed, will trigger a replace of this resource. Note this only take effects when the `body` is a unknown before apply. Technically, we do a JSON merge patch and check whether the attribute path appear in the merge patch.",
+				MarkdownDescription: "A set of `body` attribute paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) whose value once changed, will trigger a replace of this resource. Note this only take effects when the `body` is a unknown before apply. Technically, we do a JSON merge patch and check whether the attribute path appear in the merge patch.",
 				Optional:            true,
 				ElementType:         types.StringType,
 			},
@@ -406,17 +406,60 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 		// // If the entire plan is null, the resource is planned for destruction.
 		return
 	}
+
+	if req.State.Raw.IsNull() {
+		// // If the entire state is null, the resource is planned for creation.
+		return
+	}
 	var plan resourceData
 	if diags := req.Plan.Get(ctx, &plan); diags.HasError() {
 		resp.Diagnostics.Append(diags...)
 		return
 	}
 
-	if plan.ForceNewAttrs.ValueBool() && !plan.Body.IsUnknown() {
-		var state resourceData
-		if diags := req.State.Get(ctx, &state); diags.HasError() {
+	if !plan.ForceNewAttrs.IsUnknown() && !plan.Body.IsUnknown() {
+		var forceNewAttrs []types.String
+		if diags := plan.ForceNewAttrs.ElementsAs(ctx, &forceNewAttrs, false); diags != nil {
 			resp.Diagnostics.Append(diags...)
 			return
+		}
+		var knownForceNewAttrs []string
+		for _, attr := range forceNewAttrs {
+			if attr.IsUnknown() {
+				continue
+			}
+			knownForceNewAttrs = append(knownForceNewAttrs, attr.ValueString())
+		}
+
+		if len(knownForceNewAttrs) != 0 {
+			var state resourceData
+			if diags := req.State.Get(ctx, &state); diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			}
+
+			originJson := state.Body.ValueString()
+			if originJson == "" {
+				originJson = "{}"
+			}
+
+			modifiedJson := plan.Body.ValueString()
+			if modifiedJson == "" {
+				modifiedJson = "{}"
+			}
+			patch, err := jsonpatch.CreateMergePatch([]byte(originJson), []byte(modifiedJson))
+			if err != nil {
+				resp.Diagnostics.AddError("failed to create merge patch", err.Error())
+				return
+			}
+
+			for _, attr := range knownForceNewAttrs {
+				result := gjson.Get(string(patch), attr)
+				if result.Exists() {
+					resp.RequiresReplace = []tfpath.Path{tfpath.Root("body")}
+					break
+				}
+			}
 		}
 	}
 }
