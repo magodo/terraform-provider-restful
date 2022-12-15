@@ -63,7 +63,9 @@ type resourceData struct {
 	MergePatchDisabled types.Bool `tfsdk:"merge_patch_disabled"`
 	Query              types.Map  `tfsdk:"query"`
 	Header             types.Map  `tfsdk:"header"`
-	CheckExistance     types.Bool `tfsdk:"check_existance"`
+
+	CheckExistance types.Bool `tfsdk:"check_existance"`
+	ForceNewAttrs  types.Bool `tfsdk:"force_new_attrs"`
 
 	Output types.String `tfsdk:"output"`
 }
@@ -359,6 +361,12 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				MarkdownDescription: "Whether to check resource already existed? Defaults to `false`.",
 				Optional:            true,
 			},
+			"force_new_attrs": schema.SetAttribute{
+				Description:         "A set of `body` attribute paths whose value once changed, will trigger a replace of this resource. Note this only take effects when the `body` is a unknown before apply",
+				MarkdownDescription: "A set of `body` attribute paths whose value once changed, will trigger a replace of this resource. Note this only take effects when the `body` is a unknown before apply",
+				Optional:            true,
+				ElementType:         types.StringType,
+			},
 			"output": schema.StringAttribute{
 				Description:         "The response body after reading the resource.",
 				MarkdownDescription: "The response body after reading the resource.",
@@ -389,6 +397,26 @@ func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConf
 					}
 				}
 			}
+		}
+	}
+}
+
+func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.Plan.Raw.IsNull() {
+		// // If the entire plan is null, the resource is planned for destruction.
+		return
+	}
+	var plan resourceData
+	if diags := req.Plan.Get(ctx, &plan); diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+
+	if plan.ForceNewAttrs.ValueBool() && !plan.Body.IsUnknown() {
+		var state resourceData
+		if diags := req.State.Get(ctx, &state); diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
 		}
 	}
 }
