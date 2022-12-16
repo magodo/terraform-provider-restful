@@ -47,6 +47,7 @@ resource "restful_resource" "rg" {
 
 - `check_existance` (Boolean) Whether to check resource already existed? Defaults to `false`.
 - `create_method` (String) The method used to create the resource. Possible values are `PUT` and `POST`. This overrides the `create_method` set in the provider block (defaults to POST).
+- `create_selector` (String) A selector in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries) query syntax, that is used when create returns a collection of resources, to select exactly one member resource of from it. By default, the whole response body is used as the body.
 - `delete_method` (String) The method used to delete the resource. Possible values are `DELETE` and `POST`. This overrides the `delete_method` set in the provider block (defaults to DELETE).
 - `delete_path` (String) The API path used to delete the resource. The `id` is used instead if `delete_path` is absent. The path can be string literal, or combined by followings: `$(path)` expanded to `path`, `$(body.x.y.z)` expands to the `x.y.z` property (urlencoded) in API body, `#(body.id)` expands to the `id` property, with `base_url` prefix trimmed.
 - `header` (Map of String) The header parameters that are applied to each request. This overrides the `header` set in the provider block.
@@ -58,8 +59,8 @@ resource "restful_resource" "rg" {
 - `precheck_delete` (Attributes) The precheck that is prior to the "Delete" operation. (see [below for nested schema](#nestedatt--precheck_delete))
 - `precheck_update` (Attributes) The precheck that is prior to the "Update" operation. (see [below for nested schema](#nestedatt--precheck_update))
 - `query` (Map of List of String) The query parameters that are applied to each request. This overrides the `query` set in the provider block.
-- `read_body_locator` (String) Specifies how to locate the resource body in the read response. The format is `body.path`, where the `path` is using the gjson syntax[gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).
 - `read_path` (String) The API path used to read the resource, which is used as the `id`. The `path` is used as the `id` instead if `read_path` is absent. The path can be string literal, or combined by followings: `$(path)` expanded to `path`, `$(body.x.y.z)` expands to the `x.y.z` property (urlencoded) in API body, `#(body.id)` expands to the `id` property, with `base_url` prefix trimmed.
+- `read_selector` (String) A selector in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries) query syntax, that is used when read returns a collection of resources, to select exactly one member resource of from it. By default, the whole response body is used as the body.
 - `update_method` (String) The method used to update the resource. Possible values are `PUT`, `POST`, and `PATCH`. This overrides the `update_method` set in the provider block (defaults to PUT).
 - `update_path` (String) The API path used to update the resource. The `id` is used instead if `update_path` is absent. The path can be string literal, or combined by followings: `$(path)` expanded to `path`, `$(body.x.y.z)` expands to the `x.y.z` property (urlencoded) in API body, `#(body.id)` expands to the `id` property, with `base_url` prefix trimmed.
 - `write_only_attrs` (List of String) A list of paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attributes that are only settable, but won't be read in GET response.
