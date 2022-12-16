@@ -39,7 +39,8 @@ type resourceData struct {
 
 	Path types.String `tfsdk:"path"`
 
-	ReadBodyLocator types.String `tfsdk:"read_body_locator"`
+	CreateSelector types.String `tfsdk:"create_selector"`
+	ReadSelector   types.String `tfsdk:"read_selector"`
 
 	ReadPath   types.String `tfsdk:"read_path"`
 	UpdatePath types.String `tfsdk:"update_path"`
@@ -253,16 +254,15 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				},
 			},
 
-			"read_body_locator": schema.StringAttribute{
-				Description:         "Specifies how to locate the resource body in the read response. The format is `body.path`, where the `path` is using the gjson syntax.",
-				MarkdownDescription: "Specifies how to locate the resource body in the read response. The format is `body.path`, where the `path` is using the gjson syntax[gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).",
+			"create_selector": schema.StringAttribute{
+				Description:         "A selector in gjson query syntax, that is used when create returns a collection of resources, to select exactly one member resource of from it. By default, the whole response body is used as the body.",
+				MarkdownDescription: "A selector in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries) query syntax, that is used when create returns a collection of resources, to select exactly one member resource of from it. By default, the whole response body is used as the body.",
 				Optional:            true,
-				Validators: []validator.String{
-					myvalidator.StringIsParsable("locator", func(s string) error {
-						_, err := parseLocator(s)
-						return err
-					}),
-				},
+			},
+			"read_selector": schema.StringAttribute{
+				Description:         "A selector in gjson query syntax, that is used when read returns a collection of resources, to select exactly one member resource of from it. By default, the whole response body is used as the body.",
+				MarkdownDescription: "A selector in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries) query syntax, that is used when read returns a collection of resources, to select exactly one member resource of from it. By default, the whole response body is used as the body.",
+				Optional:            true,
 			},
 
 			"read_path": schema.StringAttribute{
@@ -490,6 +490,12 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 
 	b := response.Body()
 
+	if sel := plan.CreateSelector.ValueString(); sel != "" {
+		// Guaranteed by schema
+		bodyLocator := client.BodyLocator(sel)
+		b = []byte(bodyLocator.LocateValueInResp(*response))
+	}
+
 	// Construct the resource id, which is used as the path to read the resource later on. By default, it is the same as the "path", unless "read_path" is specified.
 	resourceId := plan.Path.ValueString()
 	if !plan.ReadPath.IsNull() {
@@ -602,9 +608,9 @@ func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *reso
 
 	b := response.Body()
 
-	if loc := state.ReadBodyLocator.ValueString(); loc != "" {
+	if sel := state.ReadSelector.ValueString(); sel != "" {
 		// Guaranteed by schema
-		bodyLocator, _ := parseLocator(loc)
+		bodyLocator := client.BodyLocator(sel)
 		b = []byte(bodyLocator.LocateValueInResp(*response))
 	}
 
