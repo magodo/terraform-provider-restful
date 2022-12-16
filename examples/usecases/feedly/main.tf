@@ -1,3 +1,4 @@
+# This needs to be run with "-parallelism=1", otherwise the "/feeds" might miss to add the feed to the collection. 
 variable "token" {
   type = string
 }
