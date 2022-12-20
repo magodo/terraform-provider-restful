@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -72,6 +73,8 @@ type PollOption struct {
 
 	Header Header
 
+	Query Query
+
 	// DefaultDelay specifies the interval between two pollings. The `Retry-After` in the response header takes higher precedence than this.
 	DefaultDelay time.Duration
 }
@@ -80,6 +83,7 @@ func NewPollableFromResp(resp resty.Response, opt PollOption) (*Pollable, error)
 	p := Pollable{
 		DefaultDelay: opt.DefaultDelay,
 		Header:       opt.Header,
+		Query:        opt.Query,
 	}
 
 	if opt.Status.Success == "" {
@@ -100,15 +104,22 @@ func NewPollableFromResp(resp resty.Response, opt PollOption) (*Pollable, error)
 		p.InitDelay = d
 	}
 
+	var rawURL string
 	if loc := opt.UrlLocator; loc != nil {
-		url := loc.LocateValueInResp(resp)
-		if url == "" {
+		rawURL = loc.LocateValueInResp(resp)
+		if rawURL == "" {
 			return nil, fmt.Errorf("No polling URL found in %s", loc)
 		}
-		p.URL = url
 	} else {
-		p.URL = resp.Request.RawRequest.URL.String()
+		rawURL = resp.Request.URL
 	}
+	urL, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, fmt.Errorf("parsing raw URL %q: %v", rawURL, err)
+	}
+	// We intentionaly clean the query calling the url.String() here, as the query will be later added back during constructing the poll request.
+	urL.RawQuery = ""
+	p.URL = urL.String()
 
 	return &p, nil
 }
@@ -145,6 +156,7 @@ type Pollable struct {
 	InitDelay     time.Duration
 	URL           string
 	Header        Header
+	Query         Query
 	Status        PollingStatus
 	StatusLocator ValueLocator
 	DefaultDelay  time.Duration
@@ -155,7 +167,7 @@ func (f *Pollable) PollUntilDone(ctx context.Context, client *Client) error {
 PollingLoop:
 	for {
 		// There is no need to retry here as resty client has embedded retry logic (by default 3 max retries).
-		req := client.R().SetContext(ctx).SetHeaders(f.Header)
+		req := client.R().SetContext(ctx).SetHeaders(f.Header).SetQueryParamsFromValues(url.Values(f.Query))
 		resp, err := req.Get(f.URL)
 		if err != nil {
 			return fmt.Errorf("polling %s: %v", f.URL, err)

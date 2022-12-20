@@ -186,7 +186,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 			diagnostics.Append(diags...)
 			return
 		}
-		opt, diags := r.p.apiOpt.ForPoll(ctx, opt.Header, d)
+		opt, diags := r.p.apiOpt.ForPoll(ctx, opt.Header, opt.Query, d)
 		if diags.HasError() {
 			diagnostics.Append(diags...)
 			return
@@ -194,7 +194,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 		if opt.UrlLocator == nil {
 			// Update the request URL to pointing to the resource path, which is mainly for resources whose create method is POST.
 			// As it will be used to poll the resource status.
-			response.Request.RawRequest.URL.Path, _ = url.JoinPath(r.p.apiOpt.BaseURL.String(), resourceId)
+			response.Request.URL, _ = url.JoinPath(r.p.apiOpt.BaseURL.String(), resourceId)
 		}
 		p, err := client.NewPollableFromResp(*response, *opt)
 		if err != nil {

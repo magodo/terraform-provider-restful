@@ -112,7 +112,7 @@ func (opt apiOption) ForResourceOperation(ctx context.Context, d operationResour
 	return &out, nil
 }
 
-func (opt apiOption) ForPoll(ctx context.Context, defaultHeader client.Header, d pollData) (*client.PollOption, diag.Diagnostics) {
+func (opt apiOption) ForPoll(ctx context.Context, defaultHeader client.Header, defaultQuery client.Query, d pollData) (*client.PollOption, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
 	var status pollStatusGo
@@ -139,10 +139,12 @@ func (opt apiOption) ForPoll(ctx context.Context, defaultHeader client.Header, d
 
 	header := defaultHeader
 	if !d.Header.IsNull() {
-		if d := d.Header.ElementsAs(ctx, &header, false); d.HasError() {
-			diags.Append(d...)
-			return nil, diags
-		}
+		header = header.Clone().TakeOrSelf(ctx, d.Header)
+	}
+
+	query := defaultQuery
+	if !d.Query.IsNull() {
+		query = query.Clone().TakeOrSelf(ctx, d.Query)
 	}
 
 	return &client.PollOption{
@@ -153,6 +155,7 @@ func (opt apiOption) ForPoll(ctx context.Context, defaultHeader client.Header, d
 		},
 		UrlLocator:   urlLocator,
 		Header:       header,
+		Query:        query,
 		DefaultDelay: time.Duration(d.DefaultDelay.ValueInt64()) * time.Second,
 	}, nil
 }
