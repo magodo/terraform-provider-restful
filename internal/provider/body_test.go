@@ -250,3 +250,51 @@ func TestGetUpdatedJSONForImport(t *testing.T) {
 		})
 	}
 }
+
+func TestFilterJSON(t *testing.T) {
+	cases := []struct {
+		name        string
+		body        string
+		outputAttrs []string
+		expect      interface{}
+	}{
+		{
+			name:        "invalid body",
+			body:        "",
+			outputAttrs: []string{"foo"},
+			expect:      errors.New(`no such attribute "foo" in JSON ""`),
+		},
+		{
+			name:   "invalid body but no output attrs return an empty json object",
+			body:   "",
+			expect: "{}",
+		},
+		{
+			name:        "with non existed attrs",
+			body:        `{}`,
+			outputAttrs: []string{"foo"},
+			expect:      errors.New(`no such attribute "foo" in JSON "{}"`),
+		},
+		{
+			name:        "filter attrs",
+			body:        `{"a": 1, "b": 2, "obj": {"x": 1, "y": 2}}`,
+			outputAttrs: []string{"a", "obj.x"},
+			expect:      `{"a": 1, "obj": {"x": 1}}`,
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			actual, err := FilterAttrsInJSON(tt.body, tt.outputAttrs)
+			switch expect := tt.expect.(type) {
+			case error:
+				require.EqualError(t, err, expect.Error())
+			case string:
+				require.NoError(t, err)
+				require.JSONEq(t, expect, actual)
+			default:
+				t.Fatalf("unknown expect type %T", expect)
+			}
+		})
+	}
+}

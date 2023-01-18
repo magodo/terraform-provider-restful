@@ -28,6 +28,7 @@ data "restful_resource" "test" {
 ### Optional
 
 - `header` (Map of String) The header parameters that are applied to each request. This overrides the `header` set in the provider block.
+- `output_attrs` (Set of String) A set of `output` attribute paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) that will be exported in the `output`. If this is not specified, all attributes will be exported by `output`.
 - `query` (Map of List of String) The query parameters that are applied to each request. This overrides the `query` set in the provider block.
 - `selector` (String) A selector in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries), that is used when `id` represents a collection of resources, to select exactly one member resource of from it
 

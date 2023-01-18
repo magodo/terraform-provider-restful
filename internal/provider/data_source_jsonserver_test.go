@@ -46,6 +46,25 @@ func TestDataSource_JSONServer_WithSelector(t *testing.T) {
 	})
 }
 
+func TestDataSource_JSONServer_WithOutputAttrs(t *testing.T) {
+	addr := "restful_resource.test"
+	dsaddr := "data.restful_resource.test"
+	d := newJsonServerData()
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { d.precheck(t) },
+		CheckDestroy:             d.CheckDestroy(addr),
+		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+		Steps: []resource.TestStep{
+			{
+				Config: d.dsWithOutputAttrs(),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrWith(dsaddr, "output", CheckJSONEqual("output", `{"foo": "bar", "obj": {"a": 1}}`)),
+				),
+			},
+		},
+	})
+}
+
 func (d jsonServerData) dsBasic() string {
 	return fmt.Sprintf(`
 provider "restful" {
@@ -85,6 +104,32 @@ data "restful_resource" "test" {
   id       = "/posts"
   selector = "#(foo==\"bar\")"
   depends_on = [restful_resource.test]
+}
+`, d.url)
+
+}
+
+func (d jsonServerData) dsWithOutputAttrs() string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+resource "restful_resource" "test" {
+  path = "/posts"
+  body = jsonencode({
+  	foo = "bar"
+	obj = {
+	  a = 1
+	  b = 2
+	}
+})
+  read_path = "$(path)/$(body.id)"
+}
+
+data "restful_resource" "test" {
+  id = restful_resource.test.id
+  output_attrs = ["foo", "obj.a"]
 }
 `, d.url)
 

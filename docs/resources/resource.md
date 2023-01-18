@@ -53,6 +53,7 @@ resource "restful_resource" "rg" {
 - `force_new_attrs` (Set of String) A set of `body` attribute paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) whose value once changed, will trigger a replace of this resource. Note this only take effects when the `body` is a unknown before apply. Technically, we do a JSON merge patch and check whether the attribute path appear in the merge patch.
 - `header` (Map of String) The header parameters that are applied to each request. This overrides the `header` set in the provider block.
 - `merge_patch_disabled` (Boolean) Whether to use a JSON Merge Patch as the request body in the PATCH update? This is only effective when `update_method` is set to `PATCH`. This overrides the `merge_patch_disabled` set in the provider block (defaults to `false`).
+- `output_attrs` (Set of String) A set of `output` attribute paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) that will be exported in the `output`. If this is not specified, all attributes will be exported by `output`.
 - `poll_create` (Attributes) The polling option for the "Create" operation (see [below for nested schema](#nestedatt--poll_create))
 - `poll_delete` (Attributes) The polling option for the "Delete" operation (see [below for nested schema](#nestedatt--poll_delete))
 - `poll_update` (Attributes) The polling option for the "Update" operation (see [below for nested schema](#nestedatt--poll_update))
@@ -83,6 +84,7 @@ Optional:
 
 - `default_delay_sec` (Number) The interval between two pollings if there is no `Retry-After` in the response header, in second.
 - `header` (Map of String) The header parameters. This overrides the `header` set in the resource block.
+- `query` (Map of List of String) The query parameters. This overrides the `query` set in the resource block.
 - `url_locator` (String) Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the resource's path is used for polling.
 
 <a id="nestedatt--poll_create--status"></a>
@@ -110,6 +112,7 @@ Optional:
 
 - `default_delay_sec` (Number) The interval between two pollings if there is no `Retry-After` in the response header, in second.
 - `header` (Map of String) The header parameters. This overrides the `header` set in the resource block.
+- `query` (Map of List of String) The query parameters. This overrides the `query` set in the resource block.
 - `url_locator` (String) Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the resource's path is used for polling.
 
 <a id="nestedatt--poll_delete--status"></a>
@@ -137,6 +140,7 @@ Optional:
 
 - `default_delay_sec` (Number) The interval between two pollings if there is no `Retry-After` in the response header, in second.
 - `header` (Map of String) The header parameters. This overrides the `header` set in the resource block.
+- `query` (Map of List of String) The query parameters. This overrides the `query` set in the resource block.
 - `url_locator` (String) Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the resource's path is used for polling.
 
 <a id="nestedatt--poll_update--status"></a>

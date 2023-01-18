@@ -135,3 +135,20 @@ func getUpdatedJSONForImport(oldJSON, newJSON interface{}) (interface{}, error) 
 	}
 	return newJSON, nil
 }
+
+// Given a JSON object, only keep the attributes specified and remove the others.
+func FilterAttrsInJSON(obj string, attrs []string) (string, error) {
+	outputJSON := "{}"
+	for _, attr := range attrs {
+		res := gjson.Get(obj, attr)
+		if !res.Exists() {
+			return "", fmt.Errorf("no such attribute %q in JSON %q", attr, obj)
+		}
+		var err error
+		outputJSON, err = sjson.Set(outputJSON, attr, res.Value())
+		if err != nil {
+			return "", err
+		}
+	}
+	return outputJSON, nil
+}
