@@ -1,6 +1,14 @@
+terraform {
+  required_providers {
+    restful = {
+      source = "magodo/restful"
+    }
+  }
+}
+
 provider "restful" {
   base_url = "http://localhost:3000"
-  alias    = "no auth"
+  alias    = "no_auth"
 }
 
 provider "restful" {
@@ -13,6 +21,7 @@ provider "restful" {
       }
     }
   }
+  alias = "http_basic"
 }
 
 provider "restful" {
@@ -24,6 +33,21 @@ provider "restful" {
       }
     }
   }
+  alias = "http_token"
+}
+
+provider "restful" {
+  base_url = "http://localhost:3000"
+  security = {
+    apikey = [
+      {
+        in    = "header"
+        name  = "Fastly-Key"
+        value = "AAAAAAABBBBBBCCCCCC"
+      },
+    ]
+  }
+  alias = "api_key"
 }
 
 provider "restful" {

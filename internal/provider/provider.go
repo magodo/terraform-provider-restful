@@ -248,7 +248,7 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 							Validators: []validator.Object{
 								objectvalidator.ExactlyOneOf(
 									path.MatchRoot("security").AtName("http"),
-									path.MatchRoot("security").AtName("apikey"),
+									path.MatchRoot("security").AtName("apikey").AtAnySetValue(),
 									path.MatchRoot("security").AtName("oauth2"),
 								),
 							},
@@ -423,7 +423,7 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 						Validators: []validator.Object{
 							objectvalidator.ExactlyOneOf(
 								path.MatchRoot("security").AtName("http"),
-								path.MatchRoot("security").AtName("apikey"),
+								path.MatchRoot("security").AtName("apikey").AtAnySetValue(),
 								path.MatchRoot("security").AtName("oauth2"),
 							),
 						},
