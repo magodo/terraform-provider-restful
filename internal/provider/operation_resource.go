@@ -105,13 +105,22 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 }
 
 func (r *OperationResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	r.p = &Provider{}
-	if req.ProviderData != nil {
-		p, diags := req.ProviderData.(providerData).ConfigureProvider(ctx)
-		resp.Diagnostics.Append(diags...)
-		r.p = p
+	if req.ProviderData == nil {
+		return
 	}
-	return
+	providerData, ok := req.ProviderData.(providerData)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Unexpected Operation Resource Configure Type",
+			fmt.Sprintf("got: %T.", req.ProviderData),
+		)
+		return
+	}
+	if diags := providerData.provider.Init(ctx, providerData.config); diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+	r.p = providerData.provider
 }
 
 func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Plan, state *tfsdk.State, diagnostics *diag.Diagnostics) {

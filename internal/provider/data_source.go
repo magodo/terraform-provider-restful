@@ -65,13 +65,22 @@ func (d *DataSource) Schema(ctx context.Context, req datasource.SchemaRequest, r
 }
 
 func (d *DataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
-	d.p = &Provider{}
-	if req.ProviderData != nil {
-		p, diags := req.ProviderData.(providerData).ConfigureProvider(ctx)
-		resp.Diagnostics.Append(diags...)
-		d.p = p
+	if req.ProviderData == nil {
+		return
 	}
-	return
+	providerData, ok := req.ProviderData.(providerData)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Unexpected Data Source Configure Type",
+			fmt.Sprintf("got: %T.", req.ProviderData),
+		)
+		return
+	}
+	if diags := providerData.provider.Init(ctx, providerData.config); diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+	d.p = providerData.provider
 }
 
 func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
