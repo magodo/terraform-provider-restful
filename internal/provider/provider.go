@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"sync"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/objectvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -25,9 +26,15 @@ var _ provider.Provider = &Provider{}
 type Provider struct {
 	client *client.Client
 	apiOpt apiOption
+	once   sync.Once
 }
 
 type providerData struct {
+	config   providerConfig
+	provider *Provider
+}
+
+type providerConfig struct {
 	BaseURL            types.String `tfsdk:"base_url"`
 	Security           types.Object `tfsdk:"security"`
 	CreateMethod       types.String `tfsdk:"create_method"`
@@ -481,246 +488,261 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 }
 
 func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
-	var config providerData
-	diags := req.Config.Get(ctx, &config)
+	data := providerData{
+		provider: &Provider{},
+	}
+	diags := req.Config.Get(ctx, &data.config)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
 	}
 
-	resp.ResourceData = config
-	resp.DataSourceData = config
+	resp.ResourceData = data
+	resp.DataSourceData = data
 
 	return
 }
 
-func (config providerData) ConfigureProvider(ctx context.Context) (*Provider, diag.Diagnostics) {
-	clientOpt := client.BuildOption{
-		CookieEnabled: config.CookieEnabled.ValueBool(),
-	}
-
-	if secRaw := config.Security; !secRaw.IsNull() {
-		var sec securityData
-		if diags := secRaw.As(ctx, &sec, basetypes.ObjectAsOptions{}); diags.HasError() {
-			return nil, diags
+func (p *Provider) Init(ctx context.Context, config providerConfig) diag.Diagnostics {
+	var odiags diag.Diagnostics
+	p.once.Do(func() {
+		clientOpt := client.BuildOption{
+			CookieEnabled: config.CookieEnabled.ValueBool(),
 		}
-		switch {
-		case !sec.HTTP.IsNull():
-			var http httpData
-			if diags := sec.HTTP.As(ctx, &http, basetypes.ObjectAsOptions{}); diags.HasError() {
-				return nil, diags
+
+		if secRaw := config.Security; !secRaw.IsNull() {
+			var sec securityData
+			if diags := secRaw.As(ctx, &sec, basetypes.ObjectAsOptions{}); diags.HasError() {
+				odiags = diags
+				return
 			}
 			switch {
-			case !http.Basic.IsNull():
-				var basic httpBasicData
-				if diags := http.Basic.As(ctx, &basic, basetypes.ObjectAsOptions{}); diags.HasError() {
-					return nil, diags
+			case !sec.HTTP.IsNull():
+				var http httpData
+				if diags := sec.HTTP.As(ctx, &http, basetypes.ObjectAsOptions{}); diags.HasError() {
+					odiags = diags
+					return
 				}
-				opt := client.HTTPBasicOption{
-					Username: basic.Username.ValueString(),
-					Password: basic.Password.ValueString(),
-				}
-				clientOpt.Security = opt
-			case !http.Token.IsNull():
-				var token httpTokenData
-				if diags := http.Token.As(ctx, &token, basetypes.ObjectAsOptions{}); diags.HasError() {
-					return nil, diags
-				}
-				opt := client.HTTPTokenOption{
-					Token:  token.Token.ValueString(),
-					Scheme: token.Scheme.ValueString(),
-				}
-				clientOpt.Security = opt
-			}
-		case !sec.APIKey.IsNull():
-			opt := client.APIKeyAuthOption{}
-			for _, apikeyRaw := range sec.APIKey.Elements() {
-				apikeyObj := apikeyRaw.(types.Object)
-				if apikeyObj.IsNull() {
-					continue
-				}
-				var apikey apikeyData
-				if diags := apikeyObj.As(ctx, &apikey, basetypes.ObjectAsOptions{}); diags.HasError() {
-					return nil, diags
-				}
-				opt = append(opt, client.APIKeyAuthOpt{
-					Name:  apikey.Name.ValueString(),
-					In:    client.APIKeyAuthIn(apikey.In.ValueString()),
-					Value: apikey.Value.ValueString(),
-				})
-			}
-			clientOpt.Security = opt
-		case !sec.OAuth2.IsNull():
-			var oauth2 oauth2Data
-			if diags := sec.OAuth2.As(ctx, &oauth2, basetypes.ObjectAsOptions{}); diags.HasError() {
-				return nil, diags
-			}
-			switch {
-			case !oauth2.Password.IsNull():
-				var password oauth2PasswordData
-				if diags := oauth2.Password.As(ctx, &oauth2, basetypes.ObjectAsOptions{}); diags.HasError() {
-					return nil, diags
-				}
-				opt := client.OAuth2PasswordOption{
-					TokenURL:     password.TokenUrl.ValueString(),
-					Username:     password.Username.ValueString(),
-					Password:     password.Password.ValueString(),
-					ClientId:     password.ClientID.ValueString(),
-					ClientSecret: password.ClientSecret.ValueString(),
-					AuthStyle:    client.OAuth2AuthStyle(password.In.ValueString()),
-				}
-				if !password.Scopes.IsNull() {
-					var scopes []string
-					for _, scope := range password.Scopes.Elements() {
-						scope := scope.(types.String)
-						if scope.IsNull() {
-							continue
-						}
-						scopes = append(scopes, scope.ValueString())
+				switch {
+				case !http.Basic.IsNull():
+					var basic httpBasicData
+					if diags := http.Basic.As(ctx, &basic, basetypes.ObjectAsOptions{}); diags.HasError() {
+						odiags = diags
+						return
 					}
-					opt.Scopes = scopes
+					opt := client.HTTPBasicOption{
+						Username: basic.Username.ValueString(),
+						Password: basic.Password.ValueString(),
+					}
+					clientOpt.Security = opt
+				case !http.Token.IsNull():
+					var token httpTokenData
+					if diags := http.Token.As(ctx, &token, basetypes.ObjectAsOptions{}); diags.HasError() {
+						odiags = diags
+						return
+					}
+					opt := client.HTTPTokenOption{
+						Token:  token.Token.ValueString(),
+						Scheme: token.Scheme.ValueString(),
+					}
+					clientOpt.Security = opt
+				}
+			case !sec.APIKey.IsNull():
+				opt := client.APIKeyAuthOption{}
+				for _, apikeyRaw := range sec.APIKey.Elements() {
+					apikeyObj := apikeyRaw.(types.Object)
+					if apikeyObj.IsNull() {
+						continue
+					}
+					var apikey apikeyData
+					if diags := apikeyObj.As(ctx, &apikey, basetypes.ObjectAsOptions{}); diags.HasError() {
+						odiags = diags
+						return
+					}
+					opt = append(opt, client.APIKeyAuthOpt{
+						Name:  apikey.Name.ValueString(),
+						In:    client.APIKeyAuthIn(apikey.In.ValueString()),
+						Value: apikey.Value.ValueString(),
+					})
 				}
 				clientOpt.Security = opt
-			case !oauth2.ClientCredentials.IsNull():
-				var cc oauth2ClientCredentialsData
-				if diags := oauth2.ClientCredentials.As(ctx, &cc, basetypes.ObjectAsOptions{}); diags.HasError() {
-					return nil, diags
+			case !sec.OAuth2.IsNull():
+				var oauth2 oauth2Data
+				if diags := sec.OAuth2.As(ctx, &oauth2, basetypes.ObjectAsOptions{}); diags.HasError() {
+					odiags = diags
+					return
 				}
-				opt := client.OAuth2ClientCredentialOption{
-					TokenURL:     cc.TokenUrl.ValueString(),
-					ClientId:     cc.ClientID.ValueString(),
-					ClientSecret: cc.ClientSecret.ValueString(),
-					AuthStyle:    client.OAuth2AuthStyle(cc.In.ValueString()),
-				}
-				if !cc.Scopes.IsNull() {
-					var scopes []string
-					for _, scope := range cc.Scopes.Elements() {
-						scope := scope.(types.String)
-						if scope.IsNull() {
-							continue
-						}
-						scopes = append(scopes, scope.ValueString())
+				switch {
+				case !oauth2.Password.IsNull():
+					var password oauth2PasswordData
+					if diags := oauth2.Password.As(ctx, &oauth2, basetypes.ObjectAsOptions{}); diags.HasError() {
+						odiags = diags
+						return
 					}
-					opt.Scopes = scopes
-				}
-				if !cc.EndpointParams.IsNull() {
-					endpointParams := map[string][]string{}
-					for k, values := range cc.EndpointParams.Elements() {
-						var vs []string
-						values := values.(types.List)
-						for _, value := range values.Elements() {
-							value := value.(types.String)
-							if value.IsNull() {
+					opt := client.OAuth2PasswordOption{
+						TokenURL:     password.TokenUrl.ValueString(),
+						Username:     password.Username.ValueString(),
+						Password:     password.Password.ValueString(),
+						ClientId:     password.ClientID.ValueString(),
+						ClientSecret: password.ClientSecret.ValueString(),
+						AuthStyle:    client.OAuth2AuthStyle(password.In.ValueString()),
+					}
+					if !password.Scopes.IsNull() {
+						var scopes []string
+						for _, scope := range password.Scopes.Elements() {
+							scope := scope.(types.String)
+							if scope.IsNull() {
 								continue
 							}
-							vs = append(vs, value.ValueString())
+							scopes = append(scopes, scope.ValueString())
 						}
-						endpointParams[k] = vs
+						opt.Scopes = scopes
 					}
-					opt.EndpointParams = endpointParams
-				}
-				clientOpt.Security = opt
-			case !oauth2.RefreshToken.IsNull():
-				var refreshToken oauth2RefreshTokenData
-				if diags := oauth2.RefreshToken.As(ctx, &refreshToken, basetypes.ObjectAsOptions{}); diags.HasError() {
-					return nil, diags
-				}
+					clientOpt.Security = opt
+				case !oauth2.ClientCredentials.IsNull():
+					var cc oauth2ClientCredentialsData
+					if diags := oauth2.ClientCredentials.As(ctx, &cc, basetypes.ObjectAsOptions{}); diags.HasError() {
+						odiags = diags
+						return
+					}
+					opt := client.OAuth2ClientCredentialOption{
+						TokenURL:     cc.TokenUrl.ValueString(),
+						ClientId:     cc.ClientID.ValueString(),
+						ClientSecret: cc.ClientSecret.ValueString(),
+						AuthStyle:    client.OAuth2AuthStyle(cc.In.ValueString()),
+					}
+					if !cc.Scopes.IsNull() {
+						var scopes []string
+						for _, scope := range cc.Scopes.Elements() {
+							scope := scope.(types.String)
+							if scope.IsNull() {
+								continue
+							}
+							scopes = append(scopes, scope.ValueString())
+						}
+						opt.Scopes = scopes
+					}
+					if !cc.EndpointParams.IsNull() {
+						endpointParams := map[string][]string{}
+						for k, values := range cc.EndpointParams.Elements() {
+							var vs []string
+							values := values.(types.List)
+							for _, value := range values.Elements() {
+								value := value.(types.String)
+								if value.IsNull() {
+									continue
+								}
+								vs = append(vs, value.ValueString())
+							}
+							endpointParams[k] = vs
+						}
+						opt.EndpointParams = endpointParams
+					}
+					clientOpt.Security = opt
+				case !oauth2.RefreshToken.IsNull():
+					var refreshToken oauth2RefreshTokenData
+					if diags := oauth2.RefreshToken.As(ctx, &refreshToken, basetypes.ObjectAsOptions{}); diags.HasError() {
+						odiags = diags
+						return
+					}
 
-				opt := client.OAuth2RefreshTokenOption{
-					TokenURL:     refreshToken.TokenUrl.ValueString(),
-					RefreshToken: refreshToken.RefreshToken.ValueString(),
-					ClientId:     refreshToken.ClientID.ValueString(),
-					ClientSecret: refreshToken.ClientSecret.ValueString(),
-					AuthStyle:    client.OAuth2AuthStyle(refreshToken.In.ValueString()),
-					TokenType:    refreshToken.TokenType.ValueString(),
-				}
-				if !refreshToken.Scopes.IsNull() {
-					var scopes []string
-					for _, scope := range refreshToken.Scopes.Elements() {
-						scope := scope.(types.String)
-						if scope.IsNull() {
-							continue
-						}
-						scopes = append(scopes, scope.ValueString())
+					opt := client.OAuth2RefreshTokenOption{
+						TokenURL:     refreshToken.TokenUrl.ValueString(),
+						RefreshToken: refreshToken.RefreshToken.ValueString(),
+						ClientId:     refreshToken.ClientID.ValueString(),
+						ClientSecret: refreshToken.ClientSecret.ValueString(),
+						AuthStyle:    client.OAuth2AuthStyle(refreshToken.In.ValueString()),
+						TokenType:    refreshToken.TokenType.ValueString(),
 					}
-					opt.Scopes = scopes
+					if !refreshToken.Scopes.IsNull() {
+						var scopes []string
+						for _, scope := range refreshToken.Scopes.Elements() {
+							scope := scope.(types.String)
+							if scope.IsNull() {
+								continue
+							}
+							scopes = append(scopes, scope.ValueString())
+						}
+						opt.Scopes = scopes
+					}
+					clientOpt.Security = opt
 				}
-				clientOpt.Security = opt
 			}
 		}
-	}
 
-	var (
-		p    Provider
-		diag diag.Diagnostics
-		err  error
-	)
-	p.client, err = client.New(ctx, config.BaseURL.ValueString(), &clientOpt)
-	if err != nil {
-		diag.AddError(
-			"Failed to configure provider",
-			fmt.Sprintf("Failed to new client: %v", err),
+		var (
+			diags diag.Diagnostics
+			err   error
 		)
-		return nil, diag
-	}
+		p.client, err = client.New(ctx, config.BaseURL.ValueString(), &clientOpt)
+		if err != nil {
+			diags.AddError(
+				"Failed to configure provider",
+				fmt.Sprintf("Failed to new client: %v", err),
+			)
+			odiags = diags
+			return
+		}
 
-	uRL, err := url.Parse(config.BaseURL.ValueString())
-	if err != nil {
-		diag.AddError(
-			"Failed to configure provider",
-			fmt.Sprintf("Parsing the base url %q: %v", config.BaseURL, err),
-		)
-		return nil, diag
-	}
+		uRL, err := url.Parse(config.BaseURL.ValueString())
+		if err != nil {
+			diags.AddError(
+				"Failed to configure provider",
+				fmt.Sprintf("Parsing the base url %q: %v", config.BaseURL, err),
+			)
+			odiags = diags
+			return
+		}
 
-	p.apiOpt = apiOption{
-		BaseURL:            *uRL,
-		CreateMethod:       "POST",
-		UpdateMethod:       "PUT",
-		DeleteMethod:       "DELETE",
-		MergePatchDisabled: false,
-		Query:              map[string][]string{},
-		Header:             map[string]string{},
-	}
-	if !config.CreateMethod.IsNull() {
-		p.apiOpt.CreateMethod = config.CreateMethod.ValueString()
-	}
-	if !config.UpdateMethod.IsNull() {
-		p.apiOpt.UpdateMethod = config.UpdateMethod.ValueString()
-	}
-	if !config.DeleteMethod.IsNull() {
-		p.apiOpt.DeleteMethod = config.DeleteMethod.ValueString()
-	}
-	if !config.MergePatchDisabled.IsNull() {
-		p.apiOpt.MergePatchDisabled = config.MergePatchDisabled.ValueBool()
-	}
-	if !config.Query.IsNull() {
-		queries := map[string][]string{}
-		for k, values := range config.Query.Elements() {
-			var vs []string
-			values := values.(types.List)
-			for _, value := range values.Elements() {
+		p.apiOpt = apiOption{
+			BaseURL:            *uRL,
+			CreateMethod:       "POST",
+			UpdateMethod:       "PUT",
+			DeleteMethod:       "DELETE",
+			MergePatchDisabled: false,
+			Query:              map[string][]string{},
+			Header:             map[string]string{},
+		}
+		if !config.CreateMethod.IsNull() {
+			p.apiOpt.CreateMethod = config.CreateMethod.ValueString()
+		}
+		if !config.UpdateMethod.IsNull() {
+			p.apiOpt.UpdateMethod = config.UpdateMethod.ValueString()
+		}
+		if !config.DeleteMethod.IsNull() {
+			p.apiOpt.DeleteMethod = config.DeleteMethod.ValueString()
+		}
+		if !config.MergePatchDisabled.IsNull() {
+			p.apiOpt.MergePatchDisabled = config.MergePatchDisabled.ValueBool()
+		}
+		if !config.Query.IsNull() {
+			queries := map[string][]string{}
+			for k, values := range config.Query.Elements() {
+				var vs []string
+				values := values.(types.List)
+				for _, value := range values.Elements() {
+					value := value.(types.String)
+					if value.IsNull() {
+						continue
+					}
+					vs = append(vs, value.ValueString())
+				}
+				queries[k] = vs
+			}
+			p.apiOpt.Query = queries
+		}
+		if !config.Header.IsNull() {
+			headers := map[string]string{}
+			for k, value := range config.Header.Elements() {
 				value := value.(types.String)
 				if value.IsNull() {
 					continue
 				}
-				vs = append(vs, value.ValueString())
+				headers[k] = value.ValueString()
 			}
-			queries[k] = vs
+			p.apiOpt.Header = headers
 		}
-		p.apiOpt.Query = queries
-	}
-	if !config.Header.IsNull() {
-		headers := map[string]string{}
-		for k, value := range config.Header.Elements() {
-			value := value.(types.String)
-			if value.IsNull() {
-				continue
-			}
-			headers[k] = value.ValueString()
-		}
-		p.apiOpt.Header = headers
-	}
+	})
 
-	return &p, nil
+	return odiags
 }
