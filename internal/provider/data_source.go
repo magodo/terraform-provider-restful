@@ -17,11 +17,12 @@ type DataSource struct {
 var _ datasource.DataSource = &DataSource{}
 
 type dataSourceData struct {
-	ID       types.String `tfsdk:"id"`
-	Query    types.Map    `tfsdk:"query"`
-	Header   types.Map    `tfsdk:"header"`
-	Selector types.String `tfsdk:"selector"`
-	Output   types.String `tfsdk:"output"`
+	ID          types.String `tfsdk:"id"`
+	Query       types.Map    `tfsdk:"query"`
+	Header      types.Map    `tfsdk:"header"`
+	Selector    types.String `tfsdk:"selector"`
+	OutputAttrs types.Set    `tfsdk:"output_attrs"`
+	Output      types.String `tfsdk:"output"`
 }
 
 func (d *DataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -54,6 +55,12 @@ func (d *DataSource) Schema(ctx context.Context, req datasource.SchemaRequest, r
 				Description:         "A selector in gjson query syntax, that is used when `id` represents a collection of resources, to select exactly one member resource of from it",
 				MarkdownDescription: "A selector in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries), that is used when `id` represents a collection of resources, to select exactly one member resource of from it",
 				Optional:            true,
+			},
+			"output_attrs": schema.SetAttribute{
+				Description:         "A set of `output` attribute paths (in gjson syntax) that will be exported in the `output`. If this is not specified, all attributes will be exported by `output`.",
+				MarkdownDescription: "A set of `output` attribute paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) that will be exported in the `output`. If this is not specified, all attributes will be exported by `output`.",
+				Optional:            true,
+				ElementType:         types.StringType,
 			},
 			"output": schema.StringAttribute{
 				Description:         "The response body after reading the resource.",
@@ -136,13 +143,35 @@ func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp 
 		b = []byte(result.Array()[0].Raw)
 	}
 
-	state := dataSourceData{
-		ID:       config.ID,
-		Query:    config.Query,
-		Header:   config.Header,
-		Selector: config.Selector,
-		Output:   types.StringValue(string(b)),
+	// Set output
+	output := string(b)
+	if !config.OutputAttrs.IsNull() {
+		// Update the output to only contain the specified attributes.
+		var outputAttrs []string
+		diags = config.OutputAttrs.ElementsAs(ctx, &outputAttrs, false)
+		resp.Diagnostics.Append(diags...)
+		if diags.HasError() {
+			return
+		}
+		output, err = FilterAttrsInJSON(output, outputAttrs)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Filter `output` during Read",
+				err.Error(),
+			)
+			return
+		}
 	}
+
+	state := dataSourceData{
+		ID:          config.ID,
+		Query:       config.Query,
+		Header:      config.Header,
+		Selector:    config.Selector,
+		OutputAttrs: config.OutputAttrs,
+		Output:      types.StringValue(output),
+	}
+
 	diags = resp.State.Set(ctx, state)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {

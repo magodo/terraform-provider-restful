@@ -158,6 +158,24 @@ func TestResource_JSONServer_FullPath(t *testing.T) {
 	})
 }
 
+func TestResource_JSONServer_OutputAttrs(t *testing.T) {
+	addr := "restful_resource.test"
+	d := newJsonServerData()
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { d.precheck(t) },
+		CheckDestroy:             d.CheckDestroy(addr),
+		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+		Steps: []resource.TestStep{
+			{
+				Config: d.outputAttrs(),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrWith(addr, "output", CheckJSONEqual("output", `{"foo": "bar", "obj": {"a": 1}}`)),
+				),
+			},
+		},
+	})
+}
+
 func (d jsonServerData) CheckDestroy(addr string) func(*terraform.State) error {
 	return func(s *terraform.State) error {
 		c, err := client.New(context.TODO(), d.url, nil)
@@ -231,4 +249,25 @@ resource "restful_resource" "test" {
 }
 `, d.url, v)
 
+}
+
+func (d jsonServerData) outputAttrs() string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+resource "restful_resource" "test" {
+  path = "posts"
+  body = jsonencode({
+  	foo = "bar"
+	obj = {
+		a = 1	
+		b = 2
+	}
+})
+  read_path = "$(path)/$(body.id)"
+  output_attrs = ["foo", "obj.a"]
+}
+`, d.url)
 }

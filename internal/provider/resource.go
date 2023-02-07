@@ -67,6 +67,7 @@ type resourceData struct {
 
 	CheckExistance types.Bool `tfsdk:"check_existance"`
 	ForceNewAttrs  types.Set  `tfsdk:"force_new_attrs"`
+	OutputAttrs    types.Set  `tfsdk:"output_attrs"`
 
 	Output types.String `tfsdk:"output"`
 }
@@ -374,6 +375,12 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				Optional:            true,
 				ElementType:         types.StringType,
 			},
+			"output_attrs": schema.SetAttribute{
+				Description:         "A set of `output` attribute paths (in gjson syntax) that will be exported in the `output`. If this is not specified, all attributes will be exported by `output`.",
+				MarkdownDescription: "A set of `output` attribute paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) that will be exported in the `output`. If this is not specified, all attributes will be exported by `output`.",
+				Optional:            true,
+				ElementType:         types.StringType,
+			},
 			"output": schema.StringAttribute{
 				Description:         "The response body after reading the resource.",
 				MarkdownDescription: "The response body after reading the resource.",
@@ -459,7 +466,6 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 				resp.Diagnostics.AddError("failed to create merge patch", err.Error())
 				return
 			}
-
 			for _, attr := range knownForceNewAttrs {
 				result := gjson.Get(string(patch), attr)
 				if result.Exists() {
@@ -726,8 +732,26 @@ func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *reso
 	// Set body, which is modified during read.
 	state.Body = types.StringValue(string(body))
 
-	// Set computed attributes
-	state.Output = types.StringValue(string(b))
+	// Set output
+	output := string(b)
+	if !state.OutputAttrs.IsNull() {
+		// Update the output to only contain the specified attributes.
+		var outputAttrs []string
+		diags = state.OutputAttrs.ElementsAs(ctx, &outputAttrs, false)
+		resp.Diagnostics.Append(diags...)
+		if diags.HasError() {
+			return
+		}
+		output, err = FilterAttrsInJSON(output, outputAttrs)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Filter `output` during Read",
+				err.Error(),
+			)
+			return
+		}
+	}
+	state.Output = types.StringValue(output)
 
 	diags = resp.State.Set(ctx, state)
 	resp.Diagnostics.Append(diags...)
