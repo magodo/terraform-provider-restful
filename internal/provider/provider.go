@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/objectvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -214,8 +215,7 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 							},
 						},
 						Validators: []validator.Object{
-							objectvalidator.ExactlyOneOf(
-								path.MatchRoot("security").AtName("http"),
+							objectvalidator.ConflictsWith(
 								path.MatchRoot("security").AtName("apikey"),
 								path.MatchRoot("security").AtName("oauth2"),
 							),
@@ -252,13 +252,12 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 									},
 								},
 							},
-							Validators: []validator.Object{
-								objectvalidator.ExactlyOneOf(
-									path.MatchRoot("security").AtName("http"),
-									path.MatchRoot("security").AtName("apikey"),
-									path.MatchRoot("security").AtName("oauth2"),
-								),
-							},
+						},
+						Validators: []validator.Set{
+							setvalidator.ConflictsWith(
+								path.MatchRoot("security").AtName("http"),
+								path.MatchRoot("security").AtName("oauth2"),
+							),
 						},
 					},
 					"oauth2": schema.SingleNestedAttribute{
@@ -428,10 +427,9 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 							},
 						},
 						Validators: []validator.Object{
-							objectvalidator.ExactlyOneOf(
+							objectvalidator.ConflictsWith(
 								path.MatchRoot("security").AtName("http"),
 								path.MatchRoot("security").AtName("apikey"),
-								path.MatchRoot("security").AtName("oauth2"),
 							),
 						},
 					},
