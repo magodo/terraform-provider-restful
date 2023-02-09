@@ -8,6 +8,7 @@ terraform {
 
 provider "restful" {
   base_url = "http://localhost:3000"
+  securty  = {} # optional
   alias    = "no_auth"
 }
 
