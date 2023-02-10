@@ -65,6 +65,24 @@ func TestDataSource_JSONServer_WithOutputAttrs(t *testing.T) {
 	})
 }
 
+func TestDataSource_JSONServer_NotExists(t *testing.T) {
+	dsaddr := "data.restful_resource.test"
+	d := newJsonServerData()
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { d.precheck(t) },
+		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+		Steps: []resource.TestStep{
+			{
+				Config: d.dsNotExist(),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrSet(dsaddr, "id"),
+					resource.TestCheckNoResourceAttr(dsaddr, "output"),
+				),
+			},
+		},
+	})
+}
+
 func (d jsonServerData) dsBasic() string {
 	return fmt.Sprintf(`
 provider "restful" {
@@ -130,6 +148,20 @@ resource "restful_resource" "test" {
 data "restful_resource" "test" {
   id = restful_resource.test.id
   output_attrs = ["foo", "obj.a"]
+}
+`, d.url)
+
+}
+
+func (d jsonServerData) dsNotExist() string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+data "restful_resource" "test" {
+  id = "/notexist"
+  allow_not_exist = true
 }
 `, d.url)
 

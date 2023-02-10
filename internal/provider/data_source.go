@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -17,12 +18,13 @@ type DataSource struct {
 var _ datasource.DataSource = &DataSource{}
 
 type dataSourceData struct {
-	ID          types.String `tfsdk:"id"`
-	Query       types.Map    `tfsdk:"query"`
-	Header      types.Map    `tfsdk:"header"`
-	Selector    types.String `tfsdk:"selector"`
-	OutputAttrs types.Set    `tfsdk:"output_attrs"`
-	Output      types.String `tfsdk:"output"`
+	ID            types.String `tfsdk:"id"`
+	Query         types.Map    `tfsdk:"query"`
+	Header        types.Map    `tfsdk:"header"`
+	Selector      types.String `tfsdk:"selector"`
+	OutputAttrs   types.Set    `tfsdk:"output_attrs"`
+	AllowNotExist types.Bool   `tfsdk:"allow_not_exist"`
+	Output        types.String `tfsdk:"output"`
 }
 
 func (d *DataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -61,6 +63,11 @@ func (d *DataSource) Schema(ctx context.Context, req datasource.SchemaRequest, r
 				MarkdownDescription: "A set of `output` attribute paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) that will be exported in the `output`. If this is not specified, all attributes will be exported by `output`.",
 				Optional:            true,
 				ElementType:         types.StringType,
+			},
+			"allow_not_exist": schema.BoolAttribute{
+				Description:         "Whether to throw error if the data source being queried doesn't exist (i.e. status code is 404). Defaults to `false`.",
+				MarkdownDescription: "Whether to throw error if the data source being queried doesn't exist (i.e. status code is 404). Defaults to `false`.",
+				Optional:            true,
 			},
 			"output": schema.StringAttribute{
 				Description:         "The response body after reading the resource.",
@@ -106,6 +113,15 @@ func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp 
 		return
 	}
 
+	state := dataSourceData{
+		ID:            config.ID,
+		Query:         config.Query,
+		Header:        config.Header,
+		Selector:      config.Selector,
+		OutputAttrs:   config.OutputAttrs,
+		AllowNotExist: config.AllowNotExist,
+	}
+
 	response, err := c.Read(ctx, config.ID.ValueString(), *opt)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -115,6 +131,12 @@ func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp 
 		return
 	}
 	if !response.IsSuccess() {
+		if response.StatusCode() == http.StatusNotFound && config.AllowNotExist.ValueBool() {
+			// Setting the input attributes to the state anyway
+			diags = resp.State.Set(ctx, state)
+			resp.Diagnostics.Append(diags...)
+			return
+		}
 		resp.Diagnostics.AddError(
 			fmt.Sprintf("Create API returns %d", response.StatusCode()),
 			string(response.Body()),
@@ -163,14 +185,7 @@ func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp 
 		}
 	}
 
-	state := dataSourceData{
-		ID:          config.ID,
-		Query:       config.Query,
-		Header:      config.Header,
-		Selector:    config.Selector,
-		OutputAttrs: config.OutputAttrs,
-		Output:      types.StringValue(output),
-	}
+	state.Output = types.StringValue(output)
 
 	diags = resp.State.Set(ctx, state)
 	resp.Diagnostics.Append(diags...)
