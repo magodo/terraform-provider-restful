@@ -43,7 +43,7 @@ resource "restful_operation" "register_rp" {
 - `body` (String) The payload of the API call.
 - `header` (Map of String) The header parameters that are applied to each request. This overrides the `header` set in the provider block.
 - `poll` (Attributes) The polling option for the "API" operation (see [below for nested schema](#nestedatt--poll))
-- `precheck` (Attributes) The precheck that is prior to the "API" operation. (see [below for nested schema](#nestedatt--precheck))
+- `precheck` (Attributes List) An array of prechecks that need to pass prior to the "API" operation. (see [below for nested schema](#nestedatt--precheck))
 - `query` (Map of List of String) The query parameters that are applied to each request. This overrides the `query` set in the provider block.
 
 ### Read-Only

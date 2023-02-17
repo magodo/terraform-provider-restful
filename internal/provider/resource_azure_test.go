@@ -637,7 +637,7 @@ resource "restful_resource" "rg" {
 }
 
 locals {
-  vnet_precheck = {
+  vnet_precheck = [{
     path = restful_resource.rg.id
     query = {
       api-version = ["2020-06-01"]
@@ -646,7 +646,7 @@ locals {
     status = {
       success = "Succeeded"
     }
-  }
+  }]
   vnet_poll = {
     status_locator = "body.status"
     status = {

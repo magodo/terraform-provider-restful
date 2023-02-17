@@ -32,7 +32,7 @@ type operationResourceData struct {
 	Body     types.String `tfsdk:"body"`
 	Query    types.Map    `tfsdk:"query"`
 	Header   types.Map    `tfsdk:"header"`
-	Precheck types.Object `tfsdk:"precheck"`
+	Precheck types.List   `tfsdk:"precheck"`
 	Poll     types.Object `tfsdk:"poll"`
 	Output   types.String `tfsdk:"output"`
 }
@@ -141,30 +141,32 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 
 	// Precheck
 	if !plan.Precheck.IsNull() {
-		var d precheckData
-		if diags := plan.Precheck.As(ctx, &d, basetypes.ObjectAsOptions{}); diags.HasError() {
+		var checks []precheckData
+		if diags := plan.Precheck.ElementsAs(ctx, &checks, false); diags.HasError() {
 			diagnostics.Append(diags...)
 			return
 		}
-		opt, diags := r.p.apiOpt.ForPrecheck(ctx, plan.Path.ValueString(), opt.Header, opt.Query, d)
-		if diags.HasError() {
-			diagnostics.Append(diags...)
-			return
-		}
-		p, err := client.NewPollable(*opt)
-		if err != nil {
-			diagnostics.AddError(
-				"Operation: Failed to build poller for precheck",
-				err.Error(),
-			)
-			return
-		}
-		if err := p.PollUntilDone(ctx, c); err != nil {
-			diagnostics.AddError(
-				"Operation: Pre-checking failure",
-				err.Error(),
-			)
-			return
+		for i, d := range checks {
+			opt, diags := r.p.apiOpt.ForPrecheck(ctx, plan.Path.ValueString(), opt.Header, opt.Query, d)
+			if diags.HasError() {
+				diagnostics.Append(diags...)
+				return
+			}
+			p, err := client.NewPollable(*opt)
+			if err != nil {
+				diagnostics.AddError(
+					fmt.Sprintf("Operation: Failed to build poller for %d-th precheck", i),
+					err.Error(),
+				)
+				return
+			}
+			if err := p.PollUntilDone(ctx, c); err != nil {
+				diagnostics.AddError(
+					fmt.Sprintf("Operation: Pre-checking %d-th check failure", i),
+					err.Error(),
+				)
+				return
+			}
 		}
 	}
 
