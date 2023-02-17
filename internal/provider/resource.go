@@ -9,7 +9,9 @@ import (
 	"strings"
 
 	jsonpatch "github.com/evanphx/json-patch"
+	"github.com/hashicorp/terraform-plugin-framework-validators/objectvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	tfpath "github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -82,6 +84,11 @@ type pollData struct {
 }
 
 type precheckData struct {
+	Api   types.Object `tfsdk:"api"`
+	Mutex types.String `tfsdk:"mutex"`
+}
+
+type precheckDataApi struct {
 	StatusLocator types.String `tfsdk:"status_locator"`
 	Status        types.Object `tfsdk:"status"`
 	Path          types.String `tfsdk:"path"`
@@ -106,65 +113,87 @@ func precheckAttribute(s string, pathIsRequired bool, suffixDesc string) schema.
 	}
 
 	return schema.ListNestedAttribute{
-		Description:         fmt.Sprintf("An array of prechecks that need to pass prior to the %q operation.", s),
-		MarkdownDescription: fmt.Sprintf("An array of prechecks that need to pass prior to the %q operation.", s),
+		Description:         fmt.Sprintf("An array of prechecks that need to pass prior to the %q operation. Exactly one of `mutex` or `api` should be specified.", s),
+		MarkdownDescription: fmt.Sprintf("An array of prechecks that need to pass prior to the %q operation. Exactly one of `mutex` or `api` should be specified.", s),
 		Optional:            true,
 		NestedObject: schema.NestedAttributeObject{
 			Attributes: map[string]schema.Attribute{
-				"status_locator": schema.StringAttribute{
-					Description:         "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the gjson syntax.",
-					MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).",
-					Required:            true,
+				"mutex": schema.StringAttribute{
+					Description:         "The name of the mutex, which implies the resource will keep waiting until this mutex is held",
+					MarkdownDescription: "The name of the mutex, which implies the resource will keep waiting until this mutex is held",
+					Optional:            true,
 					Validators: []validator.String{
-						myvalidator.StringIsParsable("locator", func(s string) error {
-							_, err := parseLocator(s)
-							return err
-						}),
+						stringvalidator.ExactlyOneOf(
+							path.MatchRelative().AtParent().AtName("api"),
+						),
 					},
 				},
-				"status": schema.SingleNestedAttribute{
-					Description:         "The expected status sentinels for each polling state.",
-					MarkdownDescription: "The expected status sentinels for each polling state.",
-					Required:            true,
+				"api": schema.SingleNestedAttribute{
+					Description:         "Keeps waiting until the specified API meets the success status",
+					MarkdownDescription: "Keeps waiting until the specified API meets the success status",
+					Optional:            true,
 					Attributes: map[string]schema.Attribute{
-						"success": schema.StringAttribute{
-							Description:         "The expected status sentinel for suceess status.",
-							MarkdownDescription: "The expected status sentinel for suceess status.",
+						"status_locator": schema.StringAttribute{
+							Description:         "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the gjson syntax.",
+							MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).",
 							Required:            true,
+							Validators: []validator.String{
+								myvalidator.StringIsParsable("locator", func(s string) error {
+									_, err := parseLocator(s)
+									return err
+								}),
+							},
 						},
-						"pending": schema.ListAttribute{
-							Description:         "The expected status sentinels for pending status.",
-							MarkdownDescription: "The expected status sentinels for pending status.",
+						"status": schema.SingleNestedAttribute{
+							Description:         "The expected status sentinels for each polling state.",
+							MarkdownDescription: "The expected status sentinels for each polling state.",
+							Required:            true,
+							Attributes: map[string]schema.Attribute{
+								"success": schema.StringAttribute{
+									Description:         "The expected status sentinel for suceess status.",
+									MarkdownDescription: "The expected status sentinel for suceess status.",
+									Required:            true,
+								},
+								"pending": schema.ListAttribute{
+									Description:         "The expected status sentinels for pending status.",
+									MarkdownDescription: "The expected status sentinels for pending status.",
+									Optional:            true,
+									ElementType:         types.StringType,
+								},
+							},
+						},
+						"path": schema.StringAttribute{
+							Description:         pathDesc,
+							MarkdownDescription: pathDesc,
+							Required:            pathIsRequired,
+							Optional:            !pathIsRequired,
+						},
+						"query": schema.MapAttribute{
+							Description:         "The query parameters. This overrides the `query` set in the resource block.",
+							MarkdownDescription: "The query parameters. This overrides the `query` set in the resource block.",
+							ElementType:         types.ListType{ElemType: types.StringType},
 							Optional:            true,
+						},
+						"header": schema.MapAttribute{
+							Description:         "The header parameters. This overrides the `header` set in the resource block.",
+							MarkdownDescription: "The header parameters. This overrides the `header` set in the resource block.",
 							ElementType:         types.StringType,
+							Optional:            true,
+						},
+						"default_delay_sec": schema.Int64Attribute{
+							Description:         "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
+							MarkdownDescription: "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
+							Optional:            true,
+							Computed:            true,
+							PlanModifiers: []planmodifier.Int64{
+								myplanmodifier.DefaultAttribute(types.Int64Value(10)),
+							},
 						},
 					},
-				},
-				"path": schema.StringAttribute{
-					Description:         pathDesc,
-					MarkdownDescription: pathDesc,
-					Required:            pathIsRequired,
-					Optional:            !pathIsRequired,
-				},
-				"query": schema.MapAttribute{
-					Description:         "The query parameters. This overrides the `query` set in the resource block.",
-					MarkdownDescription: "The query parameters. This overrides the `query` set in the resource block.",
-					ElementType:         types.ListType{ElemType: types.StringType},
-					Optional:            true,
-				},
-				"header": schema.MapAttribute{
-					Description:         "The header parameters. This overrides the `header` set in the resource block.",
-					MarkdownDescription: "The header parameters. This overrides the `header` set in the resource block.",
-					ElementType:         types.StringType,
-					Optional:            true,
-				},
-				"default_delay_sec": schema.Int64Attribute{
-					Description:         "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
-					MarkdownDescription: "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
-					Optional:            true,
-					Computed:            true,
-					PlanModifiers: []planmodifier.Int64{
-						myplanmodifier.DefaultAttribute(types.Int64Value(10)),
+					Validators: []validator.Object{
+						objectvalidator.ExactlyOneOf(
+							path.MatchRelative().AtParent().AtName("mutex"),
+						),
 					},
 				},
 			},
@@ -538,36 +567,12 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	}
 
 	// Precheck
-	if !plan.PrecheckCreate.IsNull() {
-		var checks []precheckData
-		if diags := plan.PrecheckCreate.ElementsAs(ctx, &checks, false); diags.HasError() {
-			resp.Diagnostics.Append(diags...)
-			return
-		}
-
-		for i, d := range checks {
-			opt, diags := r.p.apiOpt.ForPrecheck(ctx, "", opt.Header, opt.Query, d)
-			if diags.HasError() {
-				resp.Diagnostics.Append(diags...)
-				return
-			}
-			p, err := client.NewPollable(*opt)
-			if err != nil {
-				resp.Diagnostics.AddError(
-					fmt.Sprintf("Create: Failed to build poller for %d-th precheck", i),
-					err.Error(),
-				)
-				return
-			}
-			if err := p.PollUntilDone(ctx, c); err != nil {
-				resp.Diagnostics.AddError(
-					fmt.Sprintf("Create: Pre-checking %d-th check failure", i),
-					err.Error(),
-				)
-				return
-			}
-		}
+	unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, "", opt.Header, opt.Query, plan.PrecheckCreate)
+	if diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
 	}
+	defer unlockFunc()
 
 	// Create the resource
 	response, err := c.Create(ctx, plan.Path.ValueString(), plan.Body.ValueString(), *opt)
@@ -790,37 +795,13 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 
 	// Invoke API to Update the resource only when there are changes in the body.
 	if state.Body.ValueString() != plan.Body.ValueString() {
-
 		// Precheck
-		if !plan.PrecheckUpdate.IsNull() {
-			var checks []precheckData
-			if diags := plan.PrecheckUpdate.ElementsAs(ctx, &checks, false); diags.HasError() {
-				resp.Diagnostics.Append(diags...)
-				return
-			}
-			for i, d := range checks {
-				opt, diags := r.p.apiOpt.ForPrecheck(ctx, state.ID.ValueString(), opt.Header, opt.Query, d)
-				if diags.HasError() {
-					resp.Diagnostics.Append(diags...)
-					return
-				}
-				p, err := client.NewPollable(*opt)
-				if err != nil {
-					resp.Diagnostics.AddError(
-						fmt.Sprintf("Update: Failed to build poller for %d-th precheck", i),
-						err.Error(),
-					)
-					return
-				}
-				if err := p.PollUntilDone(ctx, c); err != nil {
-					resp.Diagnostics.AddError(
-						fmt.Sprintf("Update: Pre-checking %d-th check failure", i),
-						err.Error(),
-					)
-					return
-				}
-			}
+		unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, state.ID.ValueString(), opt.Header, opt.Query, plan.PrecheckUpdate)
+		if diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
 		}
+		defer unlockFunc()
 
 		body := plan.Body.ValueString()
 		if opt.Method == "PATCH" && !opt.MergePatchDisabled {
@@ -933,35 +914,12 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 	}
 
 	// Precheck
-	if !state.PrecheckDelete.IsNull() {
-		var checks []precheckData
-		if diags := state.PrecheckDelete.ElementsAs(ctx, &checks, false); diags.HasError() {
-			resp.Diagnostics.Append(diags...)
-			return
-		}
-		for i, d := range checks {
-			opt, diags := r.p.apiOpt.ForPrecheck(ctx, state.ID.ValueString(), opt.Header, opt.Query, d)
-			if diags.HasError() {
-				resp.Diagnostics.Append(diags...)
-				return
-			}
-			p, err := client.NewPollable(*opt)
-			if err != nil {
-				resp.Diagnostics.AddError(
-					fmt.Sprintf("Delete: Failed to build poller for %d-th precheck", i),
-					err.Error(),
-				)
-				return
-			}
-			if err := p.PollUntilDone(ctx, c); err != nil {
-				resp.Diagnostics.AddError(
-					fmt.Sprintf("Delete: Pre-checking %d-th check failure", i),
-					err.Error(),
-				)
-				return
-			}
-		}
+	unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, state.ID.ValueString(), opt.Header, opt.Query, state.PrecheckDelete)
+	if diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
 	}
+	defer unlockFunc()
 
 	path := state.ID.ValueString()
 	if !state.DeletePath.IsNull() {

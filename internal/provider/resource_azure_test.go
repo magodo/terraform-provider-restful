@@ -246,6 +246,44 @@ func TestResource_Azure_VirtualNetwork_SimplePoll(t *testing.T) {
 	})
 }
 
+func TestResource_Azure_RouteTable_Precheck(t *testing.T) {
+	addr := "restful_resource.route1"
+	d := newAzureData()
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { d.precheck(t) },
+		CheckDestroy:             d.CheckDestroy(addr),
+		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+		Steps: []resource.TestStep{
+			{
+				Config: d.routetable_precheck("foo"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrSet(addr, "output"),
+				),
+			},
+			{
+				ResourceName:            addr,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"poll_create", "poll_update", "poll_delete", "precheck_create", "precheck_update", "precheck_delete"},
+				ImportStateIdFunc:       d.routeImportStateIdFunc(addr),
+			},
+			{
+				Config: d.routetable_precheck("bar"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrSet(addr, "output"),
+				),
+			},
+			{
+				ResourceName:            addr,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"poll_create", "poll_update", "poll_delete", "precheck_create", "precheck_update", "precheck_delete"},
+				ImportStateIdFunc:       d.routeImportStateIdFunc(addr),
+			},
+		},
+	})
+}
+
 func TestOperationResource_Azure_Register_RP(t *testing.T) {
 	addr := "restful_operation.test"
 	d := newAzureData()
@@ -520,6 +558,25 @@ func (d azureData) vnetImportStateIdFunc(addr string) func(s *terraform.State) (
 	}
 }
 
+func (d azureData) routeImportStateIdFunc(addr string) func(s *terraform.State) (string, error) {
+	return func(s *terraform.State) (string, error) {
+		return fmt.Sprintf(`{
+  "id": %[1]q,
+  "query": {
+    "api-version": ["2022-07-01"]
+  },
+  "path": %[1]q,
+  "body": {
+    "location": null,
+    "properties": {
+      "addressPrefix": null,
+	  "nextHopType": null
+	}
+  }
+}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
+	}
+}
+
 func (d azureData) vnet_template() string {
 	return fmt.Sprintf(`
 provider "restful" {
@@ -637,16 +694,20 @@ resource "restful_resource" "rg" {
 }
 
 locals {
-  vnet_precheck = [{
-    path = restful_resource.rg.id
-    query = {
-      api-version = ["2020-06-01"]
-    }
-    status_locator = "body.properties.provisioningState"
-    status = {
-      success = "Succeeded"
-    }
-  }]
+  vnet_precheck = [
+	  {
+	  	api = {
+			path = restful_resource.rg.id
+			query = {
+			  api-version = ["2020-06-01"]
+			}
+			status_locator = "body.properties.provisioningState"
+			status = {
+			  success = "Succeeded"
+			}
+		}
+	  }
+  ]
   vnet_poll = {
     status_locator = "body.status"
     status = {
@@ -731,6 +792,122 @@ resource "restful_resource" "test" {
   })
 }
 `, d.vnet_template(), d.rd, tag)
+}
+
+func (d azureData) routetable_precheck(tag string) string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+  security = {
+    oauth2 = {
+	  client_credentials = {
+		client_id     = %q
+		client_secret = %q
+		token_url     = "https://login.microsoftonline.com/%s/oauth2/v2.0/token"
+		scopes        = ["https://management.azure.com/.default"]
+	  }
+    }
+  }
+  create_method = "PUT"
+}
+
+resource "restful_resource" "rg" {
+  path = "/subscriptions/%s/resourceGroups/restful-test-%d"
+  query = {
+    api-version = ["2020-06-01"]
+  }
+  body = jsonencode({
+    location = "westeurope"
+  })
+
+  poll_delete = {
+    status_locator = "code"
+    status = {
+      success = "200"
+      pending = ["202"]
+    }
+    url_locator = "header.location"
+  }
+}
+
+locals {
+  poll = {
+    status_locator = "body.status"
+    status = {
+      success = "Succeeded"
+      failure = "Failed"
+      pending = ["Pending"]
+    }
+    url_locator = "header.azure-asyncoperation"
+  }
+  route_precheck = [
+    {
+      mutex = restful_resource.table.id
+    }
+  ]
+}
+
+
+resource "restful_resource" "table" {
+  path = format("%%s/providers/Microsoft.Network/routeTables/restfultest-%d", restful_resource.rg.id)
+  update_method = "PATCH"
+  query = {
+    api-version = ["2022-07-01"]
+  }
+  body = jsonencode({
+    location = "westus"
+    tags = {
+      foo = "%s"
+    }
+  })
+  poll_create = local.poll
+  poll_delete = local.poll
+}
+
+resource "restful_resource" "route1" {
+  path = format("%%s/routes/route1", restful_resource.table.id)
+  query = {
+    api-version = ["2022-07-01"]
+  }
+
+  precheck_create = local.route_precheck
+  precheck_update = local.route_precheck
+  precheck_delete = local.route_precheck
+
+  poll_create = local.poll
+  poll_update = local.poll
+  poll_delete = local.poll
+
+  body = jsonencode({
+    properties = {
+      nextHopType   = "VnetLocal"
+      addressPrefix = "10.1.0.0/16"
+    }
+  })
+}
+
+resource "restful_resource" "route2" {
+  path = format("%%s/routes/route2", restful_resource.table.id)
+  query = {
+    api-version = ["2022-07-01"]
+  }
+
+  precheck_create = local.route_precheck
+  precheck_update = local.route_precheck
+  precheck_delete = local.route_precheck
+
+  poll_create = local.poll
+  poll_update = local.poll
+  poll_delete = local.poll
+
+  body = jsonencode({
+    properties = {
+      nextHopType   = "VnetLocal"
+      addressPrefix = "10.2.0.0/16"
+    }
+  })
+}
+`, d.url, d.clientId, d.clientSecret, d.tenantId, d.subscriptionId, d.rd, d.rd, tag)
 }
 
 func (d azureData) registerRP(rp string) string {
