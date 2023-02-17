@@ -57,9 +57,9 @@ resource "restful_resource" "rg" {
 - `poll_create` (Attributes) The polling option for the "Create" operation (see [below for nested schema](#nestedatt--poll_create))
 - `poll_delete` (Attributes) The polling option for the "Delete" operation (see [below for nested schema](#nestedatt--poll_delete))
 - `poll_update` (Attributes) The polling option for the "Update" operation (see [below for nested schema](#nestedatt--poll_update))
-- `precheck_create` (Attributes List) An array of prechecks that need to pass prior to the "Create" operation. (see [below for nested schema](#nestedatt--precheck_create))
-- `precheck_delete` (Attributes List) An array of prechecks that need to pass prior to the "Delete" operation. (see [below for nested schema](#nestedatt--precheck_delete))
-- `precheck_update` (Attributes List) An array of prechecks that need to pass prior to the "Update" operation. (see [below for nested schema](#nestedatt--precheck_update))
+- `precheck_create` (Attributes List) An array of prechecks that need to pass prior to the "Create" operation. Exactly one of `mutex` or `api` should be specified. (see [below for nested schema](#nestedatt--precheck_create))
+- `precheck_delete` (Attributes List) An array of prechecks that need to pass prior to the "Delete" operation. Exactly one of `mutex` or `api` should be specified. (see [below for nested schema](#nestedatt--precheck_delete))
+- `precheck_update` (Attributes List) An array of prechecks that need to pass prior to the "Update" operation. Exactly one of `mutex` or `api` should be specified. (see [below for nested schema](#nestedatt--precheck_update))
 - `query` (Map of List of String) The query parameters that are applied to each request. This overrides the `query` set in the provider block.
 - `read_path` (String) The API path used to read the resource, which is used as the `id`. The `path` is used as the `id` instead if `read_path` is absent. The path can be string literal, or combined by followings: `$(path)` expanded to `path`, `$(body.x.y.z)` expands to the `x.y.z` property (urlencoded) in API body, `#(body.id)` expands to the `id` property, with `base_url` prefix trimmed.
 - `read_selector` (String) A selector in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries) query syntax, that is used when read returns a collection of resources, to select exactly one member resource of from it. By default, the whole response body is used as the body.
@@ -159,10 +159,18 @@ Optional:
 <a id="nestedatt--precheck_create"></a>
 ### Nested Schema for `precheck_create`
 
+Optional:
+
+- `api` (Attributes) Keeps waiting until the specified API meets the success status (see [below for nested schema](#nestedatt--precheck_create--api))
+- `mutex` (String) The name of the mutex, which implies the resource will keep waiting until this mutex is held
+
+<a id="nestedatt--precheck_create--api"></a>
+### Nested Schema for `precheck_create.api`
+
 Required:
 
 - `path` (String) The path used to query readiness, relative to the `base_url` of the provider.
-- `status` (Attributes) The expected status sentinels for each polling state. (see [below for nested schema](#nestedatt--precheck_create--status))
+- `status` (Attributes) The expected status sentinels for each polling state. (see [below for nested schema](#nestedatt--precheck_create--api--status))
 - `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).
 
 Optional:
@@ -171,8 +179,8 @@ Optional:
 - `header` (Map of String) The header parameters. This overrides the `header` set in the resource block.
 - `query` (Map of List of String) The query parameters. This overrides the `query` set in the resource block.
 
-<a id="nestedatt--precheck_create--status"></a>
-### Nested Schema for `precheck_create.status`
+<a id="nestedatt--precheck_create--api--status"></a>
+### Nested Schema for `precheck_create.api.status`
 
 Required:
 
@@ -181,15 +189,24 @@ Required:
 Optional:
 
 - `pending` (List of String) The expected status sentinels for pending status.
+
 
 
 
 <a id="nestedatt--precheck_delete"></a>
 ### Nested Schema for `precheck_delete`
 
+Optional:
+
+- `api` (Attributes) Keeps waiting until the specified API meets the success status (see [below for nested schema](#nestedatt--precheck_delete--api))
+- `mutex` (String) The name of the mutex, which implies the resource will keep waiting until this mutex is held
+
+<a id="nestedatt--precheck_delete--api"></a>
+### Nested Schema for `precheck_delete.api`
+
 Required:
 
-- `status` (Attributes) The expected status sentinels for each polling state. (see [below for nested schema](#nestedatt--precheck_delete--status))
+- `status` (Attributes) The expected status sentinels for each polling state. (see [below for nested schema](#nestedatt--precheck_delete--api--status))
 - `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).
 
 Optional:
@@ -199,8 +216,8 @@ Optional:
 - `path` (String) The path used to query readiness, relative to the `base_url` of the provider. By default, the `id` of this resource is used.
 - `query` (Map of List of String) The query parameters. This overrides the `query` set in the resource block.
 
-<a id="nestedatt--precheck_delete--status"></a>
-### Nested Schema for `precheck_delete.status`
+<a id="nestedatt--precheck_delete--api--status"></a>
+### Nested Schema for `precheck_delete.api.status`
 
 Required:
 
@@ -212,12 +229,21 @@ Optional:
 
 
 
+
 <a id="nestedatt--precheck_update"></a>
 ### Nested Schema for `precheck_update`
 
+Optional:
+
+- `api` (Attributes) Keeps waiting until the specified API meets the success status (see [below for nested schema](#nestedatt--precheck_update--api))
+- `mutex` (String) The name of the mutex, which implies the resource will keep waiting until this mutex is held
+
+<a id="nestedatt--precheck_update--api"></a>
+### Nested Schema for `precheck_update.api`
+
 Required:
 
-- `status` (Attributes) The expected status sentinels for each polling state. (see [below for nested schema](#nestedatt--precheck_update--status))
+- `status` (Attributes) The expected status sentinels for each polling state. (see [below for nested schema](#nestedatt--precheck_update--api--status))
 - `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).
 
 Optional:
@@ -227,8 +253,8 @@ Optional:
 - `path` (String) The path used to query readiness, relative to the `base_url` of the provider. By default, the `id` of this resource is used.
 - `query` (Map of List of String) The query parameters. This overrides the `query` set in the resource block.
 
-<a id="nestedatt--precheck_update--status"></a>
-### Nested Schema for `precheck_update.status`
+<a id="nestedatt--precheck_update--api--status"></a>
+### Nested Schema for `precheck_update.api.status`
 
 Required:
 

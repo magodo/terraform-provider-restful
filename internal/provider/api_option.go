@@ -160,7 +160,7 @@ func (opt apiOption) ForPoll(ctx context.Context, defaultHeader client.Header, d
 	}, nil
 }
 
-func (opt apiOption) ForPrecheck(ctx context.Context, defaultPath string, defaultHeader client.Header, defaultQuery client.Query, d precheckData) (*client.PollOption, diag.Diagnostics) {
+func (opt apiOption) ForPrecheck(ctx context.Context, defaultPath string, defaultHeader client.Header, defaultQuery client.Query, d precheckDataApi) (*client.PollOption, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
 	var status pollStatusGo

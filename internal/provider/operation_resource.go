@@ -140,35 +140,12 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 	}
 
 	// Precheck
-	if !plan.Precheck.IsNull() {
-		var checks []precheckData
-		if diags := plan.Precheck.ElementsAs(ctx, &checks, false); diags.HasError() {
-			diagnostics.Append(diags...)
-			return
-		}
-		for i, d := range checks {
-			opt, diags := r.p.apiOpt.ForPrecheck(ctx, plan.Path.ValueString(), opt.Header, opt.Query, d)
-			if diags.HasError() {
-				diagnostics.Append(diags...)
-				return
-			}
-			p, err := client.NewPollable(*opt)
-			if err != nil {
-				diagnostics.AddError(
-					fmt.Sprintf("Operation: Failed to build poller for %d-th precheck", i),
-					err.Error(),
-				)
-				return
-			}
-			if err := p.PollUntilDone(ctx, c); err != nil {
-				diagnostics.AddError(
-					fmt.Sprintf("Operation: Pre-checking %d-th check failure", i),
-					err.Error(),
-				)
-				return
-			}
-		}
+	unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, plan.Path.ValueString(), opt.Header, opt.Query, plan.Precheck)
+	diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
 	}
+	defer unlockFunc()
 
 	response, err := c.Operation(ctx, plan.Path.ValueString(), plan.Body.ValueString(), *opt)
 	if err != nil {
