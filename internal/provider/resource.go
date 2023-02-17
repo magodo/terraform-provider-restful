@@ -50,9 +50,9 @@ type resourceData struct {
 	UpdateMethod types.String `tfsdk:"update_method"`
 	DeleteMethod types.String `tfsdk:"delete_method"`
 
-	PrecheckCreate types.Object `tfsdk:"precheck_create"`
-	PrecheckUpdate types.Object `tfsdk:"precheck_update"`
-	PrecheckDelete types.Object `tfsdk:"precheck_delete"`
+	PrecheckCreate types.List `tfsdk:"precheck_create"`
+	PrecheckUpdate types.List `tfsdk:"precheck_update"`
+	PrecheckDelete types.List `tfsdk:"precheck_delete"`
 
 	Body                types.String `tfsdk:"body"`
 	WriteOnlyAttributes types.List   `tfsdk:"write_only_attrs"`
@@ -105,65 +105,67 @@ func precheckAttribute(s string, pathIsRequired bool, suffixDesc string) schema.
 		pathDesc += " " + suffixDesc
 	}
 
-	return schema.SingleNestedAttribute{
-		Description:         fmt.Sprintf("The precheck that is prior to the %q operation.", s),
-		MarkdownDescription: fmt.Sprintf("The precheck that is prior to the %q operation.", s),
+	return schema.ListNestedAttribute{
+		Description:         fmt.Sprintf("An array of prechecks that need to pass prior to the %q operation.", s),
+		MarkdownDescription: fmt.Sprintf("An array of prechecks that need to pass prior to the %q operation.", s),
 		Optional:            true,
-		Attributes: map[string]schema.Attribute{
-			"status_locator": schema.StringAttribute{
-				Description:         "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the gjson syntax.",
-				MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).",
-				Required:            true,
-				Validators: []validator.String{
-					myvalidator.StringIsParsable("locator", func(s string) error {
-						_, err := parseLocator(s)
-						return err
-					}),
-				},
-			},
-			"status": schema.SingleNestedAttribute{
-				Description:         "The expected status sentinels for each polling state.",
-				MarkdownDescription: "The expected status sentinels for each polling state.",
-				Required:            true,
-				Attributes: map[string]schema.Attribute{
-					"success": schema.StringAttribute{
-						Description:         "The expected status sentinel for suceess status.",
-						MarkdownDescription: "The expected status sentinel for suceess status.",
-						Required:            true,
-					},
-					"pending": schema.ListAttribute{
-						Description:         "The expected status sentinels for pending status.",
-						MarkdownDescription: "The expected status sentinels for pending status.",
-						Optional:            true,
-						ElementType:         types.StringType,
+		NestedObject: schema.NestedAttributeObject{
+			Attributes: map[string]schema.Attribute{
+				"status_locator": schema.StringAttribute{
+					Description:         "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the gjson syntax.",
+					MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).",
+					Required:            true,
+					Validators: []validator.String{
+						myvalidator.StringIsParsable("locator", func(s string) error {
+							_, err := parseLocator(s)
+							return err
+						}),
 					},
 				},
-			},
-			"path": schema.StringAttribute{
-				Description:         pathDesc,
-				MarkdownDescription: pathDesc,
-				Required:            pathIsRequired,
-				Optional:            !pathIsRequired,
-			},
-			"query": schema.MapAttribute{
-				Description:         "The query parameters. This overrides the `query` set in the resource block.",
-				MarkdownDescription: "The query parameters. This overrides the `query` set in the resource block.",
-				ElementType:         types.ListType{ElemType: types.StringType},
-				Optional:            true,
-			},
-			"header": schema.MapAttribute{
-				Description:         "The header parameters. This overrides the `header` set in the resource block.",
-				MarkdownDescription: "The header parameters. This overrides the `header` set in the resource block.",
-				ElementType:         types.StringType,
-				Optional:            true,
-			},
-			"default_delay_sec": schema.Int64Attribute{
-				Description:         "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
-				MarkdownDescription: "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
-				Optional:            true,
-				Computed:            true,
-				PlanModifiers: []planmodifier.Int64{
-					myplanmodifier.DefaultAttribute(types.Int64Value(10)),
+				"status": schema.SingleNestedAttribute{
+					Description:         "The expected status sentinels for each polling state.",
+					MarkdownDescription: "The expected status sentinels for each polling state.",
+					Required:            true,
+					Attributes: map[string]schema.Attribute{
+						"success": schema.StringAttribute{
+							Description:         "The expected status sentinel for suceess status.",
+							MarkdownDescription: "The expected status sentinel for suceess status.",
+							Required:            true,
+						},
+						"pending": schema.ListAttribute{
+							Description:         "The expected status sentinels for pending status.",
+							MarkdownDescription: "The expected status sentinels for pending status.",
+							Optional:            true,
+							ElementType:         types.StringType,
+						},
+					},
+				},
+				"path": schema.StringAttribute{
+					Description:         pathDesc,
+					MarkdownDescription: pathDesc,
+					Required:            pathIsRequired,
+					Optional:            !pathIsRequired,
+				},
+				"query": schema.MapAttribute{
+					Description:         "The query parameters. This overrides the `query` set in the resource block.",
+					MarkdownDescription: "The query parameters. This overrides the `query` set in the resource block.",
+					ElementType:         types.ListType{ElemType: types.StringType},
+					Optional:            true,
+				},
+				"header": schema.MapAttribute{
+					Description:         "The header parameters. This overrides the `header` set in the resource block.",
+					MarkdownDescription: "The header parameters. This overrides the `header` set in the resource block.",
+					ElementType:         types.StringType,
+					Optional:            true,
+				},
+				"default_delay_sec": schema.Int64Attribute{
+					Description:         "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
+					MarkdownDescription: "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
+					Optional:            true,
+					Computed:            true,
+					PlanModifiers: []planmodifier.Int64{
+						myplanmodifier.DefaultAttribute(types.Int64Value(10)),
+					},
 				},
 			},
 		},
@@ -537,30 +539,33 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 
 	// Precheck
 	if !plan.PrecheckCreate.IsNull() {
-		var d precheckData
-		if diags := plan.PrecheckCreate.As(ctx, &d, basetypes.ObjectAsOptions{}); diags.HasError() {
+		var checks []precheckData
+		if diags := plan.PrecheckCreate.ElementsAs(ctx, &checks, false); diags.HasError() {
 			resp.Diagnostics.Append(diags...)
 			return
 		}
-		opt, diags := r.p.apiOpt.ForPrecheck(ctx, "", opt.Header, opt.Query, d)
-		if diags.HasError() {
-			resp.Diagnostics.Append(diags...)
-			return
-		}
-		p, err := client.NewPollable(*opt)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Create: Failed to build poller for precheck",
-				err.Error(),
-			)
-			return
-		}
-		if err := p.PollUntilDone(ctx, c); err != nil {
-			resp.Diagnostics.AddError(
-				"Create: Pre-checking failure",
-				err.Error(),
-			)
-			return
+
+		for i, d := range checks {
+			opt, diags := r.p.apiOpt.ForPrecheck(ctx, "", opt.Header, opt.Query, d)
+			if diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			}
+			p, err := client.NewPollable(*opt)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					fmt.Sprintf("Create: Failed to build poller for %d-th precheck", i),
+					err.Error(),
+				)
+				return
+			}
+			if err := p.PollUntilDone(ctx, c); err != nil {
+				resp.Diagnostics.AddError(
+					fmt.Sprintf("Create: Pre-checking %d-th check failure", i),
+					err.Error(),
+				)
+				return
+			}
 		}
 	}
 
@@ -788,30 +793,32 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 
 		// Precheck
 		if !plan.PrecheckUpdate.IsNull() {
-			var d precheckData
-			if diags := plan.PrecheckUpdate.As(ctx, &d, basetypes.ObjectAsOptions{}); diags.HasError() {
+			var checks []precheckData
+			if diags := plan.PrecheckUpdate.ElementsAs(ctx, &checks, false); diags.HasError() {
 				resp.Diagnostics.Append(diags...)
 				return
 			}
-			opt, diags := r.p.apiOpt.ForPrecheck(ctx, state.ID.ValueString(), opt.Header, opt.Query, d)
-			if diags.HasError() {
-				resp.Diagnostics.Append(diags...)
-				return
-			}
-			p, err := client.NewPollable(*opt)
-			if err != nil {
-				resp.Diagnostics.AddError(
-					"Update: Failed to build poller for precheck",
-					err.Error(),
-				)
-				return
-			}
-			if err := p.PollUntilDone(ctx, c); err != nil {
-				resp.Diagnostics.AddError(
-					"Update: Pre-checking failure",
-					err.Error(),
-				)
-				return
+			for i, d := range checks {
+				opt, diags := r.p.apiOpt.ForPrecheck(ctx, state.ID.ValueString(), opt.Header, opt.Query, d)
+				if diags.HasError() {
+					resp.Diagnostics.Append(diags...)
+					return
+				}
+				p, err := client.NewPollable(*opt)
+				if err != nil {
+					resp.Diagnostics.AddError(
+						fmt.Sprintf("Update: Failed to build poller for %d-th precheck", i),
+						err.Error(),
+					)
+					return
+				}
+				if err := p.PollUntilDone(ctx, c); err != nil {
+					resp.Diagnostics.AddError(
+						fmt.Sprintf("Update: Pre-checking %d-th check failure", i),
+						err.Error(),
+					)
+					return
+				}
 			}
 		}
 
@@ -927,30 +934,32 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 
 	// Precheck
 	if !state.PrecheckDelete.IsNull() {
-		var d precheckData
-		if diags := state.PrecheckDelete.As(ctx, &d, basetypes.ObjectAsOptions{}); diags.HasError() {
+		var checks []precheckData
+		if diags := state.PrecheckDelete.ElementsAs(ctx, &checks, false); diags.HasError() {
 			resp.Diagnostics.Append(diags...)
 			return
 		}
-		opt, diags := r.p.apiOpt.ForPrecheck(ctx, state.ID.ValueString(), opt.Header, opt.Query, d)
-		if diags.HasError() {
-			resp.Diagnostics.Append(diags...)
-			return
-		}
-		p, err := client.NewPollable(*opt)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Delete: Failed to build poller for precheck",
-				err.Error(),
-			)
-			return
-		}
-		if err := p.PollUntilDone(ctx, c); err != nil {
-			resp.Diagnostics.AddError(
-				"Delete: Pre-checking failure",
-				err.Error(),
-			)
-			return
+		for i, d := range checks {
+			opt, diags := r.p.apiOpt.ForPrecheck(ctx, state.ID.ValueString(), opt.Header, opt.Query, d)
+			if diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			}
+			p, err := client.NewPollable(*opt)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					fmt.Sprintf("Delete: Failed to build poller for %d-th precheck", i),
+					err.Error(),
+				)
+				return
+			}
+			if err := p.PollUntilDone(ctx, c); err != nil {
+				resp.Diagnostics.AddError(
+					fmt.Sprintf("Delete: Pre-checking %d-th check failure", i),
+					err.Error(),
+				)
+				return
+			}
 		}
 	}
 

@@ -57,9 +57,9 @@ resource "restful_resource" "rg" {
 - `poll_create` (Attributes) The polling option for the "Create" operation (see [below for nested schema](#nestedatt--poll_create))
 - `poll_delete` (Attributes) The polling option for the "Delete" operation (see [below for nested schema](#nestedatt--poll_delete))
 - `poll_update` (Attributes) The polling option for the "Update" operation (see [below for nested schema](#nestedatt--poll_update))
-- `precheck_create` (Attributes) The precheck that is prior to the "Create" operation. (see [below for nested schema](#nestedatt--precheck_create))
-- `precheck_delete` (Attributes) The precheck that is prior to the "Delete" operation. (see [below for nested schema](#nestedatt--precheck_delete))
-- `precheck_update` (Attributes) The precheck that is prior to the "Update" operation. (see [below for nested schema](#nestedatt--precheck_update))
+- `precheck_create` (Attributes List) An array of prechecks that need to pass prior to the "Create" operation. (see [below for nested schema](#nestedatt--precheck_create))
+- `precheck_delete` (Attributes List) An array of prechecks that need to pass prior to the "Delete" operation. (see [below for nested schema](#nestedatt--precheck_delete))
+- `precheck_update` (Attributes List) An array of prechecks that need to pass prior to the "Update" operation. (see [below for nested schema](#nestedatt--precheck_update))
 - `query` (Map of List of String) The query parameters that are applied to each request. This overrides the `query` set in the provider block.
 - `read_path` (String) The API path used to read the resource, which is used as the `id`. The `path` is used as the `id` instead if `read_path` is absent. The path can be string literal, or combined by followings: `$(path)` expanded to `path`, `$(body.x.y.z)` expands to the `x.y.z` property (urlencoded) in API body, `#(body.id)` expands to the `id` property, with `base_url` prefix trimmed.
 - `read_selector` (String) A selector in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries) query syntax, that is used when read returns a collection of resources, to select exactly one member resource of from it. By default, the whole response body is used as the body.
