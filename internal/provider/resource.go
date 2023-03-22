@@ -15,6 +15,7 @@ import (
 	tfpath "github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -22,7 +23,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/magodo/terraform-provider-restful/internal/buildpath"
 	"github.com/magodo/terraform-provider-restful/internal/client"
-	myplanmodifier "github.com/magodo/terraform-provider-restful/internal/planmodifier"
 	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
 	"github.com/tidwall/gjson"
 )
@@ -185,9 +185,7 @@ func precheckAttribute(s string, pathIsRequired bool, suffixDesc string) schema.
 							MarkdownDescription: "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
 							Optional:            true,
 							Computed:            true,
-							PlanModifiers: []planmodifier.Int64{
-								myplanmodifier.DefaultAttribute(types.Int64Value(10)),
-							},
+							Default:             int64default.StaticInt64(10),
 						},
 					},
 					Validators: []validator.Object{
@@ -264,9 +262,7 @@ func pollAttribute(s string) schema.Attribute {
 				MarkdownDescription: "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
 				Optional:            true,
 				Computed:            true,
-				PlanModifiers: []planmodifier.Int64{
-					myplanmodifier.DefaultAttribute(types.Int64Value(10)),
-				},
+				Default:             int64default.StaticInt64(10),
 			},
 		},
 	}
