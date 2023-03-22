@@ -138,7 +138,7 @@ func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp 
 			return
 		}
 		resp.Diagnostics.AddError(
-			fmt.Sprintf("Create API returns %d", response.StatusCode()),
+			fmt.Sprintf("Read API returns %d", response.StatusCode()),
 			string(response.Body()),
 		)
 		return
