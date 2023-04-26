@@ -36,15 +36,16 @@ type providerData struct {
 }
 
 type providerConfig struct {
-	BaseURL            types.String `tfsdk:"base_url"`
-	Security           types.Object `tfsdk:"security"`
-	CreateMethod       types.String `tfsdk:"create_method"`
-	UpdateMethod       types.String `tfsdk:"update_method"`
-	DeleteMethod       types.String `tfsdk:"delete_method"`
-	MergePatchDisabled types.Bool   `tfsdk:"merge_patch_disabled"`
-	Query              types.Map    `tfsdk:"query"`
-	Header             types.Map    `tfsdk:"header"`
-	CookieEnabled      types.Bool   `tfsdk:"cookie_enabled"`
+	BaseURL               types.String `tfsdk:"base_url"`
+	Security              types.Object `tfsdk:"security"`
+	CreateMethod          types.String `tfsdk:"create_method"`
+	UpdateMethod          types.String `tfsdk:"update_method"`
+	DeleteMethod          types.String `tfsdk:"delete_method"`
+	MergePatchDisabled    types.Bool   `tfsdk:"merge_patch_disabled"`
+	Query                 types.Map    `tfsdk:"query"`
+	Header                types.Map    `tfsdk:"header"`
+	CookieEnabled         types.Bool   `tfsdk:"cookie_enabled"`
+	TlsInsecureSkipVerify types.Bool   `tfsdk:"tls_insecure_skip_verify"`
 }
 
 type securityData struct {
@@ -481,6 +482,11 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 				MarkdownDescription: "Save cookies during API contracting. Defaults to `false`.",
 				Optional:            true,
 			},
+			"tls_insecure_skip_verify": schema.BoolAttribute{
+				Description:         "Whether a client verifies the server's certificate chain and host name. Defaults to `false`.",
+				MarkdownDescription: "Whether a client verifies the server's certificate chain and host name. Defaults to `false`.",
+				Optional:            true,
+			},
 		},
 	}
 }
@@ -507,6 +513,8 @@ func (p *Provider) Init(ctx context.Context, config providerConfig) diag.Diagnos
 		clientOpt := client.BuildOption{
 			CookieEnabled: config.CookieEnabled.ValueBool(),
 		}
+
+		clientOpt.TLSConfig.InsecureSkipVerify = config.TlsInsecureSkipVerify.ValueBool()
 
 		if secRaw := config.Security; !secRaw.IsNull() {
 			var sec securityData
