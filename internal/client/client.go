@@ -91,11 +91,14 @@ func New(ctx context.Context, baseURL string, opt *BuildOption) (*Client, error)
 		client.SetCookieJar(nil)
 	}
 
+	client.SetTLSClientConfig(&opt.TLSConfig)
+
 	if _, err := url.Parse(baseURL); err != nil {
 		return nil, err
 	}
 
 	client.SetBaseURL(baseURL)
+
 	return &Client{client}, nil
 }
 

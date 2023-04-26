@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"crypto/tls"
 	"net/http"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 type BuildOption struct {
 	Security      securityOption
 	CookieEnabled bool
+	TLSConfig     tls.Config
 }
 
 type securityOption interface {

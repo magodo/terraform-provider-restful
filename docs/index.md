@@ -125,6 +125,7 @@ provider "restful" {
 - `merge_patch_disabled` (Boolean) Whether to use a JSON Merge Patch as the request body in the PATCH update? Defaults to `false`. This is only effective when `update_method` is set to `PATCH`.
 - `query` (Map of List of String) The query parameters that are applied to each request.
 - `security` (Attributes) The OpenAPI security scheme that is be used for auth. Only one of `http`, `apikey` and `oauth2` can be specified. (see [below for nested schema](#nestedatt--security))
+- `tls_insecure_skip_verify` (Boolean) Whether a client verifies the server's certificate chain and host name. Defaults to `false`.
 - `update_method` (String) The method used to update the resource. Possible values are `PUT` and `PATCH`. Defaults to `PUT`.
 
 <a id="nestedatt--security"></a>
