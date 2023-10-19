@@ -581,7 +581,7 @@ func (p *Provider) Init(ctx context.Context, config providerConfig) diag.Diagnos
 				switch {
 				case !oauth2.Password.IsNull():
 					var password oauth2PasswordData
-					if diags := oauth2.Password.As(ctx, &oauth2, basetypes.ObjectAsOptions{}); diags.HasError() {
+					if diags := oauth2.Password.As(ctx, &password, basetypes.ObjectAsOptions{}); diags.HasError() {
 						odiags = diags
 						return
 					}
