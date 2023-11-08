@@ -129,6 +129,7 @@ func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp 
 		Selector:      config.Selector,
 		OutputAttrs:   config.OutputAttrs,
 		AllowNotExist: config.AllowNotExist,
+		Precheck:      config.Precheck,
 	}
 
 	response, err := c.Read(ctx, config.ID.ValueString(), *opt)
