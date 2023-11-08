@@ -24,6 +24,7 @@ type dataSourceData struct {
 	Selector      types.String `tfsdk:"selector"`
 	OutputAttrs   types.Set    `tfsdk:"output_attrs"`
 	AllowNotExist types.Bool   `tfsdk:"allow_not_exist"`
+	Precheck      types.List   `tfsdk:"precheck"`
 	Output        types.String `tfsdk:"output"`
 }
 
@@ -69,6 +70,7 @@ func (d *DataSource) Schema(ctx context.Context, req datasource.SchemaRequest, r
 				MarkdownDescription: "Whether to throw error if the data source being queried doesn't exist (i.e. status code is 404). Defaults to `false`.",
 				Optional:            true,
 			},
+			"precheck": precheckAttribute("Read", true, ""),
 			"output": schema.StringAttribute{
 				Description:         "The response body after reading the resource.",
 				MarkdownDescription: "The response body after reading the resource.",
@@ -113,6 +115,13 @@ func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp 
 		return
 	}
 
+	unlockFunc, diags := precheck(ctx, c, d.p.apiOpt, "", opt.Header, opt.Query, config.Precheck)
+	if diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+	defer unlockFunc()
+
 	state := dataSourceData{
 		ID:            config.ID,
 		Query:         config.Query,
@@ -120,6 +129,7 @@ func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp 
 		Selector:      config.Selector,
 		OutputAttrs:   config.OutputAttrs,
 		AllowNotExist: config.AllowNotExist,
+		Precheck:      config.Precheck,
 	}
 
 	response, err := c.Read(ctx, config.ID.ValueString(), *opt)
