@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/tidwall/gjson"
 )
@@ -19,6 +21,7 @@ var _ datasource.DataSource = &DataSource{}
 
 type dataSourceData struct {
 	ID            types.String `tfsdk:"id"`
+	Method        types.String `tfsdk:"method"`
 	Query         types.Map    `tfsdk:"query"`
 	Header        types.Map    `tfsdk:"header"`
 	Selector      types.String `tfsdk:"selector"`
@@ -41,6 +44,14 @@ func (d *DataSource) Schema(ctx context.Context, req datasource.SchemaRequest, r
 				Description:         "The ID of the Resource, i.e. The path of the data source, relative to the `base_url` of the provider.",
 				MarkdownDescription: "The ID of the Resource, i.e. The path of the data source, relative to the `base_url` of the provider.",
 				Required:            true,
+			},
+			"method": schema.StringAttribute{
+				Description:         "The HTTP Method for the request. Allowed methods are a subset of methods defined in RFC7231 namely, GET, HEAD, and POST. POST support is only intended for read-only URLs, such as submitting a search. Defaults to `GET`.",
+				MarkdownDescription: "The HTTP Method for the request. Allowed methods are a subset of methods defined in [RFC7231](https://datatracker.ietf.org/doc/html/rfc7231#section-4.3) namely, `GET`, `HEAD`, and `POST`. `POST` support is only intended for read-only URLs, such as submitting a search. Defaults to `GET`.",
+				Optional:            true,
+				Validators: []validator.String{
+					stringvalidator.OneOf("GET", "POST", "HEAD"),
+				},
 			},
 			"query": schema.MapAttribute{
 				Description:         "The query parameters that are applied to each request. This overrides the `query` set in the provider block.",
