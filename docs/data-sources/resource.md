@@ -29,6 +29,7 @@ data "restful_resource" "test" {
 
 - `allow_not_exist` (Boolean) Whether to throw error if the data source being queried doesn't exist (i.e. status code is 404). Defaults to `false`.
 - `header` (Map of String) The header parameters that are applied to each request. This overrides the `header` set in the provider block.
+- `method` (String) The HTTP Method for the request. Allowed methods are a subset of methods defined in [RFC7231](https://datatracker.ietf.org/doc/html/rfc7231#section-4.3) namely, `GET`, `HEAD`, and `POST`. `POST` support is only intended for read-only URLs, such as submitting a search. Defaults to `GET`.
 - `output_attrs` (Set of String) A set of `output` attribute paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) that will be exported in the `output`. If this is not specified, all attributes will be exported by `output`.
 - `precheck` (Attributes List) An array of prechecks that need to pass prior to the "Read" operation. Exactly one of `mutex` or `api` should be specified. (see [below for nested schema](#nestedatt--precheck))
 - `query` (Map of List of String) The query parameters that are applied to each request. This overrides the `query` set in the provider block.

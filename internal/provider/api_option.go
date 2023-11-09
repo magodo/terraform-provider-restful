@@ -97,6 +97,7 @@ func (opt apiOption) ForResourceDelete(ctx context.Context, d resourceData) (*cl
 
 func (opt apiOption) ForDataSourceRead(ctx context.Context, d dataSourceData) (*client.ReadOption, diag.Diagnostics) {
 	out := client.ReadOption{
+		Method: d.Method.ValueString(),
 		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
 		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
 	}

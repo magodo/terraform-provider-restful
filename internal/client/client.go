@@ -125,6 +125,8 @@ func (c *Client) Create(ctx context.Context, path string, body interface{}, opt 
 }
 
 type ReadOption struct {
+	// The http method used for reading, which defaults to "GET"
+	Method string
 	Query  Query
 	Header Header
 }
@@ -134,7 +136,16 @@ func (c *Client) Read(ctx context.Context, path string, opt ReadOption) (*resty.
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 	req.SetHeaders(opt.Header)
 
-	return req.Get(path)
+	switch opt.Method {
+	case "", "GET":
+		return req.Get(path)
+	case "HEAD":
+		return req.Head(path)
+	case "POST":
+		return req.Post(path)
+	default:
+		return nil, fmt.Errorf("unknown read method: %s", opt.Method)
+	}
 }
 
 type UpdateOption struct {
