@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/magodo/terraform-provider-restful/internal/attrpath"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
@@ -137,18 +138,57 @@ func getUpdatedJSONForImport(oldJSON, newJSON interface{}) (interface{}, error) 
 }
 
 // Given a JSON object, only keep the attributes specified and remove the others.
-func FilterAttrsInJSON(obj string, attrs []string) (string, error) {
-	outputJSON := "{}"
-	for _, attr := range attrs {
-		res := gjson.Get(obj, attr)
-		if !res.Exists() {
-			return "", fmt.Errorf("no such attribute %q in JSON %q", attr, obj)
-		}
-		var err error
-		outputJSON, err = sjson.Set(outputJSON, attr, res.Value())
-		if err != nil {
-			return "", err
-		}
+func FilterAttrsInJSON(doc string, attrs []attrpath.AttrPath) (string, error) {
+	var objOrArray any
+	if err := json.Unmarshal([]byte(doc), &objOrArray); err != nil {
+		return "", err
 	}
-	return outputJSON, nil
+}
+
+func filterAttrInJSON(doc any, prefix, path attrpath.AttrPath) (any, error) {
+	if len(path) == 0 {
+		return doc, nil
+	}
+
+	step := path[0]
+	prefix = append(prefix, step)
+	remain := path[1:]
+	switch doc := doc.(type) {
+	case []interface{}:
+		switch step := step.(type) {
+		case attrpath.AttrStepValue:
+			// This must be an splat
+			// TODO: shall we support index?
+			return nil, fmt.Errorf("%s: expect a splat step, got a value step (%s)", prefix, step)
+		case attrpath.AttrStepSplat:
+			for i := range doc {
+				indoc, err := filterAttrInJSON(doc[i], prefix, remain)
+				if err != nil {
+					return nil, err
+				}
+				doc[i] = indoc
+			}
+			return doc, nil
+		default:
+			return nil, fmt.Errorf("%s: unknown step type %T", prefix, step)
+		}
+	case map[string]interface{}:
+		switch step := step.(type) {
+		case attrpath.AttrStepValue:
+			k := string(step)
+			v := doc[k]
+			indoc, err := filterAttrInJSON(v, prefix, remain)
+			if err != nil {
+				return nil, err
+			}
+			doc[k] = indoc
+			return doc, nil
+		case attrpath.AttrStepSplat:
+			return nil, fmt.Errorf("%s: expect a value step, got a splat step", prefix)
+		default:
+			return nil, fmt.Errorf("%s: unknown step type %T", prefix, step)
+		}
+	default:
+		return nil, fmt.Errorf("invalid document type %T", doc)
+	}
 }
