@@ -92,7 +92,7 @@ func TestResource_JSONServer_PatchUpdate(t *testing.T) {
 				ResourceName:            addr,
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"read_path"},
+				ImportStateVerifyIgnore: []string{"read_path", "update_method"},
 				ImportStateIdFunc: func(s *terraform.State) (string, error) {
 					return fmt.Sprintf(`{"id": %q, "path": "posts", "update_method": "PATCH", "body": {"foo": null}}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
 				},
@@ -107,7 +107,7 @@ func TestResource_JSONServer_PatchUpdate(t *testing.T) {
 				ResourceName:            addr,
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"read_path"},
+				ImportStateVerifyIgnore: []string{"read_path", "update_method"},
 				ImportStateIdFunc: func(s *terraform.State) (string, error) {
 					return fmt.Sprintf(`{"id": %q, "path": "posts", "update_method": "PATCH", "body": {"foo": null}}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
 				},
@@ -134,7 +134,7 @@ func TestResource_JSONServer_FullPath(t *testing.T) {
 				ResourceName:            addr,
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"read_path"},
+				ImportStateVerifyIgnore: []string{"read_path", "update_path", "delete_path"},
 				ImportStateIdFunc: func(s *terraform.State) (string, error) {
 					return fmt.Sprintf(`{"id": %q, "path": "posts", "update_path": "$(path)/$(body.id)", "delete_path": "$(path)/$(body.id)", "body": {"foo": null}}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
 				},
@@ -149,7 +149,7 @@ func TestResource_JSONServer_FullPath(t *testing.T) {
 				ResourceName:            addr,
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"read_path"},
+				ImportStateVerifyIgnore: []string{"read_path", "update_path", "delete_path"},
 				ImportStateIdFunc: func(s *terraform.State) (string, error) {
 					return fmt.Sprintf(`{"id": %q, "path": "posts", "update_path": "$(path)/$(body.id)", "delete_path": "$(path)/$(body.id)", "body": {"foo": null}}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
 				},

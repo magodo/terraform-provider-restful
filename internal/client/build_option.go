@@ -18,7 +18,7 @@ type BuildOption struct {
 }
 
 type securityOption interface {
-	newClient(ctx context.Context) (*resty.Client, error)
+	newClient(ctx context.Context, client *http.Client) (*resty.Client, error)
 }
 
 type HTTPBasicOption struct {
@@ -26,8 +26,8 @@ type HTTPBasicOption struct {
 	Password string
 }
 
-func (opt HTTPBasicOption) newClient(_ context.Context) (*resty.Client, error) {
-	return resty.New().SetBasicAuth(opt.Username, opt.Password), nil
+func (opt HTTPBasicOption) newClient(_ context.Context, client *http.Client) (*resty.Client, error) {
+	return resty.NewWithClient(client).SetBasicAuth(opt.Username, opt.Password), nil
 }
 
 type HTTPTokenOption struct {
@@ -35,8 +35,8 @@ type HTTPTokenOption struct {
 	Scheme string
 }
 
-func (opt HTTPTokenOption) newClient(_ context.Context) (*resty.Client, error) {
-	return resty.New().SetAuthToken(opt.Token).SetScheme(opt.Scheme), nil
+func (opt HTTPTokenOption) newClient(_ context.Context, client *http.Client) (*resty.Client, error) {
+	return resty.NewWithClient(client).SetAuthToken(opt.Token).SetScheme(opt.Scheme), nil
 }
 
 type APIKeyAuthIn string
@@ -55,22 +55,22 @@ type APIKeyAuthOpt struct {
 
 type APIKeyAuthOption []APIKeyAuthOpt
 
-func (opt APIKeyAuthOption) newClient(_ context.Context) (*resty.Client, error) {
-	client := resty.New()
+func (opt APIKeyAuthOption) newClient(_ context.Context, client *http.Client) (*resty.Client, error) {
+	c := resty.NewWithClient(client)
 	for _, key := range opt {
 		switch key.In {
 		case APIKeyAuthInHeader:
-			client.SetHeader(key.Name, key.Value)
+			c.SetHeader(key.Name, key.Value)
 		case APIKeyAuthInQuery:
-			client.SetQueryParam(key.Name, key.Value)
+			c.SetQueryParam(key.Name, key.Value)
 		case APIKeyAuthInCookie:
-			client.SetCookie(&http.Cookie{
+			c.SetCookie(&http.Cookie{
 				Name:  key.Name,
 				Value: key.Value,
 			})
 		}
 	}
-	return client, nil
+	return c, nil
 }
 
 type OAuth2AuthStyle string
@@ -91,7 +91,7 @@ type OAuth2PasswordOption struct {
 	Scopes       []string
 }
 
-func (opt OAuth2PasswordOption) newClient(ctx context.Context) (*resty.Client, error) {
+func (opt OAuth2PasswordOption) newClient(ctx context.Context, client *http.Client) (*resty.Client, error) {
 	cfg := oauth2.Config{
 		ClientID:     opt.ClientId,
 		ClientSecret: opt.ClientSecret,
@@ -115,7 +115,11 @@ func (opt OAuth2PasswordOption) newClient(ctx context.Context) (*resty.Client, e
 
 	// We use background context here when constructing the client since we are building the client during the provider configuration, where the context is used only for that purpose.
 	// Especially, when we use this client, we will set the operation bound context for each request.
-	return resty.NewWithClient(cfg.Client(context.Background(), tk)), nil
+	ctx = context.WithValue(context.Background(), oauth2.HTTPClient, client)
+
+	// We use background context here when constructing the client since we are building the client during the provider configuration, where the context is used only for that purpose.
+	// Especially, when we use this client, we will set the operation bound context for each request.
+	return resty.NewWithClient(cfg.Client(ctx, tk)), nil
 }
 
 type OAuth2ClientCredentialOption struct {
@@ -128,7 +132,7 @@ type OAuth2ClientCredentialOption struct {
 	AuthStyle      OAuth2AuthStyle
 }
 
-func (opt OAuth2ClientCredentialOption) newClient(_ context.Context) (*resty.Client, error) {
+func (opt OAuth2ClientCredentialOption) newClient(_ context.Context, client *http.Client) (*resty.Client, error) {
 	cfg := clientcredentials.Config{
 		ClientID:       opt.ClientId,
 		ClientSecret:   opt.ClientSecret,
@@ -146,7 +150,7 @@ func (opt OAuth2ClientCredentialOption) newClient(_ context.Context) (*resty.Cli
 
 	// We use background context here when constructing the client since we are building the client during the provider configuration, where the context is used only for that purpose.
 	// Especially, when we use this client, we will set the operation bound context for each request.
-	ctx := context.Background()
+	ctx := context.WithValue(context.Background(), oauth2.HTTPClient, client)
 	ts := cfg.TokenSource(ctx)
 	return resty.NewWithClient(oauth2.NewClient(ctx, ts)), nil
 }
@@ -162,7 +166,7 @@ type OAuth2RefreshTokenOption struct {
 	Scopes       []string
 }
 
-func (opt OAuth2RefreshTokenOption) newClient(_ context.Context) (*resty.Client, error) {
+func (opt OAuth2RefreshTokenOption) newClient(_ context.Context, client *http.Client) (*resty.Client, error) {
 	cfg := oauth2.Config{
 		ClientID:     opt.ClientId,
 		ClientSecret: opt.ClientSecret,
@@ -181,7 +185,7 @@ func (opt OAuth2RefreshTokenOption) newClient(_ context.Context) (*resty.Client,
 
 	// We use background context here when constructing the client since we are building the client during the provider configuration, where the context is used only for that purpose.
 	// Especially, when we use this client, we will set the operation bound context for each request.
-	ctx := context.Background()
+	ctx := context.WithValue(context.Background(), oauth2.HTTPClient, client)
 	return resty.NewWithClient(cfg.Client(ctx, &oauth2.Token{
 		RefreshToken: opt.RefreshToken,
 		TokenType:    opt.TokenType,
