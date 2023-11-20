@@ -1013,13 +1013,8 @@ type importSpec struct {
 func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	idPath := tfpath.Root("id")
 	path := tfpath.Root("path")
-	updatePath := tfpath.Root("update_path")
-	deletePath := tfpath.Root("delete_path")
 	queryPath := tfpath.Root("query")
 	headerPath := tfpath.Root("header")
-	createMethodPath := tfpath.Root("create_method")
-	updateMethodPath := tfpath.Root("update_method")
-	deleteMethodPath := tfpath.Root("delete_method")
 	bodyPath := tfpath.Root("body")
 
 	var imp importSpec
@@ -1031,6 +1026,23 @@ func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest
 		return
 	}
 
+	if imp.Id == "" {
+		resp.Diagnostics.AddError(
+			"Resource Import Error",
+			fmt.Sprintf("`id` not specified in the import spec"),
+		)
+		return
+	}
+
+	if imp.Path == "" {
+		resp.Diagnostics.AddError(
+			"Resource Import Error",
+			fmt.Sprintf("`path` not specified in the import spec"),
+		)
+		return
+	}
+
+	var body string
 	if len(imp.Body) != 0 {
 		b, err := json.Marshal(imp.Body)
 		if err != nil {
@@ -1040,17 +1052,12 @@ func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest
 			)
 			return
 		}
-		body := __IMPORT_HEADER__ + string(b)
-		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, bodyPath, body)...)
+		body = string(b)
 	}
-
+	body = __IMPORT_HEADER__ + body
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, idPath, imp.Id)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path, imp.Path)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, updatePath, imp.UpdatePath)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, deletePath, imp.DeletePath)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, bodyPath, body)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, queryPath, imp.Query)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, headerPath, imp.Header)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, createMethodPath, imp.CreateMethod)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, updateMethodPath, imp.UpdateMethod)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, deleteMethodPath, imp.DeleteMethod)...)
 }
