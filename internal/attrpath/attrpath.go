@@ -42,7 +42,7 @@ type AttrStepSplat struct{}
 
 func (AttrStepSplat) isAttrStep() {}
 
-func ParseAttrPath(input string) (AttrPath, error) {
+func Path(input string) (AttrPath, error) {
 	var gerr error
 	s := scanner.Scanner{
 		Error: func(s *scanner.Scanner, msg string) {

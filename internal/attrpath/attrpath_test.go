@@ -102,7 +102,7 @@ func TestParseAttrPath(t *testing.T) {
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			actual, err := ParseAttrPath(tt.input)
+			actual, err := Path(tt.input)
 			if tt.isErr {
 				require.Error(t, err)
 				return
@@ -183,7 +183,7 @@ func TestAttrPathString(t *testing.T) {
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			actual, err := ParseAttrPath(tt.input)
+			actual, err := Path(tt.input)
 			require.NoError(t, err)
 			require.Equal(t, tt.expect, actual.String())
 		})

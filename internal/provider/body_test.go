@@ -256,45 +256,106 @@ func TestFilterJSON(t *testing.T) {
 		name        string
 		body        string
 		outputAttrs []string
-		expect      interface{}
+		expect      string
+		expectError bool
 	}{
 		{
 			name:        "invalid body",
 			body:        "",
 			outputAttrs: []string{"foo"},
-			expect:      errors.New(`no such attribute "foo" in JSON ""`),
+			expectError: true,
 		},
 		{
-			name:   "invalid body but no output attrs return an empty json object",
-			body:   "",
-			expect: "{}",
-		},
-		{
-			name:        "with non existed attrs",
+			name:        "object with non existed attrs",
 			body:        `{}`,
 			outputAttrs: []string{"foo"},
-			expect:      errors.New(`no such attribute "foo" in JSON "{}"`),
+			expect:      `{}`,
 		},
 		{
-			name:        "filter attrs",
+			name:        "object with splat addr",
+			body:        `{}`,
+			outputAttrs: []string{"#"},
+			expectError: true,
+		},
+		{
+			name:        "array with non existed attrs",
+			body:        `[]`,
+			outputAttrs: []string{"#.foo"},
+			expect:      `[]`,
+		},
+		{
+			name:        "array with key addr",
+			body:        `[]`,
+			outputAttrs: []string{"foo"},
+			expectError: true,
+		},
+		{
+			name:        "filter object",
 			body:        `{"a": 1, "b": 2, "obj": {"x": 1, "y": 2}}`,
 			outputAttrs: []string{"a", "obj.x"},
 			expect:      `{"a": 1, "obj": {"x": 1}}`,
+		},
+		{
+			name:        "filter object for nothing",
+			body:        `{"a": 1, "b": 2, "obj": {"x": 1, "y": 2}}`,
+			outputAttrs: []string{},
+			expect:      `{"a": 1, "b": 2, "obj": {"x": 1, "y": 2}}`,
+		},
+		{
+			name:        "filter array",
+			body:        `[{"a": 1}, {"b": 2}, {"obj": {"x": 1, "y": 2}}]`,
+			outputAttrs: []string{"#.a", "#.obj.x"},
+			expect:      `[{"a": 1}, {}, {"obj": {"x": 1}}]`,
+		},
+		{
+			name: "filter array of same elements",
+			body: `[
+				{"a": 1, "b": 2, "obj": {"x": 1, "y": 2}},
+				{"a": 1, "b": 2, "obj": {"x": 1, "y": 2}},
+				{"a": 1, "b": 2, "obj": {"x": 1, "y": 2}}
+			]`,
+			outputAttrs: []string{"#.a", "#.obj.x"},
+			expect: `[
+				{"a": 1, "obj": {"x": 1}},
+				{"a": 1, "obj": {"x": 1}},
+				{"a": 1, "obj": {"x": 1}}
+			]`,
+		},
+		{
+			name: "filter array nested in array",
+			body: `[
+				[ 
+					{"a": 1, "b": 2, "obj": {"x": 1, "y": 2}},
+					{"a": 1, "b": 2, "obj": {"x": 1, "y": 2}}
+				],
+				[ 
+					{"a": 1, "b": 2, "obj": {"x": 1, "y": 2}}
+				],
+				[]
+			]`,
+			outputAttrs: []string{"#.#.a", "#.#.obj.x"},
+			expect: `[
+				[
+					{"a": 1, "obj": {"x": 1}},
+					{"a": 1, "obj": {"x": 1}}
+				],
+				[
+					{"a": 1, "obj": {"x": 1}}
+				],
+				[]
+			]`,
 		},
 	}
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			actual, err := FilterAttrsInJSON(tt.body, tt.outputAttrs)
-			switch expect := tt.expect.(type) {
-			case error:
-				require.EqualError(t, err, expect.Error())
-			case string:
-				require.NoError(t, err)
-				require.JSONEq(t, expect, actual)
-			default:
-				t.Fatalf("unknown expect type %T", expect)
+			if tt.expectError {
+				require.Error(t, err)
+				return
 			}
+			require.NoError(t, err)
+			require.JSONEq(t, tt.expect, actual)
 		})
 	}
 }
