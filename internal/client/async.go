@@ -79,7 +79,7 @@ type PollOption struct {
 	DefaultDelay time.Duration
 }
 
-func NewPollableFromResp(resp resty.Response, opt PollOption) (*Pollable, error) {
+func NewPollableForPoll(resp resty.Response, opt PollOption) (*Pollable, error) {
 	p := Pollable{
 		DefaultDelay: opt.DefaultDelay,
 		Header:       opt.Header,
@@ -117,14 +117,21 @@ func NewPollableFromResp(resp resty.Response, opt PollOption) (*Pollable, error)
 	if err != nil {
 		return nil, fmt.Errorf("parsing raw URL %q: %v", rawURL, err)
 	}
-	// We intentionaly clean the query calling the url.String() here, as the query will be later added back during constructing the poll request.
+
+	// In case the url_locator is specified, we will overwrite the query by the query parameters contained in the polling URL,
+	// as typically the polling URL is a complete URL with both the path and query parameters (probably contains auth code).
+	// Otherwise, if the url_locator not specified, which means we will GET the same URL as the original request. Hence, we continue
+	// to use the same query parameter as the original request (as is passed in the opt) .
+	if opt.UrlLocator != nil {
+		p.Query = Query(urL.Query())
+	}
 	urL.RawQuery = ""
 	p.URL = urL.String()
 
 	return &p, nil
 }
 
-func NewPollable(opt PollOption) (*Pollable, error) {
+func NewPollableForPrecheck(opt PollOption) (*Pollable, error) {
 	p := Pollable{
 		DefaultDelay: opt.DefaultDelay,
 		Header:       opt.Header,

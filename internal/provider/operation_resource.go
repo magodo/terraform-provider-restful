@@ -184,7 +184,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 			// As it will be used to poll the resource status.
 			response.Request.URL, _ = url.JoinPath(r.p.apiOpt.BaseURL.String(), resourceId)
 		}
-		p, err := client.NewPollableFromResp(*response, *opt)
+		p, err := client.NewPollableForPoll(*response, *opt)
 		if err != nil {
 			diagnostics.AddError(
 				"Operation: Failed to build poller from the response of the initiated request",
