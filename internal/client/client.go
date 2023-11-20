@@ -3,11 +3,14 @@ package client
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 
 	"github.com/go-resty/resty/v2"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"golang.org/x/net/publicsuffix"
 )
 
 type Query url.Values
@@ -78,20 +81,24 @@ func New(ctx context.Context, baseURL string, opt *BuildOption) (*Client, error)
 		opt = &BuildOption{}
 	}
 
+	transport := http.DefaultTransport.(*http.Transport)
+	transport.TLSClientConfig = &opt.TLSConfig
+	httpClient := &http.Client{
+		Transport: transport,
+	}
+	if opt.CookieEnabled {
+		cookieJar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
+		httpClient.Jar = cookieJar
+	}
+
 	client := resty.New()
 	if opt.Security != nil {
 		var err error
-		client, err = opt.Security.newClient(ctx)
+		client, err = opt.Security.newClient(ctx, httpClient)
 		if err != nil {
 			return nil, err
 		}
 	}
-
-	if !opt.CookieEnabled {
-		client.SetCookieJar(nil)
-	}
-
-	client.SetTLSClientConfig(&opt.TLSConfig)
 
 	if _, err := url.Parse(baseURL); err != nil {
 		return nil, err
