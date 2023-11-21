@@ -63,7 +63,6 @@ Optional:
 
 - `default_delay_sec` (Number) The interval between two pollings if there is no `Retry-After` in the response header, in second.
 - `header` (Map of String) The header parameters. This overrides the `header` set in the resource block.
-- `query` (Map of List of String) The query parameters. This overrides the `query` set in the resource block.
 - `url_locator` (String) Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the resource's path is used for polling.
 
 <a id="nestedatt--poll--status"></a>

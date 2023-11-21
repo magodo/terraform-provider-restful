@@ -143,20 +143,18 @@ func (opt apiOption) ForPoll(ctx context.Context, defaultHeader client.Header, d
 		header = header.Clone().TakeOrSelf(ctx, d.Header)
 	}
 
-	query := defaultQuery
-	if !d.Query.IsNull() {
-		query = query.Clone().TakeOrSelf(ctx, d.Query)
-	}
-
 	return &client.PollOption{
 		StatusLocator: statusLocator,
 		Status: client.PollingStatus{
 			Success: status.Success,
 			Pending: status.Pending,
 		},
-		UrlLocator:   urlLocator,
-		Header:       header,
-		Query:        query,
+		UrlLocator: urlLocator,
+		Header:     header,
+
+		// The poll option always use the default query, which is typically is from the original request
+		Query: defaultQuery,
+
 		DefaultDelay: time.Duration(d.DefaultDelay.ValueInt64()) * time.Second,
 	}, nil
 }

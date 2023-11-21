@@ -29,7 +29,7 @@ func precheck(ctx context.Context, c *client.Client, apiOpt apiOption, defaultPa
 				if diags.HasError() {
 					return nil, diags
 				}
-				p, err := client.NewPollable(*opt)
+				p, err := client.NewPollableForPrecheck(*opt)
 				if err != nil {
 					return nil, diag.Diagnostics{
 						diag.NewErrorDiagnostic(

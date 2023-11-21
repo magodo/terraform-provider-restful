@@ -79,7 +79,6 @@ type pollData struct {
 	Status        types.Object `tfsdk:"status"`
 	UrlLocator    types.String `tfsdk:"url_locator"`
 	Header        types.Map    `tfsdk:"header"`
-	Query         types.Map    `tfsdk:"query"`
 	DefaultDelay  types.Int64  `tfsdk:"default_delay_sec"`
 }
 
@@ -249,12 +248,6 @@ func pollAttribute(s string) schema.Attribute {
 				Description:         "The header parameters. This overrides the `header` set in the resource block.",
 				MarkdownDescription: "The header parameters. This overrides the `header` set in the resource block.",
 				ElementType:         types.StringType,
-				Optional:            true,
-			},
-			"query": schema.MapAttribute{
-				Description:         "The query parameters. This overrides the `query` set in the resource block.",
-				MarkdownDescription: "The query parameters. This overrides the `query` set in the resource block.",
-				ElementType:         types.ListType{ElemType: types.StringType},
 				Optional:            true,
 			},
 			"default_delay_sec": schema.Int64Attribute{
@@ -636,7 +629,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 			// As it will be used to poll the resource status.
 			response.Request.URL = resourceId
 		}
-		p, err := client.NewPollableFromResp(*response, *opt)
+		p, err := client.NewPollableForPoll(*response, *opt)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Create: Failed to build poller from the response of the initiated request",
@@ -853,7 +846,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 				resp.Diagnostics.Append(diags...)
 				return
 			}
-			p, err := client.NewPollableFromResp(*response, *opt)
+			p, err := client.NewPollableForPoll(*response, *opt)
 			if err != nil {
 				resp.Diagnostics.AddError(
 					"Update: Failed to build poller from the response of the initiated request",
@@ -962,7 +955,7 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 			resp.Diagnostics.Append(diags...)
 			return
 		}
-		p, err := client.NewPollableFromResp(*response, *opt)
+		p, err := client.NewPollableForPoll(*response, *opt)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Delete: Failed to build poller from the response of the initiated request",
