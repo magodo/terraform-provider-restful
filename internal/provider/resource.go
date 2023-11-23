@@ -23,6 +23,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/magodo/terraform-provider-restful/internal/buildpath"
 	"github.com/magodo/terraform-provider-restful/internal/client"
+	"github.com/magodo/terraform-provider-restful/internal/defaults"
 	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
 	"github.com/tidwall/gjson"
 )
@@ -63,6 +64,10 @@ type resourceData struct {
 	PollUpdate types.Object `tfsdk:"poll_update"`
 	PollDelete types.Object `tfsdk:"poll_delete"`
 
+	RetryCreate types.Object `tfsdk:"retry_create"`
+	RetryUpdate types.Object `tfsdk:"retry_update"`
+	RetryDelete types.Object `tfsdk:"retry_delete"`
+
 	MergePatchDisabled types.Bool `tfsdk:"merge_patch_disabled"`
 	Query              types.Map  `tfsdk:"query"`
 	Header             types.Map  `tfsdk:"header"`
@@ -96,9 +101,17 @@ type precheckDataApi struct {
 	DefaultDelay  types.Int64  `tfsdk:"default_delay_sec"`
 }
 
-type pollStatusGo struct {
+type statusDataGo struct {
 	Success string   `tfsdk:"success"`
 	Pending []string `tfsdk:"pending"`
+}
+
+type retryData struct {
+	StatusLocator types.String `tfsdk:"status_locator"`
+	Status        types.Object `tfsdk:"status"`
+	Count         types.Int64  `tfsdk:"count"`
+	WaitInSec     types.Int64  `tfsdk:"wait_in_sec"`
+	MaxWaitInSec  types.Int64  `tfsdk:"max_wait_in_sec"`
 }
 
 func (r *Resource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -180,8 +193,8 @@ func precheckAttribute(s string, pathIsRequired bool, suffixDesc string) schema.
 							Optional:            true,
 						},
 						"default_delay_sec": schema.Int64Attribute{
-							Description:         "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
-							MarkdownDescription: "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
+							Description:         "The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `10`.",
+							MarkdownDescription: "The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `10`.",
 							Optional:            true,
 							Computed:            true,
 							Default:             int64default.StaticInt64(10),
@@ -251,11 +264,65 @@ func pollAttribute(s string) schema.Attribute {
 				Optional:            true,
 			},
 			"default_delay_sec": schema.Int64Attribute{
-				Description:         "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
-				MarkdownDescription: "The interval between two pollings if there is no `Retry-After` in the response header, in second.",
+				Description:         "The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `10`.",
+				MarkdownDescription: "The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `10`.",
 				Optional:            true,
 				Computed:            true,
 				Default:             int64default.StaticInt64(10),
+			},
+		},
+	}
+}
+
+func retryAttribute(s string) schema.Attribute {
+	return schema.SingleNestedAttribute{
+		Description:         fmt.Sprintf("The retry option for the %q operation", s),
+		MarkdownDescription: fmt.Sprintf("The retry option for the %q operation", s),
+		Optional:            true,
+		Attributes: map[string]schema.Attribute{
+			"status_locator": schema.StringAttribute{
+				Description:         "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the gjson syntax. In most case, you shall use `code`, as you most not expect a write-like operation to perform multiple times.",
+				MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the gjson syntax. In most case, you shall use `code`, as you most not expect a write-like operation to perform multiple times.",
+				Required:            true,
+				Validators: []validator.String{
+					myvalidator.StringIsParsable("locator", func(s string) error {
+						_, err := parseLocator(s)
+						return err
+					}),
+				},
+			},
+			"status": schema.SingleNestedAttribute{
+				Description:         "The expected status sentinels.",
+				MarkdownDescription: "The expected status sentinels.",
+				Required:            true,
+				Attributes: map[string]schema.Attribute{
+					"success": schema.StringAttribute{
+						Description:         "The expected status sentinel for suceess status.",
+						MarkdownDescription: "The expected status sentinel for suceess status.",
+						Required:            true,
+					},
+					"pending": schema.ListAttribute{
+						Description:         "The expected status sentinels for pending status.",
+						MarkdownDescription: "The expected status sentinels for pending status.",
+						Optional:            true,
+						ElementType:         types.StringType,
+					},
+				},
+			},
+			"count": schema.Int64Attribute{
+				Description:         fmt.Sprintf("The maximum allowed retries. Defaults to `%d`.", defaults.RetryCount),
+				MarkdownDescription: fmt.Sprintf("The maximum allowed retries. Defaults to `%d`.", defaults.RetryCount),
+				Optional:            true,
+			},
+			"wait_in_sec": schema.Int64Attribute{
+				Description:         fmt.Sprintf("The initial retry wait time between two retries in second, if there is no `Retry-After` in the response header, or the `Retry-After` is less than this. The wait time will be increased in capped exponential backoff with jitter, at most up to `max_wait_in_sec` (if not null). Defaults to `%v`.", defaults.RetryWaitTime.Seconds()),
+				MarkdownDescription: fmt.Sprintf("The initial retry wait time between two retries in second, if there is no `Retry-After` in the response header, or the `Retry-After` is less than this. The wait time will be increased in capped exponential backoff with jitter, at most up to `max_wait_in_sec` (if not null). Defaults to `%v`.", defaults.RetryWaitTime.Seconds()),
+				Optional:            true,
+			},
+			"max_wait_in_sec": schema.Int64Attribute{
+				Description:         fmt.Sprintf("The maximum allowed retry wait time. Defaults to `%v`.", defaults.RetryMaxWaitTime.Seconds()),
+				MarkdownDescription: fmt.Sprintf("The maximum allowed retry wait time. Defaults to `%v`.", defaults.RetryMaxWaitTime.Seconds()),
+				Optional:            true,
 			},
 		},
 	}
@@ -336,6 +403,10 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 			"precheck_create": precheckAttribute("Create", true, ""),
 			"precheck_update": precheckAttribute("Update", false, "By default, the `id` of this resource is used."),
 			"precheck_delete": precheckAttribute("Delete", false, "By default, the `id` of this resource is used."),
+
+			"retry_create": retryAttribute("Create (i.e. PUT/POST)"),
+			"retry_update": retryAttribute("Update (i.e. PUT/PATCH/POST)"),
+			"retry_delete": retryAttribute("Delete (i.e. DELETE)"),
 
 			"write_only_attrs": schema.ListAttribute{
 				Description:         "A list of paths (in gjson syntax) to the attributes that are only settable, but won't be read in GET response.",

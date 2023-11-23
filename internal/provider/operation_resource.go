@@ -34,6 +34,7 @@ type operationResourceData struct {
 	Header   types.Map    `tfsdk:"header"`
 	Precheck types.List   `tfsdk:"precheck"`
 	Poll     types.Object `tfsdk:"poll"`
+	Retry    types.Object `tfsdk:"retry"`
 	Output   types.String `tfsdk:"output"`
 }
 
@@ -95,6 +96,7 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 			},
 			"precheck": precheckAttribute("API", false, "By default, the `path` of this resource is used."),
 			"poll":     pollAttribute("API"),
+			"retry":    retryAttribute("API"),
 			"output": schema.StringAttribute{
 				Description:         "The response body.",
 				MarkdownDescription: "The response body.",
