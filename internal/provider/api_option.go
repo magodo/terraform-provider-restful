@@ -114,6 +114,14 @@ func (opt apiOption) ForResourceRead(ctx context.Context, d resourceData) (*clie
 		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
 		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
 	}
+
+	if !d.RetryRead.IsNull() && !d.RetryRead.IsUnknown() {
+		retryOpt, diags := opt.forRetry(ctx, d.RetryRead)
+		if diags.HasError() {
+			return nil, diags
+		}
+		out.Retry = retryOpt
+	}
 	return &out, nil
 }
 

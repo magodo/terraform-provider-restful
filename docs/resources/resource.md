@@ -65,6 +65,7 @@ resource "restful_resource" "rg" {
 - `read_selector` (String) A selector in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries) query syntax, that is used when read returns a collection of resources, to select exactly one member resource of from it. By default, the whole response body is used as the body.
 - `retry_create` (Attributes) The retry option for the "Create (i.e. PUT/POST)" operation (see [below for nested schema](#nestedatt--retry_create))
 - `retry_delete` (Attributes) The retry option for the "Delete (i.e. DELETE)" operation (see [below for nested schema](#nestedatt--retry_delete))
+- `retry_read` (Attributes) The retry option for the "Read (i.e. GET, but not include the `precheck_xxx`/`poll_xxx`)" operation (see [below for nested schema](#nestedatt--retry_read))
 - `retry_update` (Attributes) The retry option for the "Update (i.e. PUT/PATCH/POST)" operation (see [below for nested schema](#nestedatt--retry_update))
 - `update_method` (String) The method used to update the resource. Possible values are `PUT`, `POST`, and `PATCH`. This overrides the `update_method` set in the provider block (defaults to PUT).
 - `update_path` (String) The API path used to update the resource. The `id` is used instead if `update_path` is absent. The path can be string literal, or combined by followings: `$(path)` expanded to `path`, `$(body.x.y.z)` expands to the `x.y.z` property (urlencoded) in API body, `#(body.id)` expands to the `id` property, with `base_url` prefix trimmed.
@@ -310,6 +311,33 @@ Optional:
 
 <a id="nestedatt--retry_delete--status"></a>
 ### Nested Schema for `retry_delete.status`
+
+Required:
+
+- `success` (String) The expected status sentinel for suceess status.
+
+Optional:
+
+- `pending` (List of String) The expected status sentinels for pending status.
+
+
+
+<a id="nestedatt--retry_read"></a>
+### Nested Schema for `retry_read`
+
+Required:
+
+- `status` (Attributes) The expected status sentinels. (see [below for nested schema](#nestedatt--retry_read--status))
+- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the gjson syntax. In most case, you shall use `code`, as you most not expect a write-like operation to perform multiple times.
+
+Optional:
+
+- `count` (Number) The maximum allowed retries. Defaults to `3`.
+- `max_wait_in_sec` (Number) The maximum allowed retry wait time. Defaults to `3600`.
+- `wait_in_sec` (Number) The initial retry wait time between two retries in second, if there is no `Retry-After` in the response header, or the `Retry-After` is less than this. The wait time will be increased in capped exponential backoff with jitter, at most up to `max_wait_in_sec` (if not null). Defaults to `1`.
+
+<a id="nestedatt--retry_read--status"></a>
+### Nested Schema for `retry_read.status`
 
 Required:
 

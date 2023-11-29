@@ -199,9 +199,15 @@ func (c *Client) Create(ctx context.Context, path string, body interface{}, opt 
 type ReadOption struct {
 	Query  Query
 	Header Header
+	Retry  *RetryOption
 }
 
 func (c *Client) Read(ctx context.Context, path string, opt ReadOption) (*resty.Response, error) {
+	if opt.Retry != nil {
+		c.setRetry(*opt.Retry)
+		defer c.resetRetry()
+	}
+
 	req := c.R().SetContext(ctx)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 	req.SetHeaders(opt.Header)

@@ -65,6 +65,7 @@ type resourceData struct {
 	PollDelete types.Object `tfsdk:"poll_delete"`
 
 	RetryCreate types.Object `tfsdk:"retry_create"`
+	RetryRead   types.Object `tfsdk:"retry_read"`
 	RetryUpdate types.Object `tfsdk:"retry_update"`
 	RetryDelete types.Object `tfsdk:"retry_delete"`
 
@@ -405,6 +406,7 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 			"precheck_delete": precheckAttribute("Delete", false, "By default, the `id` of this resource is used."),
 
 			"retry_create": retryAttribute("Create (i.e. PUT/POST)"),
+			"retry_read":   retryAttribute("Read (i.e. GET, but not include the `precheck_xxx`/`poll_xxx`)"),
 			"retry_update": retryAttribute("Update (i.e. PUT/PATCH/POST)"),
 			"retry_delete": retryAttribute("Delete (i.e. DELETE)"),
 
@@ -508,12 +510,12 @@ func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConf
 
 func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	if req.Plan.Raw.IsNull() {
-		// // If the entire plan is null, the resource is planned for destruction.
+		// If the entire plan is null, the resource is planned for destruction.
 		return
 	}
 
 	if req.State.Raw.IsNull() {
-		// // If the entire state is null, the resource is planned for creation.
+		// If the entire state is null, the resource is planned for creation.
 		return
 	}
 	var plan resourceData
