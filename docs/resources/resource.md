@@ -88,7 +88,7 @@ Optional:
 
 - `default_delay_sec` (Number) The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `10`.
 - `header` (Map of String) The header parameters. This overrides the `header` set in the resource block.
-- `url_locator` (String) Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the resource's path is used for polling.
+- `url_locator` (String) Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the current operation's URL is used for polling, execpt `Create` where it fallbacks to use the resource id as the polling URL.
 
 <a id="nestedatt--poll_create--status"></a>
 ### Nested Schema for `poll_create.status`
@@ -115,7 +115,7 @@ Optional:
 
 - `default_delay_sec` (Number) The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `10`.
 - `header` (Map of String) The header parameters. This overrides the `header` set in the resource block.
-- `url_locator` (String) Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the resource's path is used for polling.
+- `url_locator` (String) Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the current operation's URL is used for polling, execpt `Create` where it fallbacks to use the resource id as the polling URL.
 
 <a id="nestedatt--poll_delete--status"></a>
 ### Nested Schema for `poll_delete.status`
@@ -142,7 +142,7 @@ Optional:
 
 - `default_delay_sec` (Number) The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `10`.
 - `header` (Map of String) The header parameters. This overrides the `header` set in the resource block.
-- `url_locator` (String) Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the resource's path is used for polling.
+- `url_locator` (String) Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the current operation's URL is used for polling, execpt `Create` where it fallbacks to use the resource id as the polling URL.
 
 <a id="nestedatt--poll_update--status"></a>
 ### Nested Schema for `poll_update.status`
