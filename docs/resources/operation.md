@@ -45,6 +45,7 @@ resource "restful_operation" "register_rp" {
 - `poll` (Attributes) The polling option for the "API" operation (see [below for nested schema](#nestedatt--poll))
 - `precheck` (Attributes List) An array of prechecks that need to pass prior to the "API" operation. Exactly one of `mutex` or `api` should be specified. (see [below for nested schema](#nestedatt--precheck))
 - `query` (Map of List of String) The query parameters that are applied to each request. This overrides the `query` set in the provider block.
+- `retry` (Attributes) The retry option for the "API" operation (see [below for nested schema](#nestedatt--retry))
 
 ### Read-Only
 
@@ -61,7 +62,7 @@ Required:
 
 Optional:
 
-- `default_delay_sec` (Number) The interval between two pollings if there is no `Retry-After` in the response header, in second.
+- `default_delay_sec` (Number) The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `10`.
 - `header` (Map of String) The header parameters. This overrides the `header` set in the resource block.
 - `url_locator` (String) Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the resource's path is used for polling.
 
@@ -96,7 +97,7 @@ Required:
 
 Optional:
 
-- `default_delay_sec` (Number) The interval between two pollings if there is no `Retry-After` in the response header, in second.
+- `default_delay_sec` (Number) The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `10`.
 - `header` (Map of String) The header parameters. This overrides the `header` set in the resource block.
 - `path` (String) The path used to query readiness, relative to the `base_url` of the provider. By default, the `path` of this resource is used.
 - `query` (Map of List of String) The query parameters. This overrides the `query` set in the resource block.
@@ -113,3 +114,29 @@ Optional:
 - `pending` (List of String) The expected status sentinels for pending status.
 
 
+
+
+<a id="nestedatt--retry"></a>
+### Nested Schema for `retry`
+
+Required:
+
+- `status` (Attributes) The expected status sentinels. (see [below for nested schema](#nestedatt--retry--status))
+- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the gjson syntax. In most case, you shall use `code`, as you most not expect a write-like operation to perform multiple times.
+
+Optional:
+
+- `count` (Number) The maximum allowed retries. Defaults to `3`.
+- `max_wait_in_sec` (Number) The maximum allowed retry wait time. Defaults to `3600`.
+- `wait_in_sec` (Number) The initial retry wait time between two retries in second, if there is no `Retry-After` in the response header, or the `Retry-After` is less than this. The wait time will be increased in capped exponential backoff with jitter, at most up to `max_wait_in_sec` (if not null). Defaults to `1`.
+
+<a id="nestedatt--retry--status"></a>
+### Nested Schema for `retry.status`
+
+Required:
+
+- `success` (String) The expected status sentinel for suceess status.
+
+Optional:
+
+- `pending` (List of String) The expected status sentinels for pending status.
