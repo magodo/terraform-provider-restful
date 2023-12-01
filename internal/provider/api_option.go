@@ -207,6 +207,24 @@ func (opt apiOption) ForResourceOperation(ctx context.Context, d operationResour
 	return &out, nil
 }
 
+func (opt apiOption) ForResourceOperationDelete(ctx context.Context, d operationResourceData) (*client.OperationOption, diag.Diagnostics) {
+	out := client.OperationOption{
+		Method: d.DeleteMethod.ValueString(),
+		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
+		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
+	}
+
+	if !d.RetryDelete.IsNull() && !d.RetryDelete.IsUnknown() {
+		retryOpt, diags := opt.forRetry(ctx, d.Retry)
+		if diags.HasError() {
+			return nil, diags
+		}
+		out.Retry = retryOpt
+	}
+
+	return &out, nil
+}
+
 func (opt apiOption) ForPoll(ctx context.Context, defaultHeader client.Header, defaultQuery client.Query, d pollData) (*client.PollOption, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
