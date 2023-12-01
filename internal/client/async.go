@@ -180,6 +180,14 @@ PollingLoop:
 			return fmt.Errorf("polling %s: %v", f.URL, err)
 		}
 
+		// In case this is status_locator is not a code locator, then we shall firstly ensure the GET succeeded,
+		// to avoid the status retrieving error hides the actual GET error.
+		if _, ok := f.StatusLocator.(CodeLocator); !ok {
+			if !resp.IsSuccess() {
+				return fmt.Errorf("polling returns %d: %s", resp.StatusCode(), string(resp.Body()))
+			}
+		}
+
 		status := f.StatusLocator.LocateValueInResp(*resp)
 		if status == "" {
 			return fmt.Errorf("No status value found from %s", f.StatusLocator)
