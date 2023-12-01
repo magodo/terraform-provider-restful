@@ -35,17 +35,24 @@ resource "restful_operation" "register_rp" {
 
 ### Required
 
-- `method` (String) The HTTP method of the API call. Possible values are `PUT`, `POST`, `PATCH` and `DELETE`.
-- `path` (String) The path of the API call, relative to the `base_url` of the provider.
+- `method` (String) The HTTP method for the `Create`/`Update` call. Possible values are `PUT`, `POST`, `PATCH` and `DELETE`.
+- `path` (String) The path for the `Create`/`Update` call, relative to the `base_url` of the provider.
 
 ### Optional
 
-- `body` (String) The payload of the API call.
+- `body` (String) The payload for the `Create`/`Update` call.
+- `delete_body` (String) The payload for the `Delete` call.
+- `delete_method` (String) The method for the `Delete` call. Possible values are `POST`, `PUT`, `PATCH` and `DELETE`. If this is not specified, no `Delete` call will occur.
+- `delete_path` (String) The path for the `Delete` call, relative to the `base_url` of the provider. The `path` is used instead if `delete_path` is absent.
 - `header` (Map of String) The header parameters that are applied to each request. This overrides the `header` set in the provider block.
-- `poll` (Attributes) The polling option for the "API" operation (see [below for nested schema](#nestedatt--poll))
-- `precheck` (Attributes List) An array of prechecks that need to pass prior to the "API" operation. Exactly one of `mutex` or `api` should be specified. (see [below for nested schema](#nestedatt--precheck))
+- `output_attrs` (Set of String) A set of `output` attribute paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) that will be exported in the `output`. If this is not specified, all attributes will be exported by `output`.
+- `poll` (Attributes) The polling option for the "`Create`/`Update`" operation (see [below for nested schema](#nestedatt--poll))
+- `poll_delete` (Attributes) The polling option for the "`Delete`" operation (see [below for nested schema](#nestedatt--poll_delete))
+- `precheck` (Attributes List) An array of prechecks that need to pass prior to the "`Create`/`Update`" operation. Exactly one of `mutex` or `api` should be specified. (see [below for nested schema](#nestedatt--precheck))
+- `precheck_delete` (Attributes List) An array of prechecks that need to pass prior to the "`Delete`" operation. Exactly one of `mutex` or `api` should be specified. (see [below for nested schema](#nestedatt--precheck_delete))
 - `query` (Map of List of String) The query parameters that are applied to each request. This overrides the `query` set in the provider block.
-- `retry` (Attributes) The retry option for the "API" operation (see [below for nested schema](#nestedatt--retry))
+- `retry` (Attributes) The retry option for the "`Create`/`Update`" operation (see [below for nested schema](#nestedatt--retry))
+- `retry_delete` (Attributes) The retry option for the "`Delete`" operation (see [below for nested schema](#nestedatt--retry_delete))
 
 ### Read-Only
 
@@ -79,6 +86,33 @@ Optional:
 
 
 
+<a id="nestedatt--poll_delete"></a>
+### Nested Schema for `poll_delete`
+
+Required:
+
+- `status` (Attributes) The expected status sentinels for each polling state. (see [below for nested schema](#nestedatt--poll_delete--status))
+- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).
+
+Optional:
+
+- `default_delay_sec` (Number) The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `10`.
+- `header` (Map of String) The header parameters. This overrides the `header` set in the resource block.
+- `url_locator` (String) Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the resource's path is used for polling.
+
+<a id="nestedatt--poll_delete--status"></a>
+### Nested Schema for `poll_delete.status`
+
+Required:
+
+- `success` (String) The expected status sentinel for suceess status.
+
+Optional:
+
+- `pending` (List of String) The expected status sentinels for pending status.
+
+
+
 <a id="nestedatt--precheck"></a>
 ### Nested Schema for `precheck`
 
@@ -92,7 +126,44 @@ Optional:
 
 Required:
 
+- `path` (String) The path used to query readiness, relative to the `base_url` of the provider.
 - `status` (Attributes) The expected status sentinels for each polling state. (see [below for nested schema](#nestedatt--precheck--api--status))
+- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).
+
+Optional:
+
+- `default_delay_sec` (Number) The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `10`.
+- `header` (Map of String) The header parameters. This overrides the `header` set in the resource block.
+- `query` (Map of List of String) The query parameters. This overrides the `query` set in the resource block.
+
+<a id="nestedatt--precheck--api--status"></a>
+### Nested Schema for `precheck.api.status`
+
+Required:
+
+- `success` (String) The expected status sentinel for suceess status.
+
+Optional:
+
+- `pending` (List of String) The expected status sentinels for pending status.
+
+
+
+
+<a id="nestedatt--precheck_delete"></a>
+### Nested Schema for `precheck_delete`
+
+Optional:
+
+- `api` (Attributes) Keeps waiting until the specified API meets the success status (see [below for nested schema](#nestedatt--precheck_delete--api))
+- `mutex` (String) The name of the mutex, which implies the resource will keep waiting until this mutex is held
+
+<a id="nestedatt--precheck_delete--api"></a>
+### Nested Schema for `precheck_delete.api`
+
+Required:
+
+- `status` (Attributes) The expected status sentinels for each polling state. (see [below for nested schema](#nestedatt--precheck_delete--api--status))
 - `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).
 
 Optional:
@@ -102,8 +173,8 @@ Optional:
 - `path` (String) The path used to query readiness, relative to the `base_url` of the provider. By default, the `path` of this resource is used.
 - `query` (Map of List of String) The query parameters. This overrides the `query` set in the resource block.
 
-<a id="nestedatt--precheck--api--status"></a>
-### Nested Schema for `precheck.api.status`
+<a id="nestedatt--precheck_delete--api--status"></a>
+### Nested Schema for `precheck_delete.api.status`
 
 Required:
 
@@ -132,6 +203,33 @@ Optional:
 
 <a id="nestedatt--retry--status"></a>
 ### Nested Schema for `retry.status`
+
+Required:
+
+- `success` (String) The expected status sentinel for suceess status.
+
+Optional:
+
+- `pending` (List of String) The expected status sentinels for pending status.
+
+
+
+<a id="nestedatt--retry_delete"></a>
+### Nested Schema for `retry_delete`
+
+Required:
+
+- `status` (Attributes) The expected status sentinels. (see [below for nested schema](#nestedatt--retry_delete--status))
+- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the gjson syntax. In most case, you shall use `code`, as you most not expect a write-like operation to perform multiple times.
+
+Optional:
+
+- `count` (Number) The maximum allowed retries. Defaults to `3`.
+- `max_wait_in_sec` (Number) The maximum allowed retry wait time. Defaults to `3600`.
+- `wait_in_sec` (Number) The initial retry wait time between two retries in second, if there is no `Retry-After` in the response header, or the `Retry-After` is less than this. The wait time will be increased in capped exponential backoff with jitter, at most up to `max_wait_in_sec` (if not null). Defaults to `1`.
+
+<a id="nestedatt--retry_delete--status"></a>
+### Nested Schema for `retry_delete.status`
 
 Required:
 

@@ -3,10 +3,12 @@ package provider
 import (
 	"context"
 	"fmt"
-	"net/url"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/objectvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -15,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+	"github.com/magodo/terraform-provider-restful/internal/buildpath"
 	"github.com/magodo/terraform-provider-restful/internal/client"
 	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
 )
@@ -26,16 +29,23 @@ type OperationResource struct {
 var _ resource.Resource = &OperationResource{}
 
 type operationResourceData struct {
-	ID       types.String `tfsdk:"id"`
-	Path     types.String `tfsdk:"path"`
-	Method   types.String `tfsdk:"method"`
-	Body     types.String `tfsdk:"body"`
-	Query    types.Map    `tfsdk:"query"`
-	Header   types.Map    `tfsdk:"header"`
-	Precheck types.List   `tfsdk:"precheck"`
-	Poll     types.Object `tfsdk:"poll"`
-	Retry    types.Object `tfsdk:"retry"`
-	Output   types.String `tfsdk:"output"`
+	ID             types.String `tfsdk:"id"`
+	Path           types.String `tfsdk:"path"`
+	Method         types.String `tfsdk:"method"`
+	Body           types.String `tfsdk:"body"`
+	Query          types.Map    `tfsdk:"query"`
+	Header         types.Map    `tfsdk:"header"`
+	Precheck       types.List   `tfsdk:"precheck"`
+	Poll           types.Object `tfsdk:"poll"`
+	Retry          types.Object `tfsdk:"retry"`
+	DeleteMethod   types.String `tfsdk:"delete_method"`
+	DeleteBody     types.String `tfsdk:"delete_body"`
+	DeletePath     types.String `tfsdk:"delete_path"`
+	PrecheckDelete types.List   `tfsdk:"precheck_delete"`
+	PollDelete     types.Object `tfsdk:"poll_delete"`
+	RetryDelete    types.Object `tfsdk:"retry_delete"`
+	OutputAttrs    types.Set    `tfsdk:"output_attrs"`
+	Output         types.String `tfsdk:"output"`
 }
 
 func (r *OperationResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -43,6 +53,13 @@ func (r *OperationResource) Metadata(ctx context.Context, req resource.MetadataR
 }
 
 func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+	precheckDelete := precheckAttribute("`Delete`", false, "By default, the `path` of this resource is used.")
+	precheckDelete.Validators = append(precheckDelete.Validators, listvalidator.AlsoRequires(path.MatchRelative().AtParent().AtName("delete_method")))
+	pollDelete := pollAttribute("`Delete`")
+	pollDelete.Validators = append(pollDelete.Validators, objectvalidator.AlsoRequires(path.MatchRelative().AtParent().AtName("delete_method")))
+	retryDelete := retryAttribute("`Delete`")
+	retryDelete.Validators = append(retryDelete.Validators, objectvalidator.AlsoRequires(path.MatchRelative().AtParent().AtName("delete_method")))
+
 	resp.Schema = schema.Schema{
 		Description:         "`restful_operation` represents a one-time API call operation.",
 		MarkdownDescription: "`restful_operation` represents a one-time API call operation.",
@@ -56,27 +73,24 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 				},
 			},
 			"path": schema.StringAttribute{
-				Description:         "The path of the API call, relative to the `base_url` of the provider.",
-				MarkdownDescription: "The path of the API call, relative to the `base_url` of the provider.",
+				Description:         "The path for the `Create`/`Update` call, relative to the `base_url` of the provider.",
+				MarkdownDescription: "The path for the `Create`/`Update` call, relative to the `base_url` of the provider.",
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"method": schema.StringAttribute{
-				Description:         "The HTTP method of the API call. Possible values are `PUT`, `POST`, `PATCH` and `DELETE`.",
-				MarkdownDescription: "The HTTP method of the API call. Possible values are `PUT`, `POST`, `PATCH` and `DELETE`.",
+				Description:         "The HTTP method for the `Create`/`Update` call. Possible values are `PUT`, `POST`, `PATCH` and `DELETE`.",
+				MarkdownDescription: "The HTTP method for the `Create`/`Update` call. Possible values are `PUT`, `POST`, `PATCH` and `DELETE`.",
 				Required:            true,
 				Validators: []validator.String{
 					stringvalidator.OneOf("PUT", "POST", "PATCH", "DELETE"),
 				},
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
 			},
 			"body": schema.StringAttribute{
-				Description:         "The payload of the API call.",
-				MarkdownDescription: "The payload of the API call.",
+				Description:         "The payload for the `Create`/`Update` call.",
+				MarkdownDescription: "The payload for the `Create`/`Update` call.",
 				Optional:            true,
 				Validators: []validator.String{
 					myvalidator.StringIsJSON(),
@@ -94,9 +108,51 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 				ElementType:         types.StringType,
 				Optional:            true,
 			},
-			"precheck": precheckAttribute("API", false, "By default, the `path` of this resource is used."),
-			"poll":     pollAttribute("API"),
-			"retry":    retryAttribute("API"),
+
+			"precheck": precheckAttribute("`Create`/`Update`", true, ""),
+			"poll":     pollAttribute("`Create`/`Update`"),
+			"retry":    retryAttribute("`Create`/`Update`"),
+
+			"delete_method": schema.StringAttribute{
+				Description:         "The method for the `Delete` call. Possible values are `POST`, `PUT`, `PATCH` and `DELETE`. If this is not specified, no `Delete` call will occur.",
+				MarkdownDescription: "The method for the `Delete` call. Possible values are `POST`, `PUT`, `PATCH` and `DELETE`. If this is not specified, no `Delete` call will occur.",
+				Optional:            true,
+				Validators: []validator.String{
+					stringvalidator.OneOf("POST", "PUT", "PATCH", "DELETE"),
+				},
+			},
+
+			"delete_path": schema.StringAttribute{
+				Description:         "The path for the `Delete` call, relative to the `base_url` of the provider. The `path` is used instead if `delete_path` is absent.",
+				MarkdownDescription: "The path for the `Delete` call, relative to the `base_url` of the provider. The `path` is used instead if `delete_path` is absent.",
+				Optional:            true,
+				Validators: []validator.String{
+					stringvalidator.AlsoRequires(path.MatchRelative().AtParent().AtName("delete_method")),
+					myvalidator.StringIsPathBuilder(),
+				},
+			},
+
+			"delete_body": schema.StringAttribute{
+				Description:         "The payload for the `Delete` call.",
+				MarkdownDescription: "The payload for the `Delete` call.",
+				Optional:            true,
+				Validators: []validator.String{
+					stringvalidator.AlsoRequires(path.MatchRelative().AtParent().AtName("delete_method")),
+					myvalidator.StringIsJSON(),
+				},
+			},
+
+			"precheck_delete": precheckDelete,
+			"poll_delete":     pollDelete,
+			"retry_delete":    retryDelete,
+
+			"output_attrs": schema.SetAttribute{
+				Description:         "A set of `output` attribute paths (in gjson syntax) that will be exported in the `output`. If this is not specified, all attributes will be exported by `output`.",
+				MarkdownDescription: "A set of `output` attribute paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) that will be exported in the `output`. If this is not specified, all attributes will be exported by `output`.",
+				Optional:            true,
+				ElementType:         types.StringType,
+			},
+
 			"output": schema.StringAttribute{
 				Description:         "The response body.",
 				MarkdownDescription: "The response body.",
@@ -181,11 +237,6 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 			diagnostics.Append(diags...)
 			return
 		}
-		if opt.UrlLocator == nil {
-			// Update the request URL to pointing to the resource path, which is mainly for resources whose create method is POST.
-			// As it will be used to poll the resource status.
-			response.Request.URL, _ = url.JoinPath(r.p.apiOpt.BaseURL.String(), resourceId)
-		}
 		p, err := client.NewPollableForPoll(*response, *opt)
 		if err != nil {
 			diagnostics.AddError(
@@ -208,6 +259,25 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 
 	// Set Output to state
 	plan.Output = types.StringValue(string(b))
+	output := string(b)
+	if !plan.OutputAttrs.IsNull() {
+		// Update the output to only contain the specified attributes.
+		var outputAttrs []string
+		diags = plan.OutputAttrs.ElementsAs(ctx, &outputAttrs, false)
+		diagnostics.Append(diags...)
+		if diags.HasError() {
+			return
+		}
+		output, err = FilterAttrsInJSON(output, outputAttrs)
+		if err != nil {
+			diagnostics.AddError(
+				"Filter `output` during operation",
+				err.Error(),
+			)
+			return
+		}
+	}
+	plan.Output = types.StringValue(output)
 
 	diags = state.Set(ctx, plan)
 	diagnostics.Append(diags...)
@@ -231,5 +301,90 @@ func (r *OperationResource) Read(ctx context.Context, req resource.ReadRequest, 
 }
 
 func (r *OperationResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state operationResourceData
+	diags := req.State.Get(ctx, &state)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
+
+	if state.DeleteMethod.IsNull() {
+		return
+	}
+
+	c := r.p.client
+
+	opt, diags := r.p.apiOpt.ForResourceOperationDelete(ctx, state)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
+
+	// Precheck
+	unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, state.ID.ValueString(), opt.Header, opt.Query, state.PrecheckDelete)
+	if diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+	defer unlockFunc()
+
+	path := state.ID.ValueString()
+	if !state.DeletePath.IsNull() {
+		var err error
+		path, err = buildpath.BuildPath(state.DeletePath.ValueString(), r.p.apiOpt.BaseURL.String(), state.Path.ValueString(), []byte(state.Output.ValueString()))
+		if err != nil {
+			resp.Diagnostics.AddError(
+				fmt.Sprintf("Failed to build the path for deleting the operation resource"),
+				fmt.Sprintf("Can't build path with `delete_path`: %q, `path`: %q, `body`: %q", state.DeletePath.ValueString(), state.Path.ValueString(), string(state.Output.ValueString())),
+			)
+			return
+		}
+	}
+
+	response, err := c.Operation(ctx, path, state.DeleteBody.ValueString(), *opt)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Delete: Error to call operation",
+			err.Error(),
+		)
+		return
+	}
+	if !response.IsSuccess() {
+		resp.Diagnostics.AddError(
+			fmt.Sprintf("Delete: Operation API returns %d", response.StatusCode()),
+			string(response.Body()),
+		)
+		return
+	}
+
+	// For LRO, wait for completion
+	if !state.PollDelete.IsNull() {
+		var d pollData
+		if diags := state.PollDelete.As(ctx, &d, basetypes.ObjectAsOptions{}); diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
+		opt, diags := r.p.apiOpt.ForPoll(ctx, opt.Header, opt.Query, d)
+		if diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
+		p, err := client.NewPollableForPoll(*response, *opt)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Delete: Failed to build poller from the response of the initiated request",
+				err.Error(),
+			)
+			return
+		}
+		if err := p.PollUntilDone(ctx, c); err != nil {
+			resp.Diagnostics.AddError(
+				"Delete: Polling failure",
+				err.Error(),
+			)
+			return
+		}
+	}
+
 	return
 }

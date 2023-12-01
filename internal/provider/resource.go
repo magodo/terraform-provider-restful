@@ -119,7 +119,7 @@ func (r *Resource) Metadata(ctx context.Context, req resource.MetadataRequest, r
 	resp.TypeName = req.ProviderTypeName + "_resource"
 }
 
-func precheckAttribute(s string, pathIsRequired bool, suffixDesc string) schema.Attribute {
+func precheckAttribute(s string, pathIsRequired bool, suffixDesc string) schema.ListNestedAttribute {
 	pathDesc := "The path used to query readiness, relative to the `base_url` of the provider."
 	if suffixDesc != "" {
 		pathDesc += " " + suffixDesc
@@ -212,7 +212,7 @@ func precheckAttribute(s string, pathIsRequired bool, suffixDesc string) schema.
 	}
 }
 
-func pollAttribute(s string) schema.Attribute {
+func pollAttribute(s string) schema.SingleNestedAttribute {
 	return schema.SingleNestedAttribute{
 		Description:         fmt.Sprintf("The polling option for the %q operation", s),
 		MarkdownDescription: fmt.Sprintf("The polling option for the %q operation", s),
@@ -275,7 +275,7 @@ func pollAttribute(s string) schema.Attribute {
 	}
 }
 
-func retryAttribute(s string) schema.Attribute {
+func retryAttribute(s string) schema.SingleNestedAttribute {
 	return schema.SingleNestedAttribute{
 		Description:         fmt.Sprintf("The retry option for the %q operation", s),
 		MarkdownDescription: fmt.Sprintf("The retry option for the %q operation", s),
