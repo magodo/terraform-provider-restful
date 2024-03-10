@@ -93,11 +93,9 @@ func New(ctx context.Context, baseURL string, opt *BuildOption) (*Client, error)
 		httpClient.Jar = cookieJar
 	}
 
-	client := resty.New()
+	client := resty.NewWithClient(httpClient)
 	if opt.Security != nil {
-		var err error
-		client, err = opt.Security.newClient(ctx, httpClient)
-		if err != nil {
+		if err := opt.Security.configureClient(ctx, client); err != nil {
 			return nil, err
 		}
 	}
