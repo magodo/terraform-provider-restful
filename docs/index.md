@@ -118,15 +118,37 @@ provider "restful" {
 
 ### Optional
 
-- `cookie_enabled` (Boolean) Save cookies during API contracting. Defaults to `false`.
+- `client` (Attributes) The client configuration (see [below for nested schema](#nestedatt--client))
 - `create_method` (String) The method used to create the resource. Possible values are `PUT` and `POST`. Defaults to `POST`.
 - `delete_method` (String) The method used to delete the resource. Possible values are `DELETE` and `POST`. Defaults to `DELETE`.
 - `header` (Map of String) The header parameters that are applied to each request.
 - `merge_patch_disabled` (Boolean) Whether to use a JSON Merge Patch as the request body in the PATCH update? Defaults to `false`. This is only effective when `update_method` is set to `PATCH`.
 - `query` (Map of List of String) The query parameters that are applied to each request.
 - `security` (Attributes) The OpenAPI security scheme that is be used for auth. Only one of `http`, `apikey` and `oauth2` can be specified. (see [below for nested schema](#nestedatt--security))
-- `tls_insecure_skip_verify` (Boolean) Whether a client verifies the server's certificate chain and host name. Defaults to `false`.
 - `update_method` (String) The method used to update the resource. Possible values are `PUT` and `PATCH`. Defaults to `PUT`.
+
+<a id="nestedatt--client"></a>
+### Nested Schema for `client`
+
+Optional:
+
+- `certificates` (Attributes List) The client certificates for mTLS. (see [below for nested schema](#nestedatt--client--certificates))
+- `cookie_enabled` (Boolean) Save cookies during API contracting. Defaults to `false`.
+- `root_ca_certificate_files` (List of String) The list of certificate file paths of root certificate authorities that clients use when verifying server certificates. If not specified, TLS uses the host's root CA set. Conflicts with `root_ca_certificate_files`.
+- `root_ca_certificates` (List of String) The list of certificates of root certificate authorities that clients use when verifying server certificates. If not specified, TLS uses the host's root CA set. Conflicts with `root_ca_certificate_files`.
+- `tls_insecure_skip_verify` (Boolean) Whether a client verifies the server's certificate chain and host name. Defaults to `false`.
+
+<a id="nestedatt--client--certificates"></a>
+### Nested Schema for `client.certificates`
+
+Optional:
+
+- `certificate` (String) The client certificate for mTLS. Conflicts with `certificate_file`. Requires `key_file` or `key`.
+- `certificate_file` (String) The path of the client certificate file for mTLS. Conflicts with `certificate`. Requires `key_file` or `key`.
+- `key` (String) The client private key for mTLS. Conflicts with `key_file`.
+- `key_file` (String) The path of the client private key file for mTLS. Conflicts with `key`. Requires `certificate_file` or `certificate`.
+
+
 
 <a id="nestedatt--security"></a>
 ### Nested Schema for `security`

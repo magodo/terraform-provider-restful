@@ -2,10 +2,14 @@ package provider
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"net/url"
+	"os"
 	"sync"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/objectvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -36,16 +40,30 @@ type providerData struct {
 }
 
 type providerConfig struct {
-	BaseURL               types.String `tfsdk:"base_url"`
-	Security              types.Object `tfsdk:"security"`
-	CreateMethod          types.String `tfsdk:"create_method"`
-	UpdateMethod          types.String `tfsdk:"update_method"`
-	DeleteMethod          types.String `tfsdk:"delete_method"`
-	MergePatchDisabled    types.Bool   `tfsdk:"merge_patch_disabled"`
-	Query                 types.Map    `tfsdk:"query"`
-	Header                types.Map    `tfsdk:"header"`
-	CookieEnabled         types.Bool   `tfsdk:"cookie_enabled"`
-	TlsInsecureSkipVerify types.Bool   `tfsdk:"tls_insecure_skip_verify"`
+	BaseURL            types.String `tfsdk:"base_url"`
+	Client             types.Object `tfsdk:"client"`
+	Security           types.Object `tfsdk:"security"`
+	CreateMethod       types.String `tfsdk:"create_method"`
+	UpdateMethod       types.String `tfsdk:"update_method"`
+	DeleteMethod       types.String `tfsdk:"delete_method"`
+	MergePatchDisabled types.Bool   `tfsdk:"merge_patch_disabled"`
+	Query              types.Map    `tfsdk:"query"`
+	Header             types.Map    `tfsdk:"header"`
+}
+
+type clientData struct {
+	CookieEnabled          types.Bool `tfsdk:"cookie_enabled"`
+	TlsInsecureSkipVerify  types.Bool `tfsdk:"tls_insecure_skip_verify"`
+	Certificates           types.List `tfsdk:"certificates"`
+	RootCACertificates     types.List `tfsdk:"root_ca_certificates"`
+	RootCACertificateFiles types.List `tfsdk:"root_ca_certificate_files"`
+}
+
+type certificateData struct {
+	Certificate     types.String `tfsdk:"certificate"`
+	CertificateFile types.String `tfsdk:"certificate_file"`
+	Key             types.String `tfsdk:"key"`
+	KeyFile         types.String `tfsdk:"key_file"`
 }
 
 type securityData struct {
@@ -154,6 +172,116 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 						_, err := url.Parse(s)
 						return err
 					}),
+				},
+			},
+			"client": schema.SingleNestedAttribute{
+				Description:         "The client configuration",
+				MarkdownDescription: "The client configuration",
+				Optional:            true,
+				Attributes: map[string]schema.Attribute{
+					"cookie_enabled": schema.BoolAttribute{
+						Description:         "Save cookies during API contracting. Defaults to `false`.",
+						MarkdownDescription: "Save cookies during API contracting. Defaults to `false`.",
+						Optional:            true,
+					},
+					"tls_insecure_skip_verify": schema.BoolAttribute{
+						Description:         "Whether a client verifies the server's certificate chain and host name. Defaults to `false`.",
+						MarkdownDescription: "Whether a client verifies the server's certificate chain and host name. Defaults to `false`.",
+						Optional:            true,
+					},
+					"certificates": schema.ListNestedAttribute{
+						Description:         "The client certificates for mTLS.",
+						MarkdownDescription: "The client certificates for mTLS.",
+						Optional:            true,
+						NestedObject: schema.NestedAttributeObject{
+							Attributes: map[string]schema.Attribute{
+								"certificate": schema.StringAttribute{
+									Description:         "The client certificate for mTLS. Conflicts with `certificate_file`. Requires `key_file` or `key`.",
+									MarkdownDescription: "The client certificate for mTLS. Conflicts with `certificate_file`. Requires `key_file` or `key`.",
+									Optional:            true,
+									Validators: []validator.String{
+										stringvalidator.ConflictsWith(
+											path.MatchRelative().AtParent().AtName("certificate_file"),
+										),
+										stringvalidator.AtLeastOneOf(
+											path.MatchRelative().AtParent().AtName("key"),
+											path.MatchRelative().AtParent().AtName("key_file"),
+										),
+									},
+								},
+								"certificate_file": schema.StringAttribute{
+									Description:         "The path of the client certificate file for mTLS. Conflicts with `certificate`. Requires `key_file` or `key`.",
+									MarkdownDescription: "The path of the client certificate file for mTLS. Conflicts with `certificate`. Requires `key_file` or `key`.",
+									Optional:            true,
+									Validators: []validator.String{
+										stringvalidator.ConflictsWith(
+											path.MatchRelative().AtParent().AtName("certificate"),
+										),
+										stringvalidator.AtLeastOneOf(
+											path.MatchRelative().AtParent().AtName("key"),
+											path.MatchRelative().AtParent().AtName("key_file"),
+										),
+									},
+								},
+								"key": schema.StringAttribute{
+									Description:         "The client private key for mTLS. Conflicts with `key_file`.",
+									MarkdownDescription: "The client private key for mTLS. Conflicts with `key_file`.",
+									Optional:            true,
+									Validators: []validator.String{
+										stringvalidator.ConflictsWith(
+											path.MatchRelative().AtParent().AtName("key_file"),
+										),
+										stringvalidator.AtLeastOneOf(
+											path.MatchRelative().AtParent().AtName("certificate"),
+											path.MatchRelative().AtParent().AtName("certificate_file"),
+										),
+									},
+								},
+								"key_file": schema.StringAttribute{
+									Description:         "The path of the client private key file for mTLS. Conflicts with `key`. Requires `certificate_file` or `certificate`.",
+									MarkdownDescription: "The path of the client private key file for mTLS. Conflicts with `key`. Requires `certificate_file` or `certificate`.",
+									Optional:            true,
+									Validators: []validator.String{
+										stringvalidator.ConflictsWith(
+											path.MatchRelative().AtParent().AtName("key"),
+										),
+										stringvalidator.AtLeastOneOf(
+											path.MatchRelative().AtParent().AtName("certificate"),
+											path.MatchRelative().AtParent().AtName("certificate_file"),
+										),
+									},
+								},
+							},
+						},
+					},
+					"root_ca_certificates": schema.ListAttribute{
+						Description:         "The list of certificates of root certificate authorities that clients use when verifying server certificates. If not specified, TLS uses the host's root CA set. Conflicts with `root_ca_certificate_files`.",
+						MarkdownDescription: "The list of certificates of root certificate authorities that clients use when verifying server certificates. If not specified, TLS uses the host's root CA set. Conflicts with `root_ca_certificate_files`.",
+						Optional:            true,
+						ElementType:         types.StringType,
+						Validators: []validator.List{
+							listvalidator.ConflictsWith(
+								path.MatchRoot("client").AtName("root_ca_certificate_files"),
+							),
+							listvalidator.AlsoRequires(
+								path.MatchRoot("client").AtName("certificates"),
+							),
+						},
+					},
+					"root_ca_certificate_files": schema.ListAttribute{
+						Description:         "The list of certificate file paths of root certificate authorities that clients use when verifying server certificates. If not specified, TLS uses the host's root CA set. Conflicts with `root_ca_certificate_files`.",
+						MarkdownDescription: "The list of certificate file paths of root certificate authorities that clients use when verifying server certificates. If not specified, TLS uses the host's root CA set. Conflicts with `root_ca_certificate_files`.",
+						Optional:            true,
+						ElementType:         types.StringType,
+						Validators: []validator.List{
+							listvalidator.ConflictsWith(
+								path.MatchRoot("client").AtName("root_ca_certificate_files"),
+							),
+							listvalidator.AlsoRequires(
+								path.MatchRoot("client").AtName("certificates"),
+							),
+						},
+					},
 				},
 			},
 			"security": schema.SingleNestedAttribute{
@@ -477,16 +605,6 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 				ElementType:         types.StringType,
 				Optional:            true,
 			},
-			"cookie_enabled": schema.BoolAttribute{
-				Description:         "Save cookies during API contracting. Defaults to `false`.",
-				MarkdownDescription: "Save cookies during API contracting. Defaults to `false`.",
-				Optional:            true,
-			},
-			"tls_insecure_skip_verify": schema.BoolAttribute{
-				Description:         "Whether a client verifies the server's certificate chain and host name. Defaults to `false`.",
-				MarkdownDescription: "Whether a client verifies the server's certificate chain and host name. Defaults to `false`.",
-				Optional:            true,
-			},
 		},
 	}
 }
@@ -510,11 +628,18 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 func (p *Provider) Init(ctx context.Context, config providerConfig) diag.Diagnostics {
 	var odiags diag.Diagnostics
 	p.once.Do(func() {
-		clientOpt := client.BuildOption{
-			CookieEnabled: config.CookieEnabled.ValueBool(),
+		clientOpt := &client.BuildOption{}
+		if cRaw := config.Client; !cRaw.IsNull() {
+			var c clientData
+			if diags := cRaw.As(ctx, &c, basetypes.ObjectAsOptions{}); diags.HasError() {
+				odiags = diags
+				return
+			}
+			clientOpt, odiags = c.ToClientBuildOption(ctx)
+			if odiags.HasError() {
+				return
+			}
 		}
-
-		clientOpt.TLSConfig.InsecureSkipVerify = config.TlsInsecureSkipVerify.ValueBool()
 
 		if secRaw := config.Security; !secRaw.IsNull() {
 			var sec securityData
@@ -680,7 +805,7 @@ func (p *Provider) Init(ctx context.Context, config providerConfig) diag.Diagnos
 			diags diag.Diagnostics
 			err   error
 		)
-		p.client, err = client.New(ctx, config.BaseURL.ValueString(), &clientOpt)
+		p.client, err = client.New(ctx, config.BaseURL.ValueString(), clientOpt)
 		if err != nil {
 			diags.AddError(
 				"Failed to configure provider",
@@ -751,4 +876,97 @@ func (p *Provider) Init(ctx context.Context, config providerConfig) diag.Diagnos
 	})
 
 	return odiags
+}
+
+func (c clientData) ToClientBuildOption(ctx context.Context) (*client.BuildOption, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	var clientOpt client.BuildOption
+
+	clientOpt.TLSConfig.InsecureSkipVerify = c.TlsInsecureSkipVerify.ValueBool()
+
+	var caCerts [][]byte
+	switch {
+	case !c.RootCACertificateFiles.IsNull():
+		for _, f := range c.RootCACertificateFiles.Elements() {
+			f := f.(types.String).ValueString()
+			b, err := os.ReadFile(f)
+			if err != nil {
+				diags.AddError(
+					"Failed to build client option",
+					fmt.Sprintf("reading %s: %v", f, err),
+				)
+				return nil, diags
+			}
+			caCerts = append(caCerts, b)
+		}
+	case !c.RootCACertificates.IsNull():
+		for _, cert := range c.RootCACertificates.Elements() {
+			cert := cert.(types.String).ValueString()
+			caCerts = append(caCerts, []byte(cert))
+		}
+	}
+	if len(caCerts) != 0 {
+		caPool := x509.NewCertPool()
+		for _, cert := range caCerts {
+			caPool.AppendCertsFromPEM(cert)
+		}
+		clientOpt.TLSConfig.RootCAs = caPool
+	}
+
+	if !c.Certificates.IsNull() {
+		var certs []tls.Certificate
+		for _, e := range c.Certificates.Elements() {
+			obj := e.(types.Object)
+			var cd certificateData
+			if diags := obj.As(ctx, &cd, basetypes.ObjectAsOptions{}); diags.HasError() {
+				return nil, diags
+			}
+
+			var certB, keyB []byte
+			var err error
+
+			switch {
+			case !cd.Certificate.IsNull():
+				certB = []byte(cd.Certificate.ValueString())
+			case !cd.CertificateFile.IsNull():
+				certB, err = os.ReadFile(cd.CertificateFile.ValueString())
+				if err != nil {
+					diags.AddError(
+						"Failed to build client option",
+						fmt.Sprintf("reading %s: %v", cd.CertificateFile.ValueString(), err),
+					)
+					return nil, diags
+				}
+			}
+
+			switch {
+			case !cd.Key.IsNull():
+				keyB = []byte(cd.Key.ValueString())
+			case !cd.KeyFile.IsNull():
+				keyB, err = os.ReadFile(cd.KeyFile.ValueString())
+				if err != nil {
+					diags.AddError(
+						"Failed to build client option",
+						fmt.Sprintf("reading %s: %v", cd.KeyFile.ValueString(), err),
+					)
+					return nil, diags
+				}
+			}
+
+			cert, err := tls.X509KeyPair(certB, keyB)
+			if err != nil {
+				diags.AddError(
+					"Failed to build client option",
+					fmt.Sprintf("building x509 key pair: %v", err),
+				)
+				return nil, diags
+			}
+			certs = append(certs, cert)
+		}
+		clientOpt.TLSConfig.Certificates = certs
+	}
+
+	clientOpt.CookieEnabled = c.CookieEnabled.ValueBool()
+
+	return &clientOpt, nil
 }
