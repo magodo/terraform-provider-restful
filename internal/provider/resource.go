@@ -481,11 +481,22 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 		// If the entire state is null, the resource is planned for creation.
 		return
 	}
+
 	var plan resourceData
 	if diags := req.Plan.Get(ctx, &plan); diags.HasError() {
 		resp.Diagnostics.Append(diags...)
 		return
 	}
+	var state resourceData
+	if diags := req.State.Get(ctx, &state); diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+
+	defer func() {
+		resp.Plan.Set(ctx, plan)
+	}()
+
 	if !plan.ForceNewAttrs.IsUnknown() && !plan.Body.IsUnknown() {
 		var forceNewAttrs []types.String
 		if diags := plan.ForceNewAttrs.ElementsAs(ctx, &forceNewAttrs, false); diags != nil {
@@ -536,6 +547,12 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 				}
 			}
 		}
+	}
+
+	if !plan.Body.Equal(state.Body) {
+		// Explicitly set the output as unknown dynamic to overwrite its dynamic type deduced from the prior state.
+		// Otherwise, if the output changed its type, ti will result into  a data inconsistency error.
+		plan.Output = types.DynamicUnknown()
 	}
 }
 
