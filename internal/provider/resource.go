@@ -71,6 +71,7 @@ type resourceData struct {
 
 	CheckExistance types.Bool `tfsdk:"check_existance"`
 	ForceNewAttrs  types.Set  `tfsdk:"force_new_attrs"`
+	OutputAttrs    types.Set  `tfsdk:"output_attrs"`
 
 	Output types.Dynamic `tfsdk:"output"`
 }
@@ -454,6 +455,11 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				Optional:            true,
 				ElementType:         types.StringType,
 			},
+			"output_attrs": schema.SetAttribute{Description: "A set of `output` attribute paths (in gjson syntax) that will be exported in the `output`. If this is not specified, all attributes will be exported by `output`.",
+				MarkdownDescription: "A set of `output` attribute paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) that will be exported in the `output`. If this is not specified, all attributes will be exported by `output`.",
+				Optional:            true,
+				ElementType:         types.StringType,
+			},
 			"output": schema.DynamicAttribute{
 				Description:         "The response body after reading the resource.",
 				MarkdownDescription: "The response body after reading the resource.",
@@ -549,7 +555,7 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 		}
 	}
 
-	if !plan.Body.Equal(state.Body) {
+	if !plan.Body.Equal(state.Body) || !plan.OutputAttrs.Equal(state.OutputAttrs) {
 		// Explicitly set the output as unknown dynamic to overwrite its dynamic type deduced from the prior state.
 		// Otherwise, if the output changed its type, ti will result into  a data inconsistency error.
 		plan.Output = types.DynamicUnknown()
@@ -787,6 +793,24 @@ func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *reso
 	state.Body = body
 
 	// Set output
+	if !state.OutputAttrs.IsNull() {
+		var outputAttrs []string
+		diags = state.OutputAttrs.ElementsAs(ctx, &outputAttrs, false)
+		resp.Diagnostics.Append(diags...)
+		if diags.HasError() {
+			return
+		}
+		fb, err := FilterAttrsInJSON(string(b), outputAttrs)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Filter `output` during Read",
+				err.Error(),
+			)
+			return
+		}
+		b = []byte(fb)
+	}
+
 	output, err := dynamic.FromJSONImplied(b)
 	if err != nil {
 		resp.Diagnostics.AddError(
