@@ -71,9 +71,8 @@ type resourceData struct {
 
 	CheckExistance types.Bool `tfsdk:"check_existance"`
 	ForceNewAttrs  types.Set  `tfsdk:"force_new_attrs"`
-	OutputAttrs    types.Set  `tfsdk:"output_attrs"`
 
-	Output types.String `tfsdk:"output"`
+	Output types.Dynamic `tfsdk:"output"`
 }
 
 type pollData struct {
@@ -455,13 +454,7 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				Optional:            true,
 				ElementType:         types.StringType,
 			},
-			"output_attrs": schema.SetAttribute{
-				Description:         "A set of `output` attribute paths (in gjson syntax) that will be exported in the `output`. If this is not specified, all attributes will be exported by `output`.",
-				MarkdownDescription: "A set of `output` attribute paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) that will be exported in the `output`. If this is not specified, all attributes will be exported by `output`.",
-				Optional:            true,
-				ElementType:         types.StringType,
-			},
-			"output": schema.StringAttribute{
+			"output": schema.DynamicAttribute{
 				Description:         "The response body after reading the resource.",
 				MarkdownDescription: "The response body after reading the resource.",
 				Computed:            true,
@@ -777,25 +770,15 @@ func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *reso
 	state.Body = body
 
 	// Set output
-	output := string(b)
-	if !state.OutputAttrs.IsNull() {
-		// Update the output to only contain the specified attributes.
-		var outputAttrs []string
-		diags = state.OutputAttrs.ElementsAs(ctx, &outputAttrs, false)
-		resp.Diagnostics.Append(diags...)
-		if diags.HasError() {
-			return
-		}
-		output, err = FilterAttrsInJSON(output, outputAttrs)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Filter `output` during Read",
-				err.Error(),
-			)
-			return
-		}
+	output, err := dynamic.FromJSONImplied(b)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Evaluating `output` during Read",
+			err.Error(),
+		)
+		return
 	}
-	state.Output = types.StringValue(output)
+	state.Output = output
 
 	diags = resp.State.Set(ctx, state)
 	resp.Diagnostics.Append(diags...)
@@ -867,11 +850,19 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 
 		path := plan.ID.ValueString()
 		if !plan.UpdatePath.IsNull() {
-			path, err = buildpath.BuildPath(plan.UpdatePath.ValueString(), r.p.apiOpt.BaseURL.String(), plan.Path.ValueString(), []byte(state.Output.ValueString()))
+			output, err := dynamic.ToJSON(state.Output)
 			if err != nil {
 				resp.Diagnostics.AddError(
-					fmt.Sprintf("Failed to build the path for updating the resource"),
-					fmt.Sprintf("Can't build path with `update_path`: %q, `path`: %q, `body`: %q", plan.UpdatePath.ValueString(), plan.Path.ValueString(), string(state.Output.ValueString())),
+					"Failed to marshal json for `output`",
+					err.Error(),
+				)
+				return
+			}
+			path, err = buildpath.BuildPath(plan.UpdatePath.ValueString(), r.p.apiOpt.BaseURL.String(), plan.Path.ValueString(), output)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Failed to build the path for updating the resource",
+					fmt.Sprintf("Can't build path with `update_path`: %q, `path`: %q, `body`: %q", plan.UpdatePath.ValueString(), plan.Path.ValueString(), output),
 				)
 				return
 			}
@@ -971,12 +962,19 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 
 	path := state.ID.ValueString()
 	if !state.DeletePath.IsNull() {
-		var err error
-		path, err = buildpath.BuildPath(state.DeletePath.ValueString(), r.p.apiOpt.BaseURL.String(), state.Path.ValueString(), []byte(state.Output.ValueString()))
+		output, err := dynamic.ToJSON(state.Output)
 		if err != nil {
 			resp.Diagnostics.AddError(
-				fmt.Sprintf("Failed to build the path for deleting the resource"),
-				fmt.Sprintf("Can't build path with `delete_path`: %q, `path`: %q, `body`: %q", state.DeletePath.ValueString(), state.Path.ValueString(), string(state.Output.ValueString())),
+				"Failed to marshal json for `output`",
+				err.Error(),
+			)
+			return
+		}
+		path, err = buildpath.BuildPath(state.DeletePath.ValueString(), r.p.apiOpt.BaseURL.String(), state.Path.ValueString(), output)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Failed to build the path for deleting the resource",
+				fmt.Sprintf("Can't build path with `delete_path`: %q, `path`: %q, `body`: %q", state.DeletePath.ValueString(), state.Path.ValueString(), output),
 			)
 			return
 		}
