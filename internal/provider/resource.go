@@ -554,12 +554,6 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 			}
 		}
 	}
-
-	if !plan.Body.Equal(state.Body) || !plan.OutputAttrs.Equal(state.OutputAttrs) {
-		// Explicitly set the output as unknown dynamic to overwrite its dynamic type deduced from the prior state.
-		// Otherwise, if the output changed its type, ti will result into  a data inconsistency error.
-		plan.Output = types.DynamicUnknown()
-	}
 }
 
 func (r *Resource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
