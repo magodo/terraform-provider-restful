@@ -845,8 +845,25 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 		return
 	}
 
-	// Invoke API to Update the resource only when there are changes in the body.
-	if !state.Body.Equal(plan.Body) {
+	stateBody, err := dynamic.ToJSON(state.Body)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Update failure",
+			fmt.Sprintf("Error to marshal state body: %v", err),
+		)
+		return
+	}
+	planBody, err := dynamic.ToJSON(plan.Body)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Update failure",
+			fmt.Sprintf("Error to marshal plan body: %v", err),
+		)
+		return
+	}
+
+	// Invoke API to Update the resource only when there are changes in the body (regardless of the TF type diff).
+	if string(stateBody) != string(planBody) {
 		// Precheck
 		unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, state.ID.ValueString(), opt.Header, opt.Query, plan.PrecheckUpdate)
 		if diags.HasError() {
@@ -855,14 +872,6 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 		}
 		defer unlockFunc()
 
-		body, err := dynamic.ToJSON(plan.Body)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Update failure",
-				fmt.Sprintf("Error to marshal plan body: %v", err),
-			)
-			return
-		}
 		if opt.Method == "PATCH" && !opt.MergePatchDisabled {
 			stateBodyJSON, err := dynamic.ToJSON(state.Body)
 			if err != nil {
@@ -872,7 +881,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 				)
 				return
 			}
-			b, err := jsonpatch.CreateMergePatch(body, stateBodyJSON)
+			b, err := jsonpatch.CreateMergePatch(planBody, stateBodyJSON)
 			if err != nil {
 				resp.Diagnostics.AddError(
 					"Update failure",
@@ -880,7 +889,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 				)
 				return
 			}
-			body = b
+			planBody = b
 		}
 
 		path := plan.ID.ValueString()
@@ -903,7 +912,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 			}
 		}
 
-		response, err := c.Update(ctx, path, body, *opt)
+		response, err := c.Update(ctx, path, planBody, *opt)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error to call update",
