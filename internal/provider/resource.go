@@ -774,13 +774,17 @@ func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *reso
 	}
 
 	var body types.Dynamic
-	body, err = dynamic.FromJSON(b, state.Body.UnderlyingValue().Type(ctx))
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Evaluating `body` during Read",
-			err.Error(),
-		)
-		return
+	if body, err = dynamic.FromJSON(b, state.Body.UnderlyingValue().Type(ctx)); err != nil {
+		// An error might occur here during refresh, when the type of the state doesn't match the remote,
+		// e.g. a tuple field has different number of elements.
+		// In this case, we fallback to the implied types, to make the refresh proceed and return a reasonable plan diff.
+		if body, err = dynamic.FromJSONImplied(b); err != nil {
+			resp.Diagnostics.AddError(
+				"Evaluating `body` during Read",
+				err.Error(),
+			)
+			return
+		}
 	}
 
 	// Set body, which is modified during read.
