@@ -36,7 +36,7 @@ func TestOperation_JSONServer_Basic(t *testing.T) {
 			{
 				Config: d.basic(),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 		},
@@ -54,8 +54,8 @@ func TestOperation_JSONServer_withDelete(t *testing.T) {
 			{
 				Config: d.withDelete(true),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
-					resource.TestCheckResourceAttr(addr, "output", `{"enabled":true}`),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
+					resource.TestCheckResourceAttr(addr, "output.enabled", `true`),
 				),
 			},
 			{
@@ -66,7 +66,7 @@ func TestOperation_JSONServer_withDelete(t *testing.T) {
 			{
 				Config: d.withDelete(false),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr(resaddr, "output", `{"enabled":false}`),
+					resource.TestCheckResourceAttr(resaddr, "output.enabled", `false`),
 				),
 			},
 		},
@@ -82,9 +82,9 @@ provider "restful" {
 resource "restful_operation" "test" {
   path = "posts"
   method = "POST"
-  body = jsonencode({
+  body = {
   	foo = "bar"
-  })
+  }
 }
 `, d.url)
 }
@@ -98,7 +98,7 @@ provider "restful" {
 # This resource is used to check the state of the posts after the operation resource is deleted
 resource "restful_resource" "test" {
   path = "posts"
-  body = jsonencode({})
+  body = {}
   read_path = "$(path)/$(body.id)"
   output_attrs = ["enabled"]
 }
@@ -109,14 +109,14 @@ resource "restful_resource" "test" {
 resource "restful_operation" "test" {
   path = restful_resource.test.id
   method = "PUT"
-  body = jsonencode({
+  body = {
     enabled = true
-  })
+  }
   delete_method = "PUT"
   delete_path = restful_resource.test.id
-  delete_body = jsonencode({
+  delete_body = {
     enabled = false
-  })
+  }
   output_attrs = ["enabled"]
 }`
 	}

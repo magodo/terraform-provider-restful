@@ -11,6 +11,9 @@ import (
 )
 
 func ToJSON(d types.Dynamic) ([]byte, error) {
+	if d.IsNull() {
+		return nil, nil
+	}
 	return attrValueToJSON(d.UnderlyingValue())
 }
 

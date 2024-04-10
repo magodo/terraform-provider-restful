@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/magodo/terraform-provider-restful/internal/dynamic"
 	"github.com/tidwall/gjson"
 )
 
@@ -20,16 +21,16 @@ type DataSource struct {
 var _ datasource.DataSource = &DataSource{}
 
 type dataSourceData struct {
-	ID            types.String `tfsdk:"id"`
-	Method        types.String `tfsdk:"method"`
-	Query         types.Map    `tfsdk:"query"`
-	Header        types.Map    `tfsdk:"header"`
-	Selector      types.String `tfsdk:"selector"`
-	OutputAttrs   types.Set    `tfsdk:"output_attrs"`
-	AllowNotExist types.Bool   `tfsdk:"allow_not_exist"`
-	Precheck      types.List   `tfsdk:"precheck"`
-	Retry         types.Object `tfsdk:"retry"`
-	Output        types.String `tfsdk:"output"`
+	ID            types.String  `tfsdk:"id"`
+	Method        types.String  `tfsdk:"method"`
+	Query         types.Map     `tfsdk:"query"`
+	Header        types.Map     `tfsdk:"header"`
+	Selector      types.String  `tfsdk:"selector"`
+	OutputAttrs   types.Set     `tfsdk:"output_attrs"`
+	AllowNotExist types.Bool    `tfsdk:"allow_not_exist"`
+	Precheck      types.List    `tfsdk:"precheck"`
+	Retry         types.Object  `tfsdk:"retry"`
+	Output        types.Dynamic `tfsdk:"output"`
 }
 
 func (d *DataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -84,7 +85,7 @@ func (d *DataSource) Schema(ctx context.Context, req datasource.SchemaRequest, r
 			},
 			"precheck": precheckAttribute("Read", true, ""),
 			"retry":    retryAttribute("Read"),
-			"output": schema.StringAttribute{
+			"output": schema.DynamicAttribute{
 				Description:         "The response body after reading the resource.",
 				MarkdownDescription: "The response body after reading the resource.",
 				Computed:            true,
@@ -190,7 +191,6 @@ func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp 
 	}
 
 	// Set output
-	output := string(b)
 	if !config.OutputAttrs.IsNull() {
 		// Update the output to only contain the specified attributes.
 		var outputAttrs []string
@@ -199,7 +199,7 @@ func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp 
 		if diags.HasError() {
 			return
 		}
-		output, err = FilterAttrsInJSON(output, outputAttrs)
+		fb, err := FilterAttrsInJSON(string(b), outputAttrs)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Filter `output` during Read",
@@ -207,9 +207,18 @@ func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp 
 			)
 			return
 		}
+		b = []byte(fb)
 	}
 
-	state.Output = types.StringValue(output)
+	output, err := dynamic.FromJSONImplied(b)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Evaluating `output` during Read",
+			err.Error(),
+		)
+		return
+	}
+	state.Output = output
 
 	diags = resp.State.Set(ctx, state)
 	resp.Diagnostics.Append(diags...)

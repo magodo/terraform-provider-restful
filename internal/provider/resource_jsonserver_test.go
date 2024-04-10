@@ -43,7 +43,7 @@ func TestResource_JSONServer_Basic(t *testing.T) {
 			{
 				Config: d.basic("foo"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 			{
@@ -58,7 +58,7 @@ func TestResource_JSONServer_Basic(t *testing.T) {
 			{
 				Config: d.basic("bar"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 			{
@@ -85,7 +85,7 @@ func TestResource_JSONServer_PatchUpdate(t *testing.T) {
 			{
 				Config: d.patch("foo"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 			{
@@ -100,7 +100,7 @@ func TestResource_JSONServer_PatchUpdate(t *testing.T) {
 			{
 				Config: d.patch("bar"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 			{
@@ -127,7 +127,7 @@ func TestResource_JSONServer_FullPath(t *testing.T) {
 			{
 				Config: d.fullPath("foo"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 			{
@@ -136,13 +136,13 @@ func TestResource_JSONServer_FullPath(t *testing.T) {
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"read_path", "update_path", "delete_path"},
 				ImportStateIdFunc: func(s *terraform.State) (string, error) {
-					return fmt.Sprintf(`{"id": %q, "path": "posts", "update_path": "$(path)/$(body.id)", "delete_path": "$(path)/$(body.id)", "body": {"foo": null}}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
+					return fmt.Sprintf(`{"id": %q, "path": "posts", "body": {"foo": null}}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
 				},
 			},
 			{
 				Config: d.fullPath("bar"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 			{
@@ -151,7 +151,7 @@ func TestResource_JSONServer_FullPath(t *testing.T) {
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"read_path", "update_path", "delete_path"},
 				ImportStateIdFunc: func(s *terraform.State) (string, error) {
-					return fmt.Sprintf(`{"id": %q, "path": "posts", "update_path": "$(path)/$(body.id)", "delete_path": "$(path)/$(body.id)", "body": {"foo": null}}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
+					return fmt.Sprintf(`{"id": %q, "path": "posts", "body": {"foo": null}}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
 				},
 			},
 		},
@@ -169,7 +169,8 @@ func TestResource_JSONServer_OutputAttrs(t *testing.T) {
 			{
 				Config: d.outputAttrs(),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrWith(addr, "output", CheckJSONEqual("output", `{"foo": "bar", "obj": {"a": 1}}`)),
+					resource.TestCheckResourceAttr(addr, "output.foo", "bar"),
+					resource.TestCheckResourceAttr(addr, "output.obj.a", "1"),
 				),
 			},
 		},
@@ -207,9 +208,9 @@ provider "restful" {
 
 resource "restful_resource" "test" {
   path = "posts"
-  body = jsonencode({
+  body = {
   	foo = %q
-})
+  }
   read_path = "$(path)/$(body.id)"
 }
 `, d.url, v)
@@ -225,9 +226,9 @@ resource "restful_resource" "test" {
   path = "posts"
   read_path = "$(path)/$(body.id)"
   update_method = "PATCH"
-  body = jsonencode({
+  body = {
   	foo = %q
-})
+  }
 }
 `, d.url, v)
 }
@@ -243,9 +244,9 @@ resource "restful_resource" "test" {
   read_path = "$(path)/$(body.id)"
   update_path = "$(path)/$(body.id)"
   delete_path = "$(path)/$(body.id)"
-  body = jsonencode({
+  body = {
   	foo = %q
-})
+  }
 }
 `, d.url, v)
 
@@ -259,13 +260,13 @@ provider "restful" {
 
 resource "restful_resource" "test" {
   path = "posts"
-  body = jsonencode({
+  body = {
   	foo = "bar"
 	obj = {
 		a = 1	
 		b = 2
 	}
-})
+  }
   read_path = "$(path)/$(body.id)"
   output_attrs = ["foo", "obj.a"]
 }

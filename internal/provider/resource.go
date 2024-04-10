@@ -885,7 +885,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 				)
 				return
 			}
-			b, err := jsonpatch.CreateMergePatch(planBody, stateBodyJSON)
+			b, err := jsonpatch.CreateMergePatch(stateBodyJSON, planBody)
 			if err != nil {
 				resp.Diagnostics.AddError(
 					"Update failure",

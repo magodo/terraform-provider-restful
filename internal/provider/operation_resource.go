@@ -19,6 +19,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/magodo/terraform-provider-restful/internal/buildpath"
 	"github.com/magodo/terraform-provider-restful/internal/client"
+	"github.com/magodo/terraform-provider-restful/internal/dynamic"
 	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
 )
 
@@ -29,23 +30,23 @@ type OperationResource struct {
 var _ resource.Resource = &OperationResource{}
 
 type operationResourceData struct {
-	ID             types.String `tfsdk:"id"`
-	Path           types.String `tfsdk:"path"`
-	Method         types.String `tfsdk:"method"`
-	Body           types.String `tfsdk:"body"`
-	Query          types.Map    `tfsdk:"query"`
-	Header         types.Map    `tfsdk:"header"`
-	Precheck       types.List   `tfsdk:"precheck"`
-	Poll           types.Object `tfsdk:"poll"`
-	Retry          types.Object `tfsdk:"retry"`
-	DeleteMethod   types.String `tfsdk:"delete_method"`
-	DeleteBody     types.String `tfsdk:"delete_body"`
-	DeletePath     types.String `tfsdk:"delete_path"`
-	PrecheckDelete types.List   `tfsdk:"precheck_delete"`
-	PollDelete     types.Object `tfsdk:"poll_delete"`
-	RetryDelete    types.Object `tfsdk:"retry_delete"`
-	OutputAttrs    types.Set    `tfsdk:"output_attrs"`
-	Output         types.String `tfsdk:"output"`
+	ID             types.String  `tfsdk:"id"`
+	Path           types.String  `tfsdk:"path"`
+	Method         types.String  `tfsdk:"method"`
+	Body           types.Dynamic `tfsdk:"body"`
+	Query          types.Map     `tfsdk:"query"`
+	Header         types.Map     `tfsdk:"header"`
+	Precheck       types.List    `tfsdk:"precheck"`
+	Poll           types.Object  `tfsdk:"poll"`
+	Retry          types.Object  `tfsdk:"retry"`
+	DeleteMethod   types.String  `tfsdk:"delete_method"`
+	DeleteBody     types.Dynamic `tfsdk:"delete_body"`
+	DeletePath     types.String  `tfsdk:"delete_path"`
+	PrecheckDelete types.List    `tfsdk:"precheck_delete"`
+	PollDelete     types.Object  `tfsdk:"poll_delete"`
+	RetryDelete    types.Object  `tfsdk:"retry_delete"`
+	OutputAttrs    types.Set     `tfsdk:"output_attrs"`
+	Output         types.Dynamic `tfsdk:"output"`
 }
 
 func (r *OperationResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -88,13 +89,10 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 					stringvalidator.OneOf("PUT", "POST", "PATCH", "DELETE"),
 				},
 			},
-			"body": schema.StringAttribute{
+			"body": schema.DynamicAttribute{
 				Description:         "The payload for the `Create`/`Update` call.",
 				MarkdownDescription: "The payload for the `Create`/`Update` call.",
 				Optional:            true,
-				Validators: []validator.String{
-					myvalidator.StringIsJSON(),
-				},
 			},
 			"query": schema.MapAttribute{
 				Description:         "The query parameters that are applied to each request. This overrides the `query` set in the provider block.",
@@ -132,14 +130,10 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 				},
 			},
 
-			"delete_body": schema.StringAttribute{
+			"delete_body": schema.DynamicAttribute{
 				Description:         "The payload for the `Delete` call.",
 				MarkdownDescription: "The payload for the `Delete` call.",
 				Optional:            true,
-				Validators: []validator.String{
-					stringvalidator.AlsoRequires(path.MatchRelative().AtParent().AtName("delete_method")),
-					myvalidator.StringIsJSON(),
-				},
 			},
 
 			"precheck_delete": precheckDelete,
@@ -153,7 +147,7 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 				ElementType:         types.StringType,
 			},
 
-			"output": schema.StringAttribute{
+			"output": schema.DynamicAttribute{
 				Description:         "The response body.",
 				MarkdownDescription: "The response body.",
 				Computed:            true,
@@ -205,7 +199,16 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 	}
 	defer unlockFunc()
 
-	response, err := c.Operation(ctx, plan.Path.ValueString(), plan.Body.ValueString(), *opt)
+	b, err := dynamic.ToJSON(plan.Body)
+	if err != nil {
+		diagnostics.AddError(
+			"Error to marshal body",
+			err.Error(),
+		)
+		return
+	}
+
+	response, err := c.Operation(ctx, plan.Path.ValueString(), string(b), *opt)
 	if err != nil {
 		diagnostics.AddError(
 			"Error to call operation",
@@ -220,8 +223,6 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 		)
 		return
 	}
-
-	b := response.Body()
 
 	resourceId := plan.Path.ValueString()
 
@@ -258,8 +259,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 	plan.ID = types.StringValue(resourceId)
 
 	// Set Output to state
-	plan.Output = types.StringValue(string(b))
-	output := string(b)
+	rb := response.Body()
 	if !plan.OutputAttrs.IsNull() {
 		// Update the output to only contain the specified attributes.
 		var outputAttrs []string
@@ -268,7 +268,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 		if diags.HasError() {
 			return
 		}
-		output, err = FilterAttrsInJSON(output, outputAttrs)
+		fb, err := FilterAttrsInJSON(string(rb), outputAttrs)
 		if err != nil {
 			diagnostics.AddError(
 				"Filter `output` during operation",
@@ -276,8 +276,18 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 			)
 			return
 		}
+		rb = []byte(fb)
 	}
-	plan.Output = types.StringValue(output)
+
+	output, err := dynamic.FromJSONImplied(rb)
+	if err != nil {
+		diagnostics.AddError(
+			"Evaluating `output` during Read",
+			err.Error(),
+		)
+		return
+	}
+	plan.Output = output
 
 	diags = state.Set(ctx, plan)
 	diagnostics.Append(diags...)
@@ -330,18 +340,34 @@ func (r *OperationResource) Delete(ctx context.Context, req resource.DeleteReque
 
 	path := state.ID.ValueString()
 	if !state.DeletePath.IsNull() {
-		var err error
-		path, err = buildpath.BuildPath(state.DeletePath.ValueString(), r.p.apiOpt.BaseURL.String(), state.Path.ValueString(), []byte(state.Output.ValueString()))
+		body, err := dynamic.ToJSON(state.Output)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				fmt.Sprintf("Failed to build the path for deleting the operation resource"),
-				fmt.Sprintf("Can't build path with `delete_path`: %q, `path`: %q, `body`: %q", state.DeletePath.ValueString(), state.Path.ValueString(), string(state.Output.ValueString())),
+				fmt.Sprintf("Failed to marshal the output: %v", err),
+			)
+			return
+		}
+		path, err = buildpath.BuildPath(state.DeletePath.ValueString(), r.p.apiOpt.BaseURL.String(), state.Path.ValueString(), body)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				fmt.Sprintf("Failed to build the path for deleting the operation resource"),
+				fmt.Sprintf("Can't build path with `delete_path`: %q, `path`: %q, `body`: %q, error: %v", state.DeletePath.ValueString(), state.Path.ValueString(), string(body), err),
 			)
 			return
 		}
 	}
 
-	response, err := c.Operation(ctx, path, state.DeleteBody.ValueString(), *opt)
+	b, err := dynamic.ToJSON(state.DeleteBody)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error to marshal delete body",
+			err.Error(),
+		)
+		return
+	}
+
+	response, err := c.Operation(ctx, path, string(b), *opt)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Delete: Error to call operation",

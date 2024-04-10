@@ -20,7 +20,7 @@ func TestDataSource_JSONServer_Basic(t *testing.T) {
 			{
 				Config: d.dsBasic(),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(dsaddr, "output"),
+					resource.TestCheckResourceAttrSet(dsaddr, "output.%"),
 				),
 			},
 		},
@@ -39,7 +39,7 @@ func TestDataSource_JSONServer_WithSelector(t *testing.T) {
 			{
 				Config: d.dsWithSelector(),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(dsaddr, "output"),
+					resource.TestCheckResourceAttrSet(dsaddr, "output.%"),
 				),
 			},
 		},
@@ -58,7 +58,8 @@ func TestDataSource_JSONServer_WithOutputAttrs(t *testing.T) {
 			{
 				Config: d.dsWithOutputAttrs(),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrWith(dsaddr, "output", CheckJSONEqual("output", `{"foo": "bar", "obj": {"a": 1}}`)),
+					resource.TestCheckResourceAttr(dsaddr, "output.foo", "bar"),
+					resource.TestCheckResourceAttr(dsaddr, "output.obj.a", "1"),
 				),
 			},
 		},
@@ -76,7 +77,7 @@ func TestDataSource_JSONServer_NotExists(t *testing.T) {
 				Config: d.dsNotExist(),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttrSet(dsaddr, "id"),
-					resource.TestCheckNoResourceAttr(dsaddr, "output"),
+					resource.TestCheckNoResourceAttr(dsaddr, "output.%"),
 				),
 			},
 		},
@@ -91,9 +92,9 @@ provider "restful" {
 
 resource "restful_resource" "test" {
   path = "/posts"
-  body = jsonencode({
+  body = {
   	foo = "bar"
-})
+  }
   read_path = "$(path)/$(body.id)"
 }
 
@@ -112,9 +113,9 @@ provider "restful" {
 
 resource "restful_resource" "test" {
   path = "/posts"
-  body = jsonencode({
+  body = {
   	foo = "bar"
-})
+  }
   read_path = "$(path)/$(body.id)"
 }
 
@@ -135,13 +136,13 @@ provider "restful" {
 
 resource "restful_resource" "test" {
   path = "/posts"
-  body = jsonencode({
+  body = {
   	foo = "bar"
 	obj = {
 	  a = 1
 	  b = 2
 	}
-})
+  }
   read_path = "$(path)/$(body.id)"
 }
 
