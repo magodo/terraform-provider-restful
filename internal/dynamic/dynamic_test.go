@@ -205,7 +205,11 @@ func TestFromJSON(t *testing.T) {
 		"bool": true,
 		"string": "a"
 	},
-	"object_null": null
+	"object_null": null,
+	"dynamic": {
+		"foo": "bar"
+	},
+	"dynamic_null": null
 }`,
 			expect: types.DynamicValue(
 				types.ObjectValueMust(
@@ -262,6 +266,8 @@ func TestFromJSON(t *testing.T) {
 								"string": types.StringType,
 							},
 						},
+						"dynamic":      types.DynamicType,
+						"dynamic_null": types.DynamicType,
 					},
 					map[string]attr.Value{
 						"bool":         types.BoolValue(true),
@@ -329,6 +335,17 @@ func TestFromJSON(t *testing.T) {
 								"string": types.StringType,
 							},
 						),
+						"dynamic": types.DynamicValue(
+							types.ObjectValueMust(
+								map[string]attr.Type{
+									"foo": types.StringType,
+								},
+								map[string]attr.Value{
+									"foo": types.StringValue("bar"),
+								},
+							),
+						),
+						"dynamic_null": types.DynamicNull(),
 					},
 				),
 			),
@@ -368,6 +385,38 @@ func TestFromJSON(t *testing.T) {
 					map[string]attr.Value{
 						"str1": types.StringValue("a"),
 						"str2": types.StringNull(),
+					},
+				),
+			),
+		},
+		{
+			name: "tuple length changed",
+			input: `
+[{
+	"str1": "a"
+}]
+`,
+			expect: types.DynamicValue(
+				types.TupleValueMust(
+					[]attr.Type{
+						types.ObjectType{
+							AttrTypes: map[string]attr.Type{
+								"str1": types.StringType,
+								"str2": types.StringType,
+							},
+						},
+					},
+					[]attr.Value{
+						types.ObjectValueMust(
+							map[string]attr.Type{
+								"str1": types.StringType,
+								"str2": types.StringType,
+							},
+							map[string]attr.Value{
+								"str1": types.StringValue("a"),
+								"str2": types.StringNull(),
+							},
+						),
 					},
 				),
 			),

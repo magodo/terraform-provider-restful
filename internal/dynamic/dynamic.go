@@ -259,6 +259,11 @@ func attrValueFromJSON(b []byte, typ attr.Type) (attr.Value, error) {
 			return nil, fmt.Errorf("%s: %s", diag.Summary(), diag.Detail())
 		}
 		return vv, nil
+	case basetypes.DynamicType:
+		if b == nil || string(b) == "null" {
+			return types.DynamicNull(), nil
+		}
+		return FromJSONImplied(b)
 	default:
 		return nil, fmt.Errorf("Unhandled type: %T", typ)
 	}
