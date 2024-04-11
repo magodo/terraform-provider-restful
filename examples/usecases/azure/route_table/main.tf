@@ -49,12 +49,12 @@ resource "restful_resource" "rg" {
       pending = ["202", "200"]
     }
   }
-  body = jsonencode({
+  body = {
     location = "westus"
     tags = {
       foo = "bar"
     }
-  })
+  }
 }
 
 locals {
@@ -80,9 +80,9 @@ resource "restful_resource" "table" {
   query = {
     api-version = ["2022-07-01"]
   }
-  body = jsonencode({
+  body = {
     location = "westus"
-  })
+  }
   poll_create = local.poll
   poll_delete = local.poll
 }
@@ -101,12 +101,12 @@ resource "restful_resource" "route1" {
   poll_update = local.poll
   poll_delete = local.poll
 
-  body = jsonencode({
+  body = {
     properties = {
       nextHopType   = "VnetLocal"
       addressPrefix = "10.1.0.0/16"
     }
-  })
+  }
 }
 
 resource "restful_resource" "route2" {
@@ -123,10 +123,10 @@ resource "restful_resource" "route2" {
   poll_update = local.poll
   poll_delete = local.poll
 
-  body = jsonencode({
+  body = {
     properties = {
       nextHopType   = "VnetLocal"
       addressPrefix = "10.2.0.0/16"
     }
-  })
+  }
 }

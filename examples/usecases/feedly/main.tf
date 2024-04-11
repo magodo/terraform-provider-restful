@@ -35,9 +35,9 @@ resource "restful_resource" "collection_go" {
   update_method = "POST"
   read_path     = "$(path)/$(body.0.id)"
   read_selector = "0"
-  body = jsonencode({
+  body = {
     label = "Go"
-  })
+  }
 }
 
 resource "restful_resource" "feeds" {
@@ -47,7 +47,7 @@ resource "restful_resource" "feeds" {
   create_selector = "#[feedId == \"${each.value}\"]"
   read_path       = "feeds/$(body.id)"
   delete_path     = "${restful_resource.collection_go.id}/feeds/$(body.id)"
-  body = jsonencode({
+  body = {
     id = each.value
-  })
+  }
 }

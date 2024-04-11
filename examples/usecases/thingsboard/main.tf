@@ -50,10 +50,10 @@ data "restful_resource" "user" {
 resource "restful_resource" "customer" {
   path      = "/customer"
   read_path = "$(path)/$(body.id.id)"
-  body = jsonencode({
+  body = {
     title = "Example Company"
     tenantId = {
-      id         = jsondecode(data.restful_resource.user.output).tenantId.id
+      id         = data.restful_resource.user.output.tenantId.id
       entityType = "TENANT"
     }
     country  = "US"
@@ -64,15 +64,15 @@ resource "restful_resource" "customer" {
     zip      = "10004"
     phone    = "+1(415)777-7777"
     email    = "example@company.com"
-  })
+  }
 }
 
 resource "restful_resource" "device_profile" {
   path      = "/deviceProfile"
   read_path = "$(path)/$(body.id.id)"
-  body = jsonencode({
+  body = {
     tenantId = {
-      id         = jsondecode(data.restful_resource.user.output).tenantId.id
+      id         = data.restful_resource.user.output.tenantId.id
       entityType = "TENANT"
     }
     name               = "My Profile"
@@ -99,28 +99,28 @@ resource "restful_resource" "device_profile" {
     firmwareId         = null
     softwareId         = null
     default            = false
-  })
+  }
 }
 
 resource "restful_resource" "device" {
   path      = "/device"
   read_path = "$(path)/$(body.id.id)"
-  body = jsonencode({
+  body = {
     tenantId = {
-      id         = jsondecode(data.restful_resource.user.output).tenantId.id
+      id         = data.restful_resource.user.output.tenantId.id
       entityType = "TENANT"
     }
     customerId = {
-      id         = jsondecode(restful_resource.customer.output).id.id
+      id         = restful_resource.customer.output.id.id
       entityType = "CUSTOMER"
     }
     name  = "My Device"
     label = "Room 123 Sensor"
     deviceProfileId : {
-      id         = jsondecode(restful_resource.device_profile.output).id.id
+      id         = restful_resource.device_profile.output.id.id
       entityType = "DEVICE_PROFILE"
     }
-  })
+  }
 }
 
 data "restful_resource" "device_credential" {
@@ -137,7 +137,7 @@ locals {
       resolveMultiple = false
       singleEntity = {
         entityType = "DEVICE"
-        id         = jsondecode(restful_resource.device.output).id.id
+        id         = restful_resource.device.output.id.id
       }
       type = "singleEntity"
     }
@@ -208,9 +208,9 @@ locals {
 resource "restful_resource" "dashboard" {
   path      = "/dashboard"
   read_path = "$(path)/$(body.id.id)"
-  body = jsonencode({
+  body = {
     tenantId = {
-      id         = jsondecode(data.restful_resource.user.output).tenantId.id
+      id         = data.restful_resource.user.output.tenantId.id
       entityType = "TENANT"
     }
     title = "My Dashboard"
@@ -256,10 +256,10 @@ resource "restful_resource" "dashboard" {
         (local.my_device_widget.id) = local.my_device_widget
       }
     }
-  })
+  }
 }
 
 output "device_token" {
-  value     = jsondecode(data.restful_resource.device_credential.output).credentialsId
+  value     = data.restful_resource.device_credential.output.credentialsId
   sensitive = true
 }

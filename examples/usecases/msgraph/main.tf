@@ -36,7 +36,7 @@ provider "restful" {
 resource "restful_resource" "group" {
   path      = "/groups"
   read_path = "$(path)/$(body.id)"
-  body = jsonencode({
+  body = {
     description = "Self help community for library"
     displayName = "Library Assist"
     groupTypes = [
@@ -45,13 +45,13 @@ resource "restful_resource" "group" {
     mailEnabled     = true
     mailNickname    = "library"
     securityEnabled = false
-  })
+  }
 }
 
 resource "restful_resource" "user" {
   path      = "/users"
   read_path = "$(path)/$(body.id)"
-  body = jsonencode({
+  body = {
     accountEnabled    = true
     mailNickname      = "AdeleV"
     displayName       = "J.Doe"
@@ -59,7 +59,7 @@ resource "restful_resource" "user" {
     passwordProfile = {
       password = "SecretP@sswd99!"
     }
-  })
+  }
   write_only_attrs = [
     "mailNickname",
     "accountEnabled",

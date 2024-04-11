@@ -26,12 +26,12 @@ data "restful_resource" "me" {
 }
 
 resource "restful_resource" "playlist" {
-  path        = "/users/${jsondecode(data.restful_resource.me.output).id}/playlists"
+  path        = "/users/${data.restful_resource.me.output.id}/playlists"
   read_path   = "/playlists/$(body.id)"
   delete_path = "/playlists/$(body.id)/followers"
-  body = jsonencode({
+  body = {
     name = "World Cup (by Terraform)"
-  })
+  }
 }
 
 locals {
@@ -55,7 +55,7 @@ data "restful_resource" "track" {
 resource "restful_operation" "add_tracks_to_playlist" {
   path   = "${restful_resource.playlist.id}/tracks"
   method = "PUT"
-  body = jsonencode({
-    uris = [for d in data.restful_resource.track : jsondecode(d.output).tracks.items[0].uri]
-  })
+  body = {
+    uris = [for d in data.restful_resource.track : d.output.tracks.items[0].uri]
+  }
 }

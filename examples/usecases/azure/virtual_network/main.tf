@@ -49,12 +49,12 @@ resource "restful_resource" "rg" {
       pending = ["202", "200"]
     }
   }
-  body = jsonencode({
+  body = {
     location = "westus"
     tags = {
       foo = "bar"
     }
-  })
+  }
 }
 
 locals {
@@ -77,7 +77,7 @@ resource "restful_resource" "vnet" {
   poll_create = local.vnet_poll
   poll_update = local.vnet_poll
   poll_delete = local.vnet_poll
-  body = jsonencode({
+  body = {
     location = "westus"
     properties = {
       addressSpace = {
@@ -92,5 +92,5 @@ resource "restful_resource" "vnet" {
         }
       ]
     }
-  })
+  }
 }
