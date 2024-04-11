@@ -164,13 +164,11 @@ resource "restful_resource" "test" {
     displayName       = "J.Doe"
     userPrincipalName = "%d@%s"
   }
-  lifecycle  {
-  	ignore_changes = [
-		"body.mailNickname",
-		"body.accountEnabled",
-		"body.passwordProfile",
-	]
-  }
+  write_only_attrs = [
+    "mailNickname",
+    "accountEnabled",
+    "passwordProfile",
+  ]
 }
 `, d.url, d.clientId, d.clientSecret, d.tenantId, mpDisabled, d.rd, d.orgDomain)
 }
@@ -205,13 +203,11 @@ resource "restful_resource" "test" {
     displayName       = "J.Doe2"
     userPrincipalName = "%d@%s"
   }
-  lifecycle  {
-  	ignore_changes = [
-		"body.mailNickname",
-		"body.accountEnabled",
-		"body.passwordProfile",
-	]
-  }
+  write_only_attrs = [
+    "mailNickname",
+    "accountEnabled",
+    "passwordProfile",
+  ]
 }
 `, d.url, d.clientId, d.clientSecret, d.tenantId, mpDisabled, d.rd, d.orgDomain)
 }

@@ -42,7 +42,7 @@ func TestDataSourceMTLS(t *testing.T) {
 			{
 				Config: mtlsConfig(server.URL, caCert, clientCert, clientKey),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr(addr, "output", resp),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 		},

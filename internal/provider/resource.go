@@ -26,6 +26,7 @@ import (
 	"github.com/magodo/terraform-provider-restful/internal/dynamic"
 	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 type Resource struct {
@@ -65,9 +66,10 @@ type resourceData struct {
 	RetryUpdate types.Object `tfsdk:"retry_update"`
 	RetryDelete types.Object `tfsdk:"retry_delete"`
 
-	MergePatchDisabled types.Bool `tfsdk:"merge_patch_disabled"`
-	Query              types.Map  `tfsdk:"query"`
-	Header             types.Map  `tfsdk:"header"`
+	WriteOnlyAttributes types.List `tfsdk:"write_only_attrs"`
+	MergePatchDisabled  types.Bool `tfsdk:"merge_patch_disabled"`
+	Query               types.Map  `tfsdk:"query"`
+	Header              types.Map  `tfsdk:"header"`
 
 	CheckExistance types.Bool `tfsdk:"check_existance"`
 	ForceNewAttrs  types.Set  `tfsdk:"force_new_attrs"`
@@ -427,6 +429,12 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 					stringvalidator.OneOf("DELETE", "POST"),
 				},
 			},
+			"write_only_attrs": schema.ListAttribute{
+				Description:         "A list of paths (in gjson syntax) to the attributes that are only settable, but won't be read in GET response.",
+				MarkdownDescription: "A list of paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attributes that are only settable, but won't be read in GET response.",
+				Optional:            true,
+				ElementType:         types.StringType,
+			},
 			"merge_patch_disabled": schema.BoolAttribute{
 				Description:         "Whether to use a JSON Merge Patch as the request body in the PATCH update? This is only effective when `update_method` is set to `PATCH`. This overrides the `merge_patch_disabled` set in the provider block (defaults to `false`).",
 				MarkdownDescription: "Whether to use a JSON Merge Patch as the request body in the PATCH update? This is only effective when `update_method` is set to `PATCH`. This overrides the `merge_patch_disabled` set in the provider block (defaults to `false`).",
@@ -470,12 +478,35 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 }
 
 func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
-	// var config resourceData
-	// diags := req.Config.Get(ctx, &config)
-	// resp.Diagnostics.Append(diags...)
-	// if diags.HasError() {
-	// 	return
-	// }
+	var config resourceData
+	diags := req.Config.Get(ctx, &config)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
+	if !config.Body.IsUnknown() {
+		b, err := dynamic.ToJSON(config.Body)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Invalid configuration",
+				fmt.Sprintf("marshal body: %v", err),
+			)
+			return
+		}
+		if !config.WriteOnlyAttributes.IsUnknown() && !config.WriteOnlyAttributes.IsNull() {
+			for _, ie := range config.WriteOnlyAttributes.Elements() {
+				ie := ie.(types.String)
+				if !ie.IsUnknown() && !ie.IsNull() {
+					if !gjson.Get(string(b), ie.ValueString()).Exists() {
+						resp.Diagnostics.AddError(
+							"Invalid configuration",
+							fmt.Sprintf(`Invalid path in "write_only_attrs": %s`, ie.String()),
+						)
+					}
+				}
+			}
+		}
+	}
 }
 
 func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
@@ -721,7 +752,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 		State:       resp.State,
 		Diagnostics: resp.Diagnostics,
 	}
-	r.Read(ctx, rreq, &rresp)
+	r.read(ctx, rreq, &rresp, false)
 
 	*resp = resource.CreateResponse{
 		State:       rresp.State,
@@ -730,6 +761,10 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 }
 
 func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	r.read(ctx, req, resp, true)
+}
+
+func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse, updateBody bool) {
 	var state resourceData
 	diags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
@@ -773,22 +808,55 @@ func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *reso
 		b = []byte(bodyLocator.LocateValueInResp(*response))
 	}
 
-	var body types.Dynamic
-	if body, err = dynamic.FromJSON(b, state.Body.UnderlyingValue().Type(ctx)); err != nil {
-		// An error might occur here during refresh, when the type of the state doesn't match the remote,
-		// e.g. a tuple field has different number of elements.
-		// In this case, we fallback to the implied types, to make the refresh proceed and return a reasonable plan diff.
-		if body, err = dynamic.FromJSONImplied(b); err != nil {
-			resp.Diagnostics.AddError(
-				"Evaluating `body` during Read",
-				err.Error(),
-			)
+	if updateBody {
+		var writeOnlyAttributes []string
+		diags = state.WriteOnlyAttributes.ElementsAs(ctx, &writeOnlyAttributes, false)
+		resp.Diagnostics.Append(diags...)
+		if diags.HasError() {
 			return
 		}
-	}
 
-	// Set body, which is modified during read.
-	state.Body = body
+		// Update the read response by compensating the write only attributes from state
+		if len(writeOnlyAttributes) != 0 {
+			stateBody, err := dynamic.ToJSON(state.Body)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Read failure",
+					fmt.Sprintf("marshal state body: %v", err),
+				)
+				return
+			}
+			pb := string(b)
+			for _, path := range writeOnlyAttributes {
+				if gjson.Get(string(stateBody), path).Exists() && !gjson.Get(string(b), path).Exists() {
+					pb, err = sjson.Set(pb, path, gjson.Get(string(stateBody), path).Value())
+					if err != nil {
+						resp.Diagnostics.AddError(
+							"Read failure",
+							fmt.Sprintf("json set write only attr at path %q: %v", path, err),
+						)
+						return
+					}
+				}
+			}
+			b = []byte(pb)
+		}
+
+		var body types.Dynamic
+		if body, err = dynamic.FromJSON(b, state.Body.UnderlyingValue().Type(ctx)); err != nil {
+			// An error might occur here during refresh, when the type of the state doesn't match the remote,
+			// e.g. a tuple field has different number of elements.
+			// In this case, we fallback to the implied types, to make the refresh proceed and return a reasonable plan diff.
+			if body, err = dynamic.FromJSONImplied(b); err != nil {
+				resp.Diagnostics.AddError(
+					"Evaluating `body` during Read",
+					err.Error(),
+				)
+				return
+			}
+		}
+		state.Body = body
+	}
 
 	// Set output
 	if !state.OutputAttrs.IsNull() {
@@ -976,7 +1044,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 		State:       resp.State,
 		Diagnostics: resp.Diagnostics,
 	}
-	r.Read(ctx, rreq, &rresp)
+	r.read(ctx, rreq, &rresp, false)
 
 	*resp = resource.UpdateResponse{
 		State:       rresp.State,
