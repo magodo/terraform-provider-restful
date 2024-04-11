@@ -26,12 +26,12 @@ resource "restful_resource" "rg" {
       pending = ["202", "200"]
     }
   }
-  body = jsonencode({
+  body = {
     location = "westus"
     tags = {
       foo = "bar"
     }
-  })
+  }
 }
 ```
 
@@ -40,7 +40,7 @@ resource "restful_resource" "rg" {
 
 ### Required
 
-- `body` (String) The properties of the resource.
+- `body` (Dynamic) The properties of the resource.
 - `path` (String) The path used to create the resource, relative to the `base_url` of the provider.
 
 ### Optional
@@ -74,7 +74,7 @@ resource "restful_resource" "rg" {
 ### Read-Only
 
 - `id` (String) The ID of the Resource.
-- `output` (String) The response body after reading the resource.
+- `output` (Dynamic) The response body after reading the resource.
 
 <a id="nestedatt--poll_create"></a>
 ### Nested Schema for `poll_create`
