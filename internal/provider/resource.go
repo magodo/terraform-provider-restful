@@ -534,7 +534,7 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 		resp.Plan.Set(ctx, plan)
 	}()
 
-	if !plan.ForceNewAttrs.IsUnknown() && !plan.Body.IsUnknown() {
+	if !plan.ForceNewAttrs.IsUnknown() && dynamic.IsFullyKnown(plan.Body) {
 		var forceNewAttrs []types.String
 		if diags := plan.ForceNewAttrs.ElementsAs(ctx, &forceNewAttrs, false); diags != nil {
 			resp.Diagnostics.Append(diags...)
