@@ -46,7 +46,7 @@ resource "restful_resource" "rg" {
 ### Optional
 
 - `check_existance` (Boolean) Whether to check resource already existed? Defaults to `false`.
-- `create_method` (String) The method used to create the resource. Possible values are `PUT` and `POST`. This overrides the `create_method` set in the provider block (defaults to POST).
+- `create_method` (String) The method used to create the resource. Possible values are `PUT`, `POST` and `PATCH`. This overrides the `create_method` set in the provider block (defaults to POST).
 - `create_selector` (String) A selector in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries) query syntax, that is used when create returns a collection of resources, to select exactly one member resource of from it. By default, the whole response body is used as the body.
 - `delete_method` (String) The method used to delete the resource. Possible values are `DELETE` and `POST`. This overrides the `delete_method` set in the provider block (defaults to DELETE).
 - `delete_path` (String) The API path used to delete the resource. The `id` is used instead if `delete_path` is absent. The path can be string literal, or combined by followings: `$(path)` expanded to `path`, `$(body.x.y.z)` expands to the `x.y.z` property (urlencoded) in API body, `#(body.id)` expands to the `id` property, with `base_url` prefix trimmed.
