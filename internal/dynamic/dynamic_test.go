@@ -27,10 +27,16 @@ func TestToJSON(t *testing.T) {
 				"list": types.ListType{
 					ElemType: types.BoolType,
 				},
+				"list_empty": types.ListType{
+					ElemType: types.BoolType,
+				},
 				"list_null": types.ListType{
 					ElemType: types.BoolType,
 				},
 				"set": types.SetType{
+					ElemType: types.BoolType,
+				},
+				"set_empty": types.SetType{
 					ElemType: types.BoolType,
 				},
 				"set_null": types.SetType{
@@ -42,6 +48,9 @@ func TestToJSON(t *testing.T) {
 						types.StringType,
 					},
 				},
+				"tuple_empty": types.TupleType{
+					ElemTypes: []attr.Type{},
+				},
 				"tuple_null": types.TupleType{
 					ElemTypes: []attr.Type{
 						types.BoolType,
@@ -49,6 +58,9 @@ func TestToJSON(t *testing.T) {
 					},
 				},
 				"map": types.MapType{
+					ElemType: types.BoolType,
+				},
+				"map_empty": types.MapType{
 					ElemType: types.BoolType,
 				},
 				"map_null": types.MapType{
@@ -59,6 +71,9 @@ func TestToJSON(t *testing.T) {
 						"bool":   types.BoolType,
 						"string": types.StringType,
 					},
+				},
+				"object_empty": types.ObjectType{
+					AttrTypes: map[string]attr.Type{},
 				},
 				"object_null": types.ObjectType{
 					AttrTypes: map[string]attr.Type{
@@ -85,6 +100,10 @@ func TestToJSON(t *testing.T) {
 						types.BoolValue(false),
 					},
 				),
+				"list_empty": types.ListValueMust(
+					types.BoolType,
+					[]attr.Value{},
+				),
 				"list_null": types.ListNull(types.BoolType),
 				"set": types.SetValueMust(
 					types.BoolType,
@@ -92,6 +111,10 @@ func TestToJSON(t *testing.T) {
 						types.BoolValue(true),
 						types.BoolValue(false),
 					},
+				),
+				"set_empty": types.SetValueMust(
+					types.BoolType,
+					[]attr.Value{},
 				),
 				"set_null": types.SetNull(types.BoolType),
 				"tuple": types.TupleValueMust(
@@ -103,6 +126,10 @@ func TestToJSON(t *testing.T) {
 						types.BoolValue(true),
 						types.StringValue("a"),
 					},
+				),
+				"tuple_empty": types.TupleValueMust(
+					[]attr.Type{},
+					[]attr.Value{},
 				),
 				"tuple_null": types.TupleNull(
 					[]attr.Type{
@@ -116,6 +143,10 @@ func TestToJSON(t *testing.T) {
 						"a": types.BoolValue(true),
 					},
 				),
+				"map_empty": types.MapValueMust(
+					types.BoolType,
+					map[string]attr.Value{},
+				),
 				"map_null": types.MapNull(types.BoolType),
 				"object": types.ObjectValueMust(
 					map[string]attr.Type{
@@ -126,6 +157,10 @@ func TestToJSON(t *testing.T) {
 						"bool":   types.BoolValue(true),
 						"string": types.StringValue("a"),
 					},
+				),
+				"object_empty": types.ObjectValueMust(
+					map[string]attr.Type{},
+					map[string]attr.Value{},
 				),
 				"object_null": types.ObjectNull(
 					map[string]attr.Type{
@@ -150,19 +185,24 @@ func TestToJSON(t *testing.T) {
 	"number": 1.23,
 	"number_null": null,
 	"list": [true, false],
+	"list_empty": [],
 	"list_null": null,
 	"set": [true, false],
+	"set_empty": [],
 	"set_null": null,
 	"tuple": [true, "a"],
+	"tuple_empty": [],
 	"tuple_null": null,
 	"map": {
 		"a": true
 	},
+	"map_empty": {},
 	"map_null": null,
 	"object": {
 		"bool": true,
 		"string": "a"
 	},
+	"object_empty": {},
 	"object_null": null
 }`
 
@@ -192,19 +232,24 @@ func TestFromJSON(t *testing.T) {
 	"number": 1.23,
 	"number_null":    null,
 	"list": [true, false],
+	"list_empty": [],
 	"list_null": null,
 	"set": [true, false],
+	"set_empty": [],
 	"set_null": null,
 	"tuple": [true, "a"],
+	"tuple_empty": [],
 	"tuple_null":  null,
 	"map": {
 		"a": true
 	},
+	"map_empty": {},
 	"map_null": null,
 	"object": {
 		"bool": true,
 		"string": "a"
 	},
+	"object_empty": {},
 	"object_null": null,
 	"dynamic": {
 		"foo": "bar"
@@ -227,10 +272,16 @@ func TestFromJSON(t *testing.T) {
 						"list": types.ListType{
 							ElemType: types.BoolType,
 						},
+						"list_empty": types.ListType{
+							ElemType: types.BoolType,
+						},
 						"list_null": types.ListType{
 							ElemType: types.BoolType,
 						},
 						"set": types.SetType{
+							ElemType: types.BoolType,
+						},
+						"set_empty": types.SetType{
 							ElemType: types.BoolType,
 						},
 						"set_null": types.SetType{
@@ -242,6 +293,9 @@ func TestFromJSON(t *testing.T) {
 								types.StringType,
 							},
 						},
+						"tuple_empty": types.TupleType{
+							ElemTypes: []attr.Type{},
+						},
 						"tuple_null": types.TupleType{
 							ElemTypes: []attr.Type{
 								types.BoolType,
@@ -249,6 +303,9 @@ func TestFromJSON(t *testing.T) {
 							},
 						},
 						"map": types.MapType{
+							ElemType: types.BoolType,
+						},
+						"map_empty": types.MapType{
 							ElemType: types.BoolType,
 						},
 						"map_null": types.MapType{
@@ -259,6 +316,9 @@ func TestFromJSON(t *testing.T) {
 								"bool":   types.BoolType,
 								"string": types.StringType,
 							},
+						},
+						"object_empty": types.ObjectType{
+							AttrTypes: map[string]attr.Type{},
 						},
 						"object_null": types.ObjectType{
 							AttrTypes: map[string]attr.Type{
@@ -287,6 +347,10 @@ func TestFromJSON(t *testing.T) {
 								types.BoolValue(false),
 							},
 						),
+						"list_empty": types.ListValueMust(
+							types.BoolType,
+							[]attr.Value{},
+						),
 						"list_null": types.ListNull(types.BoolType),
 						"set": types.SetValueMust(
 							types.BoolType,
@@ -294,6 +358,10 @@ func TestFromJSON(t *testing.T) {
 								types.BoolValue(true),
 								types.BoolValue(false),
 							},
+						),
+						"set_empty": types.SetValueMust(
+							types.BoolType,
+							[]attr.Value{},
 						),
 						"set_null": types.SetNull(types.BoolType),
 						"tuple": types.TupleValueMust(
@@ -305,6 +373,10 @@ func TestFromJSON(t *testing.T) {
 								types.BoolValue(true),
 								types.StringValue("a"),
 							},
+						),
+						"tuple_empty": types.TupleValueMust(
+							[]attr.Type{},
+							[]attr.Value{},
 						),
 						"tuple_null": types.TupleNull(
 							[]attr.Type{
@@ -318,6 +390,10 @@ func TestFromJSON(t *testing.T) {
 								"a": types.BoolValue(true),
 							},
 						),
+						"map_empty": types.MapValueMust(
+							types.BoolType,
+							map[string]attr.Value{},
+						),
 						"map_null": types.MapNull(types.BoolType),
 						"object": types.ObjectValueMust(
 							map[string]attr.Type{
@@ -328,6 +404,10 @@ func TestFromJSON(t *testing.T) {
 								"bool":   types.BoolValue(true),
 								"string": types.StringValue("a"),
 							},
+						),
+						"object_empty": types.ObjectValueMust(
+							map[string]attr.Type{},
+							map[string]attr.Value{},
 						),
 						"object_null": types.ObjectNull(
 							map[string]attr.Type{
@@ -453,19 +533,24 @@ func TestFromJSONImplied(t *testing.T) {
 	"number": 1.23,
 	"number_null":    null,
 	"list": [true, false],
+	"list_empty": [],
 	"list_null": null,
 	"set": [true, false],
+	"set_empty": [],
 	"set_null": null,
 	"tuple": [true, "a"],
+	"tuple_empty": [],
 	"tuple_null":  null,
 	"map": {
 		"a": true
 	},
+	"map_empty": {},
 	"map_null": null,
 	"object": {
 		"bool": true,
 		"string": "a"
 	},
+	"object_empty": {},
 	"object_null": null
 }`,
 			expect: types.DynamicValue(
@@ -487,12 +572,18 @@ func TestFromJSONImplied(t *testing.T) {
 								types.BoolType,
 							},
 						},
+						"list_empty": types.TupleType{
+							ElemTypes: []attr.Type{},
+						},
 						"list_null": types.DynamicType,
 						"set": types.TupleType{
 							ElemTypes: []attr.Type{
 								types.BoolType,
 								types.BoolType,
 							},
+						},
+						"set_empty": types.TupleType{
+							ElemTypes: []attr.Type{},
 						},
 						"set_null": types.DynamicType,
 						"tuple": types.TupleType{
@@ -501,11 +592,17 @@ func TestFromJSONImplied(t *testing.T) {
 								types.StringType,
 							},
 						},
+						"tuple_empty": types.TupleType{
+							ElemTypes: []attr.Type{},
+						},
 						"tuple_null": types.DynamicType,
 						"map": types.ObjectType{
 							AttrTypes: map[string]attr.Type{
 								"a": types.BoolType,
 							},
+						},
+						"map_empty": types.ObjectType{
+							AttrTypes: map[string]attr.Type{},
 						},
 						"map_null": types.DynamicType,
 						"object": types.ObjectType{
@@ -513,6 +610,9 @@ func TestFromJSONImplied(t *testing.T) {
 								"bool":   types.BoolType,
 								"string": types.StringType,
 							},
+						},
+						"object_empty": types.ObjectType{
+							AttrTypes: map[string]attr.Type{},
 						},
 						"object_null": types.DynamicType,
 					},
@@ -537,6 +637,10 @@ func TestFromJSONImplied(t *testing.T) {
 								types.BoolValue(false),
 							},
 						),
+						"list_empty": types.TupleValueMust(
+							[]attr.Type{},
+							[]attr.Value{},
+						),
 						"list_null": types.DynamicNull(),
 						"set": types.TupleValueMust(
 							[]attr.Type{
@@ -547,6 +651,10 @@ func TestFromJSONImplied(t *testing.T) {
 								types.BoolValue(true),
 								types.BoolValue(false),
 							},
+						),
+						"set_empty": types.TupleValueMust(
+							[]attr.Type{},
+							[]attr.Value{},
 						),
 						"set_null": types.DynamicNull(),
 						"tuple": types.TupleValueMust(
@@ -559,6 +667,10 @@ func TestFromJSONImplied(t *testing.T) {
 								types.StringValue("a"),
 							},
 						),
+						"tuple_empty": types.TupleValueMust(
+							[]attr.Type{},
+							[]attr.Value{},
+						),
 						"tuple_null": types.DynamicNull(),
 						"map": types.ObjectValueMust(
 							map[string]attr.Type{
@@ -567,6 +679,10 @@ func TestFromJSONImplied(t *testing.T) {
 							map[string]attr.Value{
 								"a": types.BoolValue(true),
 							},
+						),
+						"map_empty": types.ObjectValueMust(
+							map[string]attr.Type{},
+							map[string]attr.Value{},
 						),
 						"map_null": types.DynamicNull(),
 						"object": types.ObjectValueMust(
@@ -578,6 +694,10 @@ func TestFromJSONImplied(t *testing.T) {
 								"bool":   types.BoolValue(true),
 								"string": types.StringValue("a"),
 							},
+						),
+						"object_empty": types.ObjectValueMust(
+							map[string]attr.Type{},
+							map[string]attr.Value{},
 						),
 						"object_null": types.DynamicNull(),
 					},

@@ -18,7 +18,7 @@ func ToJSON(d types.Dynamic) ([]byte, error) {
 }
 
 func attrListToJSON(in []attr.Value) ([]json.RawMessage, error) {
-	var l []json.RawMessage
+	l := []json.RawMessage{}
 	for _, v := range in {
 		vv, err := attrValueToJSON(v)
 		if err != nil {
@@ -105,7 +105,7 @@ func attrListFromJSON(b []byte, etyp attr.Type) ([]attr.Value, error) {
 	if err := json.Unmarshal(b, &l); err != nil {
 		return nil, err
 	}
-	var vals []attr.Value
+	vals := []attr.Value{}
 	for _, b := range l {
 		val, err := attrValueFromJSON(b, etyp)
 		if err != nil {
@@ -202,7 +202,7 @@ func attrValueFromJSON(b []byte, typ attr.Type) (attr.Value, error) {
 		if len(l) != len(typ.ElemTypes) {
 			return nil, fmt.Errorf("tuple element size not match: json=%d, type=%d", len(l), len(typ.ElemTypes))
 		}
-		var vals []attr.Value
+		vals := []attr.Value{}
 		for i, b := range l {
 			val, err := attrValueFromJSON(b, typ.ElemTypes[i])
 			if err != nil {
