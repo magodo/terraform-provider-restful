@@ -1073,7 +1073,7 @@ type importSpec struct {
 
 	// Body represents the properties expected to be managed and tracked by Terraform. The value of these properties can be null as a place holder.
 	// When absent, all the response payload read wil be set to `body`.
-	Body map[string]interface{}
+	Body interface{}
 }
 
 func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
@@ -1109,7 +1109,7 @@ func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest
 	}
 
 	var body string
-	if len(imp.Body) != 0 {
+	if imp.Body != nil {
 		b, err := json.Marshal(imp.Body)
 		if err != nil {
 			resp.Diagnostics.AddError(
