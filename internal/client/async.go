@@ -35,7 +35,7 @@ var _ ValueLocator = HeaderLocator("")
 
 func (loc HeaderLocator) LocateValueInResp(resp resty.Response) (string, bool) {
 	v := resp.Header().Get(string(loc))
-	return v, true
+	return v, v != ""
 }
 func (loc HeaderLocator) String() string {
 	return fmt.Sprintf(`header.%s`, string(loc))
