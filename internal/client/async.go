@@ -14,14 +14,16 @@ import (
 
 // ValueLocator indicates where a value is located in a HTTP response.
 type ValueLocator interface {
-	LocateValueInResp(resty.Response) string
+	LocateValueInResp(resty.Response) (string, bool)
 	String() string
 }
 
 type ExactLocator string
 
-func (loc ExactLocator) LocateValueInResp(_ resty.Response) string {
-	return string(loc)
+var _ ValueLocator = ExactLocator("")
+
+func (loc ExactLocator) LocateValueInResp(_ resty.Response) (string, bool) {
+	return string(loc), true
 }
 func (loc ExactLocator) String() string {
 	return fmt.Sprintf(`exact.%s`, string(loc))
@@ -29,8 +31,11 @@ func (loc ExactLocator) String() string {
 
 type HeaderLocator string
 
-func (loc HeaderLocator) LocateValueInResp(resp resty.Response) string {
-	return resp.Header().Get(string(loc))
+var _ ValueLocator = HeaderLocator("")
+
+func (loc HeaderLocator) LocateValueInResp(resp resty.Response) (string, bool) {
+	v := resp.Header().Get(string(loc))
+	return v, true
 }
 func (loc HeaderLocator) String() string {
 	return fmt.Sprintf(`header.%s`, string(loc))
@@ -38,9 +43,11 @@ func (loc HeaderLocator) String() string {
 
 type BodyLocator string
 
-func (loc BodyLocator) LocateValueInResp(resp resty.Response) string {
+var _ ValueLocator = BodyLocator("")
+
+func (loc BodyLocator) LocateValueInResp(resp resty.Response) (string, bool) {
 	result := gjson.GetBytes(resp.Body(), string(loc))
-	return result.String()
+	return result.String(), result.Exists()
 }
 func (loc BodyLocator) String() string {
 	return fmt.Sprintf(`body.%s`, string(loc))
@@ -48,8 +55,10 @@ func (loc BodyLocator) String() string {
 
 type CodeLocator struct{}
 
-func (loc CodeLocator) LocateValueInResp(resp resty.Response) string {
-	return strconv.Itoa(resp.StatusCode())
+var _ ValueLocator = CodeLocator{}
+
+func (loc CodeLocator) LocateValueInResp(resp resty.Response) (string, bool) {
+	return strconv.Itoa(resp.StatusCode()), true
 }
 func (loc CodeLocator) String() string {
 	return "code"
@@ -106,8 +115,9 @@ func NewPollableForPoll(resp resty.Response, opt PollOption) (*Pollable, error) 
 
 	var rawURL string
 	if loc := opt.UrlLocator; loc != nil {
-		rawURL = loc.LocateValueInResp(resp)
-		if rawURL == "" {
+		var ok bool
+		rawURL, ok = loc.LocateValueInResp(resp)
+		if !ok {
 			return nil, fmt.Errorf("No polling URL found in %s", loc)
 		}
 	} else {
@@ -188,8 +198,8 @@ PollingLoop:
 			}
 		}
 
-		status := f.StatusLocator.LocateValueInResp(*resp)
-		if status == "" {
+		status, ok := f.StatusLocator.LocateValueInResp(*resp)
+		if !ok {
 			return fmt.Errorf("No status value found from %s", f.StatusLocator)
 		}
 		// We tolerate case difference here to be pragmatic.

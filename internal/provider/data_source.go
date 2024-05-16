@@ -10,7 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/tidwall/gjson"
+	"github.com/magodo/terraform-provider-restful/internal/client"
 )
 
 type DataSource struct {
@@ -170,23 +170,23 @@ func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp 
 
 	b := response.Body()
 
-	if config.Selector.ValueString() != "" {
-		result := gjson.GetBytes(b, config.Selector.ValueString())
-		if !result.Exists() {
+	if sel := config.Selector.ValueString(); sel != "" {
+		bodyLocator := client.BodyLocator(sel)
+		sb, ok := bodyLocator.LocateValueInResp(*response)
+		if !ok {
+			if config.AllowNotExist.ValueBool() {
+				// Setting the input attributes to the state anyway
+				diags = resp.State.Set(ctx, state)
+				resp.Diagnostics.Append(diags...)
+				return
+			}
 			resp.Diagnostics.AddError(
-				fmt.Sprintf("Failed to select resource from response"),
-				fmt.Sprintf("Can't find resource with query %q", config.Selector.ValueString()),
+				fmt.Sprintf("`selector` failed to select from the response"),
+				string(response.Body()),
 			)
 			return
 		}
-		if len(result.Array()) > 1 {
-			resp.Diagnostics.AddError(
-				fmt.Sprintf("Failed to select resource from response"),
-				fmt.Sprintf("Multiple resources with query %q found (%d)", config.Selector.ValueString(), len(result.Array())),
-			)
-			return
-		}
-		b = []byte(result.Array()[0].Raw)
+		b = []byte(sb)
 	}
 
 	// Set output
