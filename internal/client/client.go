@@ -147,8 +147,8 @@ func (c *Client) setRetry(opt RetryOption) {
 				return true
 			}
 
-			status := opt.StatusLocator.LocateValueInResp(*r)
-			if status == "" {
+			status, ok := opt.StatusLocator.LocateValueInResp(*r)
+			if !ok {
 				return false
 			}
 			// We tolerate case difference here to be pragmatic.

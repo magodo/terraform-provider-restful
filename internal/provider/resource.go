@@ -684,7 +684,15 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	if sel := plan.CreateSelector.ValueString(); sel != "" {
 		// Guaranteed by schema
 		bodyLocator := client.BodyLocator(sel)
-		b = []byte(bodyLocator.LocateValueInResp(*response))
+		sb, ok := bodyLocator.LocateValueInResp(*response)
+		if !ok {
+			resp.Diagnostics.AddError(
+				fmt.Sprintf("`create_selector` failed to select from the response"),
+				string(response.Body()),
+			)
+			return
+		}
+		b = []byte(sb)
 	}
 
 	// Construct the resource id, which is used as the path to read the resource later on. By default, it is the same as the "path", unless "read_path" is specified.
@@ -806,7 +814,13 @@ func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *reso
 	if sel := state.ReadSelector.ValueString(); sel != "" {
 		// Guaranteed by schema
 		bodyLocator := client.BodyLocator(sel)
-		b = []byte(bodyLocator.LocateValueInResp(*response))
+		sb, ok := bodyLocator.LocateValueInResp(*response)
+		// This means the tracked resource selected (filtered) from the response now disappears (deleted out of band).
+		if !ok {
+			resp.State.RemoveResource(ctx)
+			return
+		}
+		b = []byte(sb)
 	}
 
 	if updateBody {
