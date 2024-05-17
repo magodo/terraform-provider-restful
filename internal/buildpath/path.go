@@ -37,6 +37,10 @@ func BuildPath(pattern string, baseURL, path string, body []byte) (string, error
 			out = strings.ReplaceAll(out, match[0], path)
 			continue
 		}
+		if match[2] == "body" {
+			out = strings.ReplaceAll(out, match[0], string(body))
+			continue
+		}
 		if strings.HasPrefix(match[2], "body.") {
 			jsonPath := strings.TrimPrefix(match[2], "body.")
 			prop := gjson.GetBytes(body, jsonPath)
