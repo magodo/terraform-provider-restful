@@ -94,6 +94,8 @@ func New(ctx context.Context, baseURL string, opt *BuildOption) (*Client, error)
 	}
 
 	client := resty.NewWithClient(httpClient)
+	client.SetDebug(true)
+
 	if opt.Security != nil {
 		if err := opt.Security.configureClient(ctx, client); err != nil {
 			return nil, err
@@ -107,6 +109,12 @@ func New(ctx context.Context, baseURL string, opt *BuildOption) (*Client, error)
 	client.SetBaseURL(baseURL)
 
 	return &Client{client}, nil
+}
+
+// SetLoggerContext sets the ctx to the internal resty logger, as the tflog requires the current ctx.
+// This needs to be called at the start of each CRUD function.
+func (c *Client) SetLoggerContext(ctx context.Context) {
+	c.Client.SetLogger(tflogger{ctx: ctx})
 }
 
 type RetryOption struct {
@@ -175,6 +183,8 @@ type CreateOption struct {
 }
 
 func (c *Client) Create(ctx context.Context, path string, body interface{}, opt CreateOption) (*resty.Response, error) {
+	c.SetLoggerContext(ctx)
+
 	if opt.Retry != nil {
 		c.setRetry(*opt.Retry)
 		defer c.resetRetry()
@@ -201,6 +211,8 @@ type ReadOption struct {
 }
 
 func (c *Client) Read(ctx context.Context, path string, opt ReadOption) (*resty.Response, error) {
+	c.SetLoggerContext(ctx)
+
 	if opt.Retry != nil {
 		c.setRetry(*opt.Retry)
 		defer c.resetRetry()
@@ -222,6 +234,8 @@ type UpdateOption struct {
 }
 
 func (c *Client) Update(ctx context.Context, path string, body interface{}, opt UpdateOption) (*resty.Response, error) {
+	c.SetLoggerContext(ctx)
+
 	if opt.Retry != nil {
 		c.setRetry(*opt.Retry)
 		defer c.resetRetry()
@@ -252,6 +266,8 @@ type DeleteOption struct {
 }
 
 func (c *Client) Delete(ctx context.Context, path string, opt DeleteOption) (*resty.Response, error) {
+	c.SetLoggerContext(ctx)
+
 	if opt.Retry != nil {
 		c.setRetry(*opt.Retry)
 		defer c.resetRetry()
@@ -279,6 +295,8 @@ type OperationOption struct {
 }
 
 func (c *Client) Operation(ctx context.Context, path string, body interface{}, opt OperationOption) (*resty.Response, error) {
+	c.SetLoggerContext(ctx)
+
 	if opt.Retry != nil {
 		c.setRetry(*opt.Retry)
 		defer c.resetRetry()
@@ -315,6 +333,8 @@ type ReadOptionDS struct {
 }
 
 func (c *Client) ReadDS(ctx context.Context, path string, opt ReadOptionDS) (*resty.Response, error) {
+	c.SetLoggerContext(ctx)
+
 	if opt.Retry != nil {
 		c.setRetry(*opt.Retry)
 		defer c.resetRetry()
