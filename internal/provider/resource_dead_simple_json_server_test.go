@@ -130,7 +130,7 @@ func TestResource_DeadSimpleServer_CreateRetString(t *testing.T) {
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"create_method", "read_path"},
 				ImportStateIdFunc: func(s *terraform.State) (string, error) {
-					return fmt.Sprintf(`{"path": "/test", "id": "/test/%s", "body": {}}`, id), nil
+					return fmt.Sprintf(`{"path": "test", "id": "test/%s", "body": {}}`, id), nil
 				},
 			},
 		},
@@ -185,7 +185,7 @@ provider "restful" {
 }
 
 resource "restful_resource" "test" {
-  path = "/test"
+  path = "test"
   create_method = "PUT"
   read_path = "$(path)/$(body)"
   body = "{}"
