@@ -121,7 +121,7 @@ func TestResource_DeadSimpleServer_CreateRetString(t *testing.T) {
 			{
 				Config: d.create_ret_string(srv.URL),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckNoResourceAttr(addr, "output.#"),
 				),
 			},
 			{
@@ -188,7 +188,7 @@ resource "restful_resource" "test" {
   path = "test"
   create_method = "PUT"
   read_path = "$(path)/$(body)"
-  body = "{}"
+  body = {}
 }
 `, url)
 }
