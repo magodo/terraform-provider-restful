@@ -1,6 +1,7 @@
 package buildpath
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -38,7 +39,11 @@ func BuildPath(pattern string, baseURL, path string, body []byte) (string, error
 			continue
 		}
 		if match[2] == "body" {
-			out = strings.ReplaceAll(out, match[0], string(body))
+			var str string
+			if err := json.Unmarshal(body, &str); err != nil {
+				return "", fmt.Errorf(`"body" expects type of string, but failed to unmarshal as a string: %v`, err)
+			}
+			out = strings.ReplaceAll(out, match[0], str)
 			continue
 		}
 		if strings.HasPrefix(match[2], "body.") {
