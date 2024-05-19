@@ -280,6 +280,7 @@ func attrValueFromJSON(b []byte, typ attr.Type) (attr.Value, error) {
 // - []interface{}: tuple
 // - map[string]interface{}: object
 // - nil: null (dynamic)
+// Note the argument has to be a valid JSON byte. E.g. it returns error on nil (0-length bytes).
 func FromJSONImplied(b []byte) (types.Dynamic, error) {
 	_, v, err := attrValueFromJSONImplied(b)
 	if err != nil {

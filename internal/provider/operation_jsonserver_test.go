@@ -73,6 +73,31 @@ func TestOperation_JSONServer_withDelete(t *testing.T) {
 	})
 }
 
+func TestOperation_JSONServer_MigrateV0ToV1(t *testing.T) {
+	d := newJsonServerOperation()
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() { d.precheck(t) },
+		Steps: []resource.TestStep{
+			{
+				ProtoV6ProviderFactories: nil,
+				ExternalProviders: map[string]resource.ExternalProvider{
+					"restful": {
+						VersionConstraint: "= 0.13.2",
+						Source:            "registry.terraform.io/magodo/restful",
+					},
+				},
+				Config: d.migrate_v0(),
+			},
+			{
+				ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+				ExternalProviders:        nil,
+				Config:                   d.migrate_v1(),
+				PlanOnly:                 true,
+			},
+		},
+	})
+}
+
 func (d jsonServerOperation) basic() string {
 	return fmt.Sprintf(`
 provider "restful" {
@@ -121,4 +146,36 @@ resource "restful_operation" "test" {
 }`
 	}
 	return tpl
+}
+
+func (d jsonServerOperation) migrate_v0() string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+resource "restful_operation" "test" {
+  path = "posts"
+  method = "POST"
+  body = jsonencode({
+  	foo = "bar"
+  })
+}
+`, d.url)
+}
+
+func (d jsonServerOperation) migrate_v1() string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+resource "restful_operation" "test" {
+  path = "posts"
+  method = "POST"
+  body = {
+  	foo = "bar"
+  }
+}
+`, d.url)
 }

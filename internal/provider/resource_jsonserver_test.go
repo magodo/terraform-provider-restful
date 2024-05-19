@@ -177,6 +177,33 @@ func TestResource_JSONServer_OutputAttrs(t *testing.T) {
 	})
 }
 
+func TestResource_JSONServer_MigrateV0ToV1(t *testing.T) {
+	addr := "restful_resource.test"
+	d := newJsonServerData()
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { d.precheck(t) },
+		CheckDestroy: d.CheckDestroy(addr),
+		Steps: []resource.TestStep{
+			{
+				ProtoV6ProviderFactories: nil,
+				ExternalProviders: map[string]resource.ExternalProvider{
+					"restful": {
+						VersionConstraint: "= 0.13.2",
+						Source:            "registry.terraform.io/magodo/restful",
+					},
+				},
+				Config: d.migrate_v0(),
+			},
+			{
+				ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+				ExternalProviders:        nil,
+				Config:                   d.migrate_v1(),
+				PlanOnly:                 true,
+			},
+		},
+	})
+}
+
 func (d jsonServerData) CheckDestroy(addr string) func(*terraform.State) error {
 	return func(s *terraform.State) error {
 		c, err := client.New(context.TODO(), d.url, nil)
@@ -269,6 +296,38 @@ resource "restful_resource" "test" {
   }
   read_path = "$(path)/$(body.id)"
   output_attrs = ["foo", "obj.a"]
+}
+`, d.url)
+}
+
+func (d jsonServerData) migrate_v0() string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+resource "restful_resource" "test" {
+  path = "posts"
+  body = jsonencode({
+  	foo = "bar"
+  })
+  read_path = "$(path)/$(body.id)"
+}
+`, d.url)
+}
+
+func (d jsonServerData) migrate_v1() string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+resource "restful_resource" "test" {
+  path = "posts"
+  body = {
+  	foo = "bar"
+  }
+  read_path = "$(path)/$(body.id)"
 }
 `, d.url)
 }

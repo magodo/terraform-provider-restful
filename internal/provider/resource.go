@@ -34,6 +34,7 @@ type Resource struct {
 }
 
 var _ resource.Resource = &Resource{}
+var _ resource.ResourceWithUpgradeState = &Resource{}
 
 type resourceData struct {
 	ID types.String `tfsdk:"id"`
@@ -332,6 +333,7 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 	resp.Schema = schema.Schema{
 		Description:         "`restful_resource` manages a restful resource.",
 		MarkdownDescription: "`restful_resource` manages a restful resource.",
+		Version:             1,
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Description:         "The ID of the Resource.",

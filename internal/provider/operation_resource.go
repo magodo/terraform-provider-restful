@@ -28,6 +28,7 @@ type OperationResource struct {
 }
 
 var _ resource.Resource = &OperationResource{}
+var _ resource.ResourceWithUpgradeState = &OperationResource{}
 
 type operationResourceData struct {
 	ID             types.String  `tfsdk:"id"`
@@ -64,6 +65,7 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 	resp.Schema = schema.Schema{
 		Description:         "`restful_operation` represents a one-time API call operation.",
 		MarkdownDescription: "`restful_operation` represents a one-time API call operation.",
+		Version:             1,
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Description:         "The ID of the operation. Same as the `path`.",
