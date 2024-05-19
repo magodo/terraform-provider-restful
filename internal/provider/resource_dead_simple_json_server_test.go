@@ -2,6 +2,7 @@ package provider_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -99,7 +100,8 @@ func TestResource_DeadSimpleServer_CreateRetString(t *testing.T) {
 			r.Body.Close()
 			r.URL.Path, _ = url.JoinPath(r.URL.Path, id)
 			obj = &object{b: b, id: r.URL.String()}
-			w.Write([]byte(id))
+			ret, _ := json.Marshal(id)
+			w.Write([]byte(ret))
 			return
 		case "GET":
 			if obj == nil || r.URL.String() != obj.id {
