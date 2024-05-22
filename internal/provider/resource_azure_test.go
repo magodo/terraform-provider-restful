@@ -67,7 +67,7 @@ func TestResource_Azure_ResourceGroup(t *testing.T) {
 			{
 				Config: d.resourceGroup(),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 			{
@@ -80,7 +80,7 @@ func TestResource_Azure_ResourceGroup(t *testing.T) {
 			{
 				Config: d.resourceGroup_complete(),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 			{
@@ -88,7 +88,7 @@ func TestResource_Azure_ResourceGroup(t *testing.T) {
 				ImportState:             true,
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"poll_delete", "create_method"},
-				ImportStateIdFunc:       d.resourceGroupImportStateIdFunc(addr),
+				ImportStateIdFunc:       d.resourceGroupCompleteImportStateIdFunc(addr),
 			},
 		},
 	})
@@ -105,7 +105,7 @@ func TestResource_Azure_ResourceGroup_updatePath(t *testing.T) {
 			{
 				Config: d.resourceGroup_updatePath(),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 			{
@@ -118,7 +118,7 @@ func TestResource_Azure_ResourceGroup_updatePath(t *testing.T) {
 			{
 				Config: d.resourceGroup_updatePath_complete(),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 			{
@@ -126,7 +126,7 @@ func TestResource_Azure_ResourceGroup_updatePath(t *testing.T) {
 				ImportState:             true,
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"poll_delete", "create_method", "update_path"},
-				ImportStateIdFunc:       d.resourceGroupUpdatePathImportStateIdFunc(addr),
+				ImportStateIdFunc:       d.resourceGroupUpdatePathCompleteImportStateIdFunc(addr),
 			},
 		},
 	})
@@ -143,7 +143,7 @@ func TestResource_Azure_VirtualNetwork(t *testing.T) {
 			{
 				Config: d.vnet("foo"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 			{
@@ -156,7 +156,7 @@ func TestResource_Azure_VirtualNetwork(t *testing.T) {
 			{
 				Config: d.vnet("bar"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 			{
@@ -181,7 +181,7 @@ func TestResource_Azure_VirtualNetwork_Precheck(t *testing.T) {
 			{
 				Config: d.vnet_precheck("foo"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 			{
@@ -194,7 +194,7 @@ func TestResource_Azure_VirtualNetwork_Precheck(t *testing.T) {
 			{
 				Config: d.vnet_precheck("bar"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 			{
@@ -219,7 +219,7 @@ func TestResource_Azure_VirtualNetwork_SimplePoll(t *testing.T) {
 			{
 				Config: d.vnet_simple_poll("foo"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 			{
@@ -232,7 +232,7 @@ func TestResource_Azure_VirtualNetwork_SimplePoll(t *testing.T) {
 			{
 				Config: d.vnet_simple_poll("bar"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 			{
@@ -257,7 +257,7 @@ func TestResource_Azure_RouteTable_Precheck(t *testing.T) {
 			{
 				Config: d.routetable_precheck("foo"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 			{
@@ -270,7 +270,7 @@ func TestResource_Azure_RouteTable_Precheck(t *testing.T) {
 			{
 				Config: d.routetable_precheck("bar"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 			{
@@ -294,13 +294,13 @@ func TestOperationResource_Azure_Register_RP(t *testing.T) {
 			{
 				Config: d.unregisterRP("Microsoft.ProviderHub"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 			{
 				Config: d.registerRP("Microsoft.ProviderHub"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 		},
@@ -358,9 +358,9 @@ resource "restful_resource" "test" {
   query = {
     api-version = ["2020-06-01"]
   }
-  body = jsonencode({
+  body = {
     location = "westeurope"
-  })
+  }
 
   create_method = "PUT"
 
@@ -396,12 +396,12 @@ resource "restful_resource" "test" {
   query = {
     api-version = ["2020-06-01"]
   }
-  body = jsonencode({
+  body = {
     location = "westeurope"
 	tags = {
 	  foo = "bar"
 	}
-  })
+  }
 
   create_method = "PUT"
 
@@ -438,9 +438,9 @@ resource "restful_resource" "test" {
   query = {
     api-version = ["2020-06-01"]
   }
-  body = jsonencode({
+  body = {
     location = "westeurope"
-  })
+  }
 
   create_method = "PUT"
 
@@ -479,12 +479,12 @@ resource "restful_resource" "test" {
   query = {
     api-version = ["2020-06-01"]
   }
-  body = jsonencode({
+  body = {
     location = "westeurope"
 	tags = {
 	  foo = "bar"
 	}
-  })
+  }
 
   create_method = "PUT"
 
@@ -510,7 +510,21 @@ func (d azureData) resourceGroupImportStateIdFunc(addr string) func(s *terraform
   "api-version": ["2020-06-01"]
 },
 "path": %[1]q,
-"create_method": "PUT",
+"body": {
+  "location": null
+}
+}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
+	}
+}
+
+func (d azureData) resourceGroupCompleteImportStateIdFunc(addr string) func(s *terraform.State) (string, error) {
+	return func(s *terraform.State) (string, error) {
+		return fmt.Sprintf(`{
+"id": %[1]q,
+"query": {
+  "api-version": ["2020-06-01"]
+},
+"path": %[1]q,
 "body": {
   "location": null,
   "tags": null
@@ -526,7 +540,22 @@ func (d azureData) resourceGroupUpdatePathImportStateIdFunc(addr string) func(s 
 "query": {
   "api-version": ["2020-06-01"]
 },
-"create_method": "PUT",
+"path": %[1]q,
+"update_path": %[1]q,
+"body": {
+  "location": null
+}
+}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
+	}
+}
+
+func (d azureData) resourceGroupUpdatePathCompleteImportStateIdFunc(addr string) func(s *terraform.State) (string, error) {
+	return func(s *terraform.State) (string, error) {
+		return fmt.Sprintf(`{
+"id": %[1]q,
+"query": {
+  "api-version": ["2020-06-01"]
+},
 "path": %[1]q,
 "update_path": %[1]q,
 "body": {
@@ -567,7 +596,6 @@ func (d azureData) routeImportStateIdFunc(addr string) func(s *terraform.State) 
   },
   "path": %[1]q,
   "body": {
-    "location": null,
     "properties": {
       "addressPrefix": null,
 	  "nextHopType": null
@@ -599,9 +627,9 @@ resource "restful_resource" "rg" {
   query = {
     api-version = ["2020-06-01"]
   }
-  body = jsonencode({
+  body = {
     location = "westeurope"
-  })
+  }
 
   poll_delete = {
     status_locator = "code"
@@ -641,7 +669,7 @@ resource "restful_resource" "test" {
   poll_update = local.vnet_poll
   poll_delete = local.vnet_poll
 
-  body = jsonencode({
+  body = {
     location = "westus"
     properties = {
       addressSpace = {
@@ -651,7 +679,7 @@ resource "restful_resource" "test" {
     tags = {
       foo = "%s"
     }
-  })
+  }
 }
 `, d.vnet_template(), d.rd, tag)
 }
@@ -679,9 +707,9 @@ resource "restful_resource" "rg" {
   query = {
     api-version = ["2020-06-01"]
   }
-  body = jsonencode({
+  body = {
     location = "westeurope"
-  })
+  }
 
   poll_delete = {
     status_locator = "code"
@@ -732,7 +760,7 @@ resource "restful_resource" "test" {
   poll_update = local.vnet_poll
   poll_delete = local.vnet_poll
 
-  body = jsonencode({
+  body = {
     location = "westus"
     properties = {
       addressSpace = {
@@ -742,7 +770,7 @@ resource "restful_resource" "test" {
     tags = {
       foo = "%s"
     }
-  })
+  }
 }
 `, d.url, d.clientId, d.clientSecret, d.tenantId, d.subscriptionId, d.rd, d.rd, tag)
 }
@@ -779,7 +807,7 @@ resource "restful_resource" "test" {
     }
   }
 
-  body = jsonencode({
+  body = {
     location = "westus"
     properties = {
       addressSpace = {
@@ -789,7 +817,7 @@ resource "restful_resource" "test" {
     tags = {
       foo = "%s"
     }
-  })
+  }
 }
 `, d.vnet_template(), d.rd, tag)
 }
@@ -816,9 +844,9 @@ resource "restful_resource" "rg" {
   query = {
     api-version = ["2020-06-01"]
   }
-  body = jsonencode({
+  body = {
     location = "westeurope"
-  })
+  }
 
   poll_delete = {
     status_locator = "code"
@@ -854,12 +882,12 @@ resource "restful_resource" "table" {
   query = {
     api-version = ["2022-07-01"]
   }
-  body = jsonencode({
+  body = {
     location = "westus"
     tags = {
       foo = "%s"
     }
-  })
+  }
   poll_create = local.poll
   poll_delete = local.poll
 }
@@ -878,12 +906,12 @@ resource "restful_resource" "route1" {
   poll_update = local.poll
   poll_delete = local.poll
 
-  body = jsonencode({
+  body = {
     properties = {
       nextHopType   = "VnetLocal"
       addressPrefix = "10.1.0.0/16"
     }
-  })
+  }
 }
 
 resource "restful_resource" "route2" {
@@ -900,12 +928,12 @@ resource "restful_resource" "route2" {
   poll_update = local.poll
   poll_delete = local.poll
 
-  body = jsonencode({
+  body = {
     properties = {
       nextHopType   = "VnetLocal"
       addressPrefix = "10.2.0.0/16"
     }
-  })
+  }
 }
 `, d.url, d.clientId, d.clientSecret, d.tenantId, d.subscriptionId, d.rd, d.rd, tag)
 }

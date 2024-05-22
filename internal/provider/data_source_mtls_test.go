@@ -25,7 +25,7 @@ func TestDataSourceMTLS(t *testing.T) {
 	serverTLSConfig, caCert, clientCert, clientKey, err := certSetup()
 	require.NoError(t, err)
 
-	resp := "response"
+	resp := "{}"
 	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, resp)
 	}))
@@ -42,7 +42,7 @@ func TestDataSourceMTLS(t *testing.T) {
 			{
 				Config: mtlsConfig(server.URL, caCert, clientCert, clientKey),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr(addr, "output", resp),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 		},

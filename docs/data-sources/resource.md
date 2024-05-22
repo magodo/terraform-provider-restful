@@ -38,7 +38,7 @@ data "restful_resource" "test" {
 
 ### Read-Only
 
-- `output` (String) The response body after reading the resource.
+- `output` (Dynamic) The response body after reading the resource.
 
 <a id="nestedatt--precheck"></a>
 ### Nested Schema for `precheck`

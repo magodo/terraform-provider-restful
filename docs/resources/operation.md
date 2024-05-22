@@ -40,8 +40,8 @@ resource "restful_operation" "register_rp" {
 
 ### Optional
 
-- `body` (String) The payload for the `Create`/`Update` call.
-- `delete_body` (String) The payload for the `Delete` call.
+- `body` (Dynamic) The payload for the `Create`/`Update` call.
+- `delete_body` (Dynamic) The payload for the `Delete` call.
 - `delete_method` (String) The method for the `Delete` call. Possible values are `POST`, `PUT`, `PATCH` and `DELETE`. If this is not specified, no `Delete` call will occur.
 - `delete_path` (String) The path for the `Delete` call, relative to the `base_url` of the provider. The `path` is used instead if `delete_path` is absent.
 - `header` (Map of String) The header parameters that are applied to each request. This overrides the `header` set in the provider block.
@@ -57,7 +57,7 @@ resource "restful_operation" "register_rp" {
 ### Read-Only
 
 - `id` (String) The ID of the operation. Same as the `path`.
-- `output` (String) The response body.
+- `output` (Dynamic) The response body.
 
 <a id="nestedatt--poll"></a>
 ### Nested Schema for `poll`

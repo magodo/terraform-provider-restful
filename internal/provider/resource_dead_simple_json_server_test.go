@@ -53,7 +53,7 @@ func TestResource_DeadSimpleServer_ObjectArray(t *testing.T) {
 			{
 				Config: d.object_array(srv.URL, "foo"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.#"),
 				),
 			},
 			{
@@ -68,7 +68,7 @@ func TestResource_DeadSimpleServer_ObjectArray(t *testing.T) {
 			{
 				Config: d.object_array(srv.URL, "bar"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.#"),
 				),
 			},
 			{
@@ -123,7 +123,7 @@ func TestResource_DeadSimpleServer_CreateRetString(t *testing.T) {
 			{
 				Config: d.create_ret_string(srv.URL),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckNoResourceAttr(addr, "output.#"),
 				),
 			},
 			{
@@ -171,11 +171,11 @@ provider "restful" {
 resource "restful_resource" "test" {
   path = "test"
   create_method = "PUT"
-  body = jsonencode([
-  {
-  	foo = %q
-  }
-])
+  body = [
+    {
+  	  foo = %q
+    }
+  ]
 }
 `, url, v)
 }
@@ -190,7 +190,7 @@ resource "restful_resource" "test" {
   path = "test"
   create_method = "PUT"
   read_path = "$(path)/$(body)"
-  body = "{}"
+  body = {}
 }
 `, url)
 }

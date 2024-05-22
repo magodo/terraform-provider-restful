@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strings"
 
 	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/hashicorp/terraform-plugin-framework-validators/objectvalidator"
@@ -24,18 +23,18 @@ import (
 	"github.com/magodo/terraform-provider-restful/internal/buildpath"
 	"github.com/magodo/terraform-provider-restful/internal/client"
 	"github.com/magodo/terraform-provider-restful/internal/defaults"
+	"github.com/magodo/terraform-provider-restful/internal/dynamic"
 	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
-
-// Magic header used to indicate the value in the state is derived from import.
-const __IMPORT_HEADER__ = "__RESTFUL_PROVIDER__"
 
 type Resource struct {
 	p *Provider
 }
 
 var _ resource.Resource = &Resource{}
+var _ resource.ResourceWithUpgradeState = &Resource{}
 
 type resourceData struct {
 	ID types.String `tfsdk:"id"`
@@ -57,8 +56,7 @@ type resourceData struct {
 	PrecheckUpdate types.List `tfsdk:"precheck_update"`
 	PrecheckDelete types.List `tfsdk:"precheck_delete"`
 
-	Body                types.String `tfsdk:"body"`
-	WriteOnlyAttributes types.List   `tfsdk:"write_only_attrs"`
+	Body types.Dynamic `tfsdk:"body"`
 
 	PollCreate types.Object `tfsdk:"poll_create"`
 	PollUpdate types.Object `tfsdk:"poll_update"`
@@ -69,15 +67,16 @@ type resourceData struct {
 	RetryUpdate types.Object `tfsdk:"retry_update"`
 	RetryDelete types.Object `tfsdk:"retry_delete"`
 
-	MergePatchDisabled types.Bool `tfsdk:"merge_patch_disabled"`
-	Query              types.Map  `tfsdk:"query"`
-	Header             types.Map  `tfsdk:"header"`
+	WriteOnlyAttributes types.List `tfsdk:"write_only_attrs"`
+	MergePatchDisabled  types.Bool `tfsdk:"merge_patch_disabled"`
+	Query               types.Map  `tfsdk:"query"`
+	Header              types.Map  `tfsdk:"header"`
 
 	CheckExistance types.Bool `tfsdk:"check_existance"`
 	ForceNewAttrs  types.Set  `tfsdk:"force_new_attrs"`
 	OutputAttrs    types.Set  `tfsdk:"output_attrs"`
 
-	Output types.String `tfsdk:"output"`
+	Output types.Dynamic `tfsdk:"output"`
 }
 
 type pollData struct {
@@ -334,6 +333,7 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 	resp.Schema = schema.Schema{
 		Description:         "`restful_resource` manages a restful resource.",
 		MarkdownDescription: "`restful_resource` manages a restful resource.",
+		Version:             1,
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Description:         "The ID of the Resource.",
@@ -388,13 +388,10 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				},
 			},
 
-			"body": schema.StringAttribute{
+			"body": schema.DynamicAttribute{
 				Description:         "The properties of the resource.",
 				MarkdownDescription: "The properties of the resource.",
 				Required:            true,
-				Validators: []validator.String{
-					myvalidator.StringIsJSON(),
-				},
 			},
 
 			"poll_create": pollAttribute("Create"),
@@ -410,12 +407,6 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 			"retry_update": retryAttribute("Update (i.e. PUT/PATCH/POST)"),
 			"retry_delete": retryAttribute("Delete (i.e. DELETE)"),
 
-			"write_only_attrs": schema.ListAttribute{
-				Description:         "A list of paths (in gjson syntax) to the attributes that are only settable, but won't be read in GET response.",
-				MarkdownDescription: "A list of paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attributes that are only settable, but won't be read in GET response.",
-				Optional:            true,
-				ElementType:         types.StringType,
-			},
 			"create_method": schema.StringAttribute{
 				Description:         "The method used to create the resource. Possible values are `PUT`, `POST` and `PATCH`. This overrides the `create_method` set in the provider block (defaults to POST).",
 				MarkdownDescription: "The method used to create the resource. Possible values are `PUT`, `POST` and `PATCH`. This overrides the `create_method` set in the provider block (defaults to POST).",
@@ -439,6 +430,12 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				Validators: []validator.String{
 					stringvalidator.OneOf("DELETE", "POST"),
 				},
+			},
+			"write_only_attrs": schema.ListAttribute{
+				Description:         "A list of paths (in gjson syntax) to the attributes that are only settable, but won't be read in GET response.",
+				MarkdownDescription: "A list of paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attributes that are only settable, but won't be read in GET response.",
+				Optional:            true,
+				ElementType:         types.StringType,
 			},
 			"merge_patch_disabled": schema.BoolAttribute{
 				Description:         "Whether to use a JSON Merge Patch as the request body in the PATCH update? This is only effective when `update_method` is set to `PATCH`. This overrides the `merge_patch_disabled` set in the provider block (defaults to `false`).",
@@ -474,7 +471,7 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				Optional:            true,
 				ElementType:         types.StringType,
 			},
-			"output": schema.StringAttribute{
+			"output": schema.DynamicAttribute{
 				Description:         "The response body after reading the resource.",
 				MarkdownDescription: "The response body after reading the resource.",
 				Computed:            true,
@@ -490,13 +487,20 @@ func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConf
 	if diags.HasError() {
 		return
 	}
-
 	if !config.Body.IsUnknown() {
+		b, err := dynamic.ToJSON(config.Body)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Invalid configuration",
+				fmt.Sprintf("marshal body: %v", err),
+			)
+			return
+		}
 		if !config.WriteOnlyAttributes.IsUnknown() && !config.WriteOnlyAttributes.IsNull() {
 			for _, ie := range config.WriteOnlyAttributes.Elements() {
 				ie := ie.(types.String)
 				if !ie.IsUnknown() && !ie.IsNull() {
-					if !gjson.Get(config.Body.ValueString(), ie.ValueString()).Exists() {
+					if !gjson.Get(string(b), ie.ValueString()).Exists() {
 						resp.Diagnostics.AddError(
 							"Invalid configuration",
 							fmt.Sprintf(`Invalid path in "write_only_attrs": %s`, ie.String()),
@@ -513,18 +517,27 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 		// If the entire plan is null, the resource is planned for destruction.
 		return
 	}
-
 	if req.State.Raw.IsNull() {
 		// If the entire state is null, the resource is planned for creation.
 		return
 	}
+
 	var plan resourceData
 	if diags := req.Plan.Get(ctx, &plan); diags.HasError() {
 		resp.Diagnostics.Append(diags...)
 		return
 	}
+	var state resourceData
+	if diags := req.State.Get(ctx, &state); diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
 
-	if !plan.ForceNewAttrs.IsUnknown() && !plan.Body.IsUnknown() {
+	defer func() {
+		resp.Plan.Set(ctx, plan)
+	}()
+
+	if !plan.ForceNewAttrs.IsUnknown() && dynamic.IsFullyKnown(plan.Body) {
 		var forceNewAttrs []types.String
 		if diags := plan.ForceNewAttrs.ElementsAs(ctx, &forceNewAttrs, false); diags != nil {
 			resp.Diagnostics.Append(diags...)
@@ -545,16 +558,23 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 				return
 			}
 
-			originJson := state.Body.ValueString()
-			if originJson == "" {
-				originJson = "{}"
+			originJson, err := dynamic.ToJSON(state.Body)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"ModifyPlan failed",
+					fmt.Sprintf("marshaling state body: %v", err),
+				)
 			}
 
-			modifiedJson := plan.Body.ValueString()
-			if modifiedJson == "" {
-				modifiedJson = "{}"
+			modifiedJson, err := dynamic.ToJSON(plan.Body)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"ModifyPlan failed",
+					fmt.Sprintf("marshaling plan body: %v", err),
+				)
 			}
-			patch, err := jsonpatch.CreateMergePatch([]byte(originJson), []byte(modifiedJson))
+
+			patch, err := jsonpatch.CreateMergePatch(originJson, modifiedJson)
 			if err != nil {
 				resp.Diagnostics.AddError("failed to create merge patch", err.Error())
 				return
@@ -637,7 +657,15 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	defer unlockFunc()
 
 	// Create the resource
-	response, err := c.Create(ctx, plan.Path.ValueString(), plan.Body.ValueString(), *opt)
+	b, err := dynamic.ToJSON(plan.Body)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error to marshal body",
+			err.Error(),
+		)
+		return
+	}
+	response, err := c.Create(ctx, plan.Path.ValueString(), string(b), *opt)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error to call create",
@@ -653,7 +681,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 		return
 	}
 
-	b := response.Body()
+	b = response.Body()
 
 	if sel := plan.CreateSelector.ValueString(); sel != "" {
 		// Guaranteed by schema
@@ -735,7 +763,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 		State:       resp.State,
 		Diagnostics: resp.Diagnostics,
 	}
-	r.Read(ctx, rreq, &rresp)
+	r.read(ctx, rreq, &rresp, false)
 
 	*resp = resource.CreateResponse{
 		State:       rresp.State,
@@ -744,6 +772,10 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 }
 
 func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	r.read(ctx, req, resp, true)
+}
+
+func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse, updateBody bool) {
 	var state resourceData
 	diags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
@@ -791,45 +823,67 @@ func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *reso
 			return
 		}
 		b = []byte(sb)
-
 	}
 
-	var writeOnlyAttributes []string
-	diags = state.WriteOnlyAttributes.ElementsAs(ctx, &writeOnlyAttributes, false)
-	resp.Diagnostics.Append(diags...)
-	if diags.HasError() {
-		return
-	}
+	if updateBody {
+		var writeOnlyAttributes []string
+		diags = state.WriteOnlyAttributes.ElementsAs(ctx, &writeOnlyAttributes, false)
+		resp.Diagnostics.Append(diags...)
+		if diags.HasError() {
+			return
+		}
 
-	var body string
-	if strings.HasPrefix(state.Body.ValueString(), __IMPORT_HEADER__) {
-		// This branch is only invoked during `terraform import`.
-		body, err = ModifyBodyForImport(strings.TrimPrefix(state.Body.ValueString(), __IMPORT_HEADER__), string(b))
-	} else {
-		body, err = ModifyBody(state.Body.ValueString(), string(b), writeOnlyAttributes)
-	}
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Modifying `body` during Read",
-			err.Error(),
-		)
-		return
-	}
+		// Update the read response by compensating the write only attributes from state
+		if len(writeOnlyAttributes) != 0 {
+			stateBody, err := dynamic.ToJSON(state.Body)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Read failure",
+					fmt.Sprintf("marshal state body: %v", err),
+				)
+				return
+			}
+			pb := string(b)
+			for _, path := range writeOnlyAttributes {
+				if gjson.Get(string(stateBody), path).Exists() && !gjson.Get(string(b), path).Exists() {
+					pb, err = sjson.Set(pb, path, gjson.Get(string(stateBody), path).Value())
+					if err != nil {
+						resp.Diagnostics.AddError(
+							"Read failure",
+							fmt.Sprintf("json set write only attr at path %q: %v", path, err),
+						)
+						return
+					}
+				}
+			}
+			b = []byte(pb)
+		}
 
-	// Set body, which is modified during read.
-	state.Body = types.StringValue(string(body))
+		var body types.Dynamic
+		if body, err = dynamic.FromJSON(b, state.Body.UnderlyingValue().Type(ctx)); err != nil {
+			// An error might occur here during refresh, when the type of the state doesn't match the remote,
+			// e.g. a tuple field has different number of elements.
+			// In this case, we fallback to the implied types, to make the refresh proceed and return a reasonable plan diff.
+			if body, err = dynamic.FromJSONImplied(b); err != nil {
+				resp.Diagnostics.AddError(
+					"Evaluating `body` during Read",
+					err.Error(),
+				)
+				return
+			}
+		}
+		state.Body = body
+	}
 
 	// Set output
-	output := string(b)
 	if !state.OutputAttrs.IsNull() {
-		// Update the output to only contain the specified attributes.
 		var outputAttrs []string
 		diags = state.OutputAttrs.ElementsAs(ctx, &outputAttrs, false)
 		resp.Diagnostics.Append(diags...)
 		if diags.HasError() {
 			return
 		}
-		output, err = FilterAttrsInJSON(output, outputAttrs)
+		fb, err := FilterAttrsInJSON(string(b), outputAttrs)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Filter `output` during Read",
@@ -837,8 +891,18 @@ func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *reso
 			)
 			return
 		}
+		b = []byte(fb)
 	}
-	state.Output = types.StringValue(output)
+
+	output, err := dynamic.FromJSONImplied(b)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Evaluating `output` during Read",
+			err.Error(),
+		)
+		return
+	}
+	state.Output = output
 
 	diags = resp.State.Set(ctx, state)
 	resp.Diagnostics.Append(diags...)
@@ -870,8 +934,25 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 		return
 	}
 
-	// Invoke API to Update the resource only when there are changes in the body.
-	if state.Body.ValueString() != plan.Body.ValueString() {
+	stateBody, err := dynamic.ToJSON(state.Body)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Update failure",
+			fmt.Sprintf("Error to marshal state body: %v", err),
+		)
+		return
+	}
+	planBody, err := dynamic.ToJSON(plan.Body)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Update failure",
+			fmt.Sprintf("Error to marshal plan body: %v", err),
+		)
+		return
+	}
+
+	// Invoke API to Update the resource only when there are changes in the body (regardless of the TF type diff).
+	if string(stateBody) != string(planBody) {
 		// Precheck
 		unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, state.ID.ValueString(), opt.Header, opt.Query, plan.PrecheckUpdate)
 		if diags.HasError() {
@@ -880,9 +961,16 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 		}
 		defer unlockFunc()
 
-		body := plan.Body.ValueString()
 		if opt.Method == "PATCH" && !opt.MergePatchDisabled {
-			b, err := jsonpatch.CreateMergePatch([]byte(state.Body.ValueString()), []byte(plan.Body.ValueString()))
+			stateBodyJSON, err := dynamic.ToJSON(state.Body)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Update failure",
+					fmt.Sprintf("Error to marshal state body: %v", err),
+				)
+				return
+			}
+			b, err := jsonpatch.CreateMergePatch(stateBodyJSON, planBody)
 			if err != nil {
 				resp.Diagnostics.AddError(
 					"Update failure",
@@ -890,23 +978,30 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 				)
 				return
 			}
-			body = string(b)
+			planBody = b
 		}
 
 		path := plan.ID.ValueString()
 		if !plan.UpdatePath.IsNull() {
-			var err error
-			path, err = buildpath.BuildPath(plan.UpdatePath.ValueString(), r.p.apiOpt.BaseURL.String(), plan.Path.ValueString(), []byte(state.Output.ValueString()))
+			output, err := dynamic.ToJSON(state.Output)
 			if err != nil {
 				resp.Diagnostics.AddError(
-					fmt.Sprintf("Failed to build the path for updating the resource"),
-					fmt.Sprintf("Can't build path with `update_path`: %q, `path`: %q, `body`: %q", plan.UpdatePath.ValueString(), plan.Path.ValueString(), string(state.Output.ValueString())),
+					"Failed to marshal json for `output`",
+					err.Error(),
+				)
+				return
+			}
+			path, err = buildpath.BuildPath(plan.UpdatePath.ValueString(), r.p.apiOpt.BaseURL.String(), plan.Path.ValueString(), output)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Failed to build the path for updating the resource",
+					fmt.Sprintf("Can't build path with `update_path`: %q, `path`: %q, `body`: %q", plan.UpdatePath.ValueString(), plan.Path.ValueString(), output),
 				)
 				return
 			}
 		}
 
-		response, err := c.Update(ctx, path, body, *opt)
+		response, err := c.Update(ctx, path, planBody, *opt)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error to call update",
@@ -966,7 +1061,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 		State:       resp.State,
 		Diagnostics: resp.Diagnostics,
 	}
-	r.Read(ctx, rreq, &rresp)
+	r.read(ctx, rreq, &rresp, false)
 
 	*resp = resource.UpdateResponse{
 		State:       rresp.State,
@@ -1000,12 +1095,19 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 
 	path := state.ID.ValueString()
 	if !state.DeletePath.IsNull() {
-		var err error
-		path, err = buildpath.BuildPath(state.DeletePath.ValueString(), r.p.apiOpt.BaseURL.String(), state.Path.ValueString(), []byte(state.Output.ValueString()))
+		output, err := dynamic.ToJSON(state.Output)
 		if err != nil {
 			resp.Diagnostics.AddError(
-				fmt.Sprintf("Failed to build the path for deleting the resource"),
-				fmt.Sprintf("Can't build path with `delete_path`: %q, `path`: %q, `body`: %q", state.DeletePath.ValueString(), state.Path.ValueString(), string(state.Output.ValueString())),
+				"Failed to marshal json for `output`",
+				err.Error(),
+			)
+			return
+		}
+		path, err = buildpath.BuildPath(state.DeletePath.ValueString(), r.p.apiOpt.BaseURL.String(), state.Path.ValueString(), output)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Failed to build the path for deleting the resource",
+				fmt.Sprintf("Can't build path with `delete_path`: %q, `path`: %q, `body`: %q", state.DeletePath.ValueString(), state.Path.ValueString(), output),
 			)
 			return
 		}
@@ -1070,25 +1172,15 @@ type importSpec struct {
 	// Path is the path used to create the resource.
 	Path string `json:"path"`
 
-	// UpdatePath is the path used to update the resource
-	UpdatePath *string `json:"update_path"`
-
-	// DeletePath is the path used to delte the resource
-	DeletePath *string `json:"delete_path"`
-
 	// Query is only required when it is mandatory for reading the resource.
 	Query url.Values `json:"query"`
 
 	// Header is only required when it is mandatory for reading the resource.
 	Header url.Values `json:"header"`
 
-	CreateMethod *string `json:"create_method"`
-	UpdateMethod *string `json:"update_method"`
-	DeleteMethod *string `json:"delete_method"`
-
 	// Body represents the properties expected to be managed and tracked by Terraform. The value of these properties can be null as a place holder.
 	// When absent, all the response payload read wil be set to `body`.
-	Body interface{}
+	Body json.RawMessage `json:"body"`
 }
 
 func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
@@ -1123,19 +1215,15 @@ func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest
 		return
 	}
 
-	var body string
-	if imp.Body != nil {
-		b, err := json.Marshal(imp.Body)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Resource Import Error",
-				fmt.Sprintf("failed to marshal id.body: %v", err),
-			)
-			return
-		}
-		body = string(b)
+	body, err := dynamic.FromJSONImplied(imp.Body)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Resource Import Error",
+			fmt.Sprintf("unmarshal `body`: %v", err),
+		)
+		return
 	}
-	body = __IMPORT_HEADER__ + body
+
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, idPath, imp.Id)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path, imp.Path)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, bodyPath, body)...)

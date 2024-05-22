@@ -67,7 +67,7 @@ func TestResource_MsGraph_User(t *testing.T) {
 			{
 				Config: d.user(false),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 			{
@@ -79,7 +79,7 @@ func TestResource_MsGraph_User(t *testing.T) {
 			{
 				Config: d.userUpdate(false),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 			{
@@ -91,7 +91,7 @@ func TestResource_MsGraph_User(t *testing.T) {
 			{
 				Config: d.user(true),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 			{
@@ -154,7 +154,7 @@ resource "restful_resource" "test" {
   path = "/users"
   read_path = "$(path)/$(body.id)"
   merge_patch_disabled 	= %t
-  body = jsonencode({
+  body = {
     accountEnabled    = true
 	mailNickname 	  = "AdeleV"
     passwordProfile = {
@@ -163,7 +163,7 @@ resource "restful_resource" "test" {
 
     displayName       = "J.Doe"
     userPrincipalName = "%d@%s"
-  })
+  }
   write_only_attrs = [
     "mailNickname",
     "accountEnabled",
@@ -194,7 +194,7 @@ resource "restful_resource" "test" {
   path = "/users"
   read_path = "$(path)/$(body.id)"
   merge_patch_disabled 	= %t
-  body = jsonencode({
+  body = {
     accountEnabled    = false
 	mailNickname 	  = "AdeleV"
     passwordProfile = {
@@ -202,7 +202,7 @@ resource "restful_resource" "test" {
     }
     displayName       = "J.Doe2"
     userPrincipalName = "%d@%s"
-  })
+  }
   write_only_attrs = [
     "mailNickname",
     "accountEnabled",

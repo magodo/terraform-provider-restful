@@ -43,7 +43,7 @@ func TestResource_JSONServer_Basic(t *testing.T) {
 			{
 				Config: d.basic("foo"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 			{
@@ -58,7 +58,7 @@ func TestResource_JSONServer_Basic(t *testing.T) {
 			{
 				Config: d.basic("bar"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 			{
@@ -85,7 +85,7 @@ func TestResource_JSONServer_PatchUpdate(t *testing.T) {
 			{
 				Config: d.patch("foo"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 			{
@@ -100,7 +100,7 @@ func TestResource_JSONServer_PatchUpdate(t *testing.T) {
 			{
 				Config: d.patch("bar"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 			{
@@ -127,7 +127,7 @@ func TestResource_JSONServer_FullPath(t *testing.T) {
 			{
 				Config: d.fullPath("foo"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 			{
@@ -136,13 +136,13 @@ func TestResource_JSONServer_FullPath(t *testing.T) {
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"read_path", "update_path", "delete_path"},
 				ImportStateIdFunc: func(s *terraform.State) (string, error) {
-					return fmt.Sprintf(`{"id": %q, "path": "posts", "update_path": "$(path)/$(body.id)", "delete_path": "$(path)/$(body.id)", "body": {"foo": null}}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
+					return fmt.Sprintf(`{"id": %q, "path": "posts", "body": {"foo": null}}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
 				},
 			},
 			{
 				Config: d.fullPath("bar"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output"),
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
 				),
 			},
 			{
@@ -151,7 +151,7 @@ func TestResource_JSONServer_FullPath(t *testing.T) {
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"read_path", "update_path", "delete_path"},
 				ImportStateIdFunc: func(s *terraform.State) (string, error) {
-					return fmt.Sprintf(`{"id": %q, "path": "posts", "update_path": "$(path)/$(body.id)", "delete_path": "$(path)/$(body.id)", "body": {"foo": null}}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
+					return fmt.Sprintf(`{"id": %q, "path": "posts", "body": {"foo": null}}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
 				},
 			},
 		},
@@ -169,8 +169,36 @@ func TestResource_JSONServer_OutputAttrs(t *testing.T) {
 			{
 				Config: d.outputAttrs(),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrWith(addr, "output", CheckJSONEqual("output", `{"foo": "bar", "obj": {"a": 1}}`)),
+					resource.TestCheckResourceAttr(addr, "output.foo", "bar"),
+					resource.TestCheckResourceAttr(addr, "output.obj.a", "1"),
 				),
+			},
+		},
+	})
+}
+
+func TestResource_JSONServer_MigrateV0ToV1(t *testing.T) {
+	addr := "restful_resource.test"
+	d := newJsonServerData()
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { d.precheck(t) },
+		CheckDestroy: d.CheckDestroy(addr),
+		Steps: []resource.TestStep{
+			{
+				ProtoV6ProviderFactories: nil,
+				ExternalProviders: map[string]resource.ExternalProvider{
+					"restful": {
+						VersionConstraint: "= 0.13.2",
+						Source:            "registry.terraform.io/magodo/restful",
+					},
+				},
+				Config: d.migrate_v0(),
+			},
+			{
+				ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+				ExternalProviders:        nil,
+				Config:                   d.migrate_v1(),
+				PlanOnly:                 true,
 			},
 		},
 	})
@@ -207,9 +235,9 @@ provider "restful" {
 
 resource "restful_resource" "test" {
   path = "posts"
-  body = jsonencode({
+  body = {
   	foo = %q
-})
+  }
   read_path = "$(path)/$(body.id)"
 }
 `, d.url, v)
@@ -225,9 +253,9 @@ resource "restful_resource" "test" {
   path = "posts"
   read_path = "$(path)/$(body.id)"
   update_method = "PATCH"
-  body = jsonencode({
+  body = {
   	foo = %q
-})
+  }
 }
 `, d.url, v)
 }
@@ -243,9 +271,9 @@ resource "restful_resource" "test" {
   read_path = "$(path)/$(body.id)"
   update_path = "$(path)/$(body.id)"
   delete_path = "$(path)/$(body.id)"
-  body = jsonencode({
+  body = {
   	foo = %q
-})
+  }
 }
 `, d.url, v)
 
@@ -259,15 +287,47 @@ provider "restful" {
 
 resource "restful_resource" "test" {
   path = "posts"
-  body = jsonencode({
+  body = {
   	foo = "bar"
 	obj = {
 		a = 1	
 		b = 2
 	}
-})
+  }
   read_path = "$(path)/$(body.id)"
   output_attrs = ["foo", "obj.a"]
+}
+`, d.url)
+}
+
+func (d jsonServerData) migrate_v0() string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+resource "restful_resource" "test" {
+  path = "posts"
+  body = jsonencode({
+  	foo = "bar"
+  })
+  read_path = "$(path)/$(body.id)"
+}
+`, d.url)
+}
+
+func (d jsonServerData) migrate_v1() string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+resource "restful_resource" "test" {
+  path = "posts"
+  body = {
+  	foo = "bar"
+  }
+  read_path = "$(path)/$(body.id)"
 }
 `, d.url)
 }

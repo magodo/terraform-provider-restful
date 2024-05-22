@@ -11,10 +11,10 @@ resource "restful_resource" "rg" {
       pending = ["202", "200"]
     }
   }
-  body = jsonencode({
+  body = {
     location = "westus"
     tags = {
       foo = "bar"
     }
-  })
+  }
 }
