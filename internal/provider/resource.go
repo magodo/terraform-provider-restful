@@ -408,11 +408,11 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 			"retry_delete": retryAttribute("Delete (i.e. DELETE)"),
 
 			"create_method": schema.StringAttribute{
-				Description:         "The method used to create the resource. Possible values are `PUT` and `POST`. This overrides the `create_method` set in the provider block (defaults to POST).",
-				MarkdownDescription: "The method used to create the resource. Possible values are `PUT` and `POST`. This overrides the `create_method` set in the provider block (defaults to POST).",
+				Description:         "The method used to create the resource. Possible values are `PUT`, `POST` and `PATCH`. This overrides the `create_method` set in the provider block (defaults to POST).",
+				MarkdownDescription: "The method used to create the resource. Possible values are `PUT`, `POST` and `PATCH`. This overrides the `create_method` set in the provider block (defaults to POST).",
 				Optional:            true,
 				Validators: []validator.String{
-					stringvalidator.OneOf("PUT", "POST"),
+					stringvalidator.OneOf("PUT", "POST", "PATCH"),
 				},
 			},
 			"update_method": schema.StringAttribute{

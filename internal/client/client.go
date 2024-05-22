@@ -199,6 +199,8 @@ func (c *Client) Create(ctx context.Context, path string, body interface{}, opt 
 		return req.Post(path)
 	case "PUT":
 		return req.Put(path)
+	case "PATCH":
+		return req.Patch(path)
 	default:
 		return nil, fmt.Errorf("unknown create method: %s", opt.Method)
 	}

@@ -14,12 +14,12 @@ import (
 // If compensateBaseAttrs is set, then any attribute path element only found in the base body will
 // be added up to the result body.
 func ModifyBody(base, body string, compensateBaseAttrs []string) (string, error) {
-	var baseJSON map[string]interface{}
+	var baseJSON interface{}
 	if err := json.Unmarshal([]byte(base), &baseJSON); err != nil {
 		return "", fmt.Errorf("unmarshal the base %q: %v", base, err)
 	}
 
-	var bodyJSON map[string]interface{}
+	var bodyJSON interface{}
 	if err := json.Unmarshal([]byte(body), &bodyJSON); err != nil {
 		return "", fmt.Errorf("unmarshal the body %q: %v", body, err)
 	}
@@ -82,11 +82,11 @@ func ModifyBodyForImport(base, body string) (string, error) {
 	if base == "" {
 		return body, nil
 	}
-	var baseJSON map[string]interface{}
+	var baseJSON interface{}
 	if err := json.Unmarshal([]byte(base), &baseJSON); err != nil {
 		return "", fmt.Errorf("unmarshal the base %q: %v", base, err)
 	}
-	var bodyJSON map[string]interface{}
+	var bodyJSON interface{}
 	if err := json.Unmarshal([]byte(body), &bodyJSON); err != nil {
 		return "", fmt.Errorf("unmarshal the body %q: %v", body, err)
 	}
