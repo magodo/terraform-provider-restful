@@ -92,6 +92,7 @@ func attrValueToJSON(val attr.Value) ([]byte, error) {
 	}
 }
 
+// FromJSON converts a JSON to dynamic types, instructed by the typ.
 func FromJSON(b []byte, typ attr.Type) (types.Dynamic, error) {
 	v, err := attrValueFromJSON(b, typ)
 	if err != nil {
@@ -280,8 +281,11 @@ func attrValueFromJSON(b []byte, typ attr.Type) (attr.Value, error) {
 // - []interface{}: tuple
 // - map[string]interface{}: object
 // - nil: null (dynamic)
-// Note the argument has to be a valid JSON byte. E.g. it returns error on nil (0-length bytes).
+// In case the input json is of zero-length, it returns null (dynamic).
 func FromJSONImplied(b []byte) (types.Dynamic, error) {
+	if len(b) == 0 {
+		return types.DynamicNull(), nil
+	}
 	_, v, err := attrValueFromJSONImplied(b)
 	if err != nil {
 		return types.Dynamic{}, err
@@ -347,8 +351,6 @@ func attrValueFromJSONImplied(b []byte) (attr.Type, attr.Value, error) {
 		return types.NumberType, types.NumberValue(big.NewFloat(v)), nil
 	case string:
 		return types.StringType, types.StringValue(v), nil
-	case nil:
-		return types.DynamicType, types.DynamicNull(), nil
 	default:
 		return nil, nil, fmt.Errorf("Unhandled type: %T", v)
 	}
