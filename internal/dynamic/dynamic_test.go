@@ -704,6 +704,11 @@ func TestFromJSONImplied(t *testing.T) {
 				),
 			),
 		},
+		{
+			name:   "empty",
+			input:  ``,
+			expect: types.DynamicNull(),
+		},
 	}
 
 	for _, tt := range cases {

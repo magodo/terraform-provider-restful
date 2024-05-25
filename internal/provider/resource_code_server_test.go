@@ -18,7 +18,7 @@ import (
 
 type deadSimpleServerData struct{}
 
-func TestResource_DeadSimpleServer_ObjectArray(t *testing.T) {
+func TestResource_CodeServer_ObjectArray(t *testing.T) {
 	addr := "restful_resource.test"
 
 	type object struct {
@@ -84,7 +84,7 @@ func TestResource_DeadSimpleServer_ObjectArray(t *testing.T) {
 	})
 }
 
-func TestResource_DeadSimpleServer_CreateRetString(t *testing.T) {
+func TestResource_CodeServer_CreateRetString(t *testing.T) {
 	addr := "restful_resource.test"
 
 	type object struct {
