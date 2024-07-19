@@ -12,10 +12,10 @@ import (
 
 var (
 	// IdPattern matches against a full URL, which is meant to be prefix trimed by the server's base URL.
-	// This can be "#{body.x.y.z}".
+	// This can be "#(body.x.y.z)".
 	IdPattern = regexp.MustCompile(`\#\(([\w.]+)\)`)
 
-	// ValuePattern matches against a normal string. This can be either "${path}", or "${body.x.y.z}"
+	// ValuePattern matches against a normal string. This can be either "$(path)", or "$(body.x.y.z)"
 	ValuePattern = regexp.MustCompile(`\$(\w*)\(([\w.]+)\)`)
 )
 
