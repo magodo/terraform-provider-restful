@@ -33,6 +33,7 @@ var _ resource.ResourceWithUpgradeState = &OperationResource{}
 type operationResourceData struct {
 	ID             types.String  `tfsdk:"id"`
 	Path           types.String  `tfsdk:"path"`
+	IdBuilder      types.String  `tfsdk:"id_builder"`
 	Method         types.String  `tfsdk:"method"`
 	Body           types.Dynamic `tfsdk:"body"`
 	Query          types.Map     `tfsdk:"query"`
@@ -68,8 +69,8 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 		Version:             1,
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
-				Description:         "The ID of the operation. Same as the `path`.",
-				MarkdownDescription: "The ID of the operation. Same as the `path`.",
+				Description:         "The ID of the operation.",
+				MarkdownDescription: "The ID of the operation.",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -81,6 +82,15 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			// This is actually the same as the `read_path` of restful_resource, besides the name
+			"id_builder": schema.StringAttribute{
+				Description:         "The pattern used to build the `id`. The `path` is used as the `id` instead if absent." + pathDescription,
+				MarkdownDescription: "The pattern used to build the `id`. The `path` is used as the `id` instead if absent." + pathDescription,
+				Optional:            true,
+				Validators: []validator.String{
+					myvalidator.StringIsPathBuilder(),
 				},
 			},
 			"method": schema.StringAttribute{
@@ -227,6 +237,16 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 	}
 
 	resourceId := plan.Path.ValueString()
+	if !plan.IdBuilder.IsNull() {
+		resourceId, err = buildpath.BuildPath(plan.IdBuilder.ValueString(), r.p.apiOpt.BaseURL.String(), plan.Path.ValueString(), response.Body())
+		if err != nil {
+			diagnostics.AddError(
+				fmt.Sprintf("Failed to build the id for this resource"),
+				fmt.Sprintf("Can't build resource id with `id_builder`: %q, `path`: %q, `body`: %q: %v", plan.IdBuilder.ValueString(), plan.Path.ValueString(), string(b), err),
+			)
+			return
+		}
+	}
 
 	// For LRO, wait for completion
 	if !plan.Poll.IsNull() {
@@ -239,6 +259,9 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 		if diags.HasError() {
 			diagnostics.Append(diags...)
 			return
+		}
+		if opt.UrlLocator == nil {
+			response.Request.URL = resourceId
 		}
 		p, err := client.NewPollableForPoll(*response, *opt)
 		if err != nil {

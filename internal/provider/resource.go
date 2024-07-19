@@ -328,8 +328,9 @@ func retryAttribute(s string) schema.SingleNestedAttribute {
 	}
 }
 
+const pathDescription = "This can be a string literal, or combined by followings: `$(path)` expanded to `path`, `$(body.x.y.z)` expands to the `x.y.z` property (urlencoded) in API body, `#(body.id)` expands to the `id` property, with `base_url` prefix trimmed."
+
 func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
-	const pathDescription = "The path can be string literal, or combined by followings: `$(path)` expanded to `path`, `$(body.x.y.z)` expands to the `x.y.z` property (urlencoded) in API body, `#(body.id)` expands to the `id` property, with `base_url` prefix trimmed."
 	resp.Schema = schema.Schema{
 		Description:         "`restful_resource` manages a restful resource.",
 		MarkdownDescription: "`restful_resource` manages a restful resource.",
