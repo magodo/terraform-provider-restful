@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
@@ -16,7 +18,7 @@ import (
 	"github.com/magodo/terraform-provider-restful/internal/client"
 )
 
-type deadSimpleServerData struct{}
+type codeServerData struct{}
 
 func TestResource_CodeServer_ObjectArray(t *testing.T) {
 	addr := "restful_resource.test"
@@ -45,7 +47,7 @@ func TestResource_CodeServer_ObjectArray(t *testing.T) {
 			return
 		}
 	}))
-	d := deadSimpleServerData{}
+	d := codeServerData{}
 	resource.Test(t, resource.TestCase{
 		CheckDestroy:             d.CheckDestroy(srv.URL, addr),
 		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
@@ -115,7 +117,7 @@ func TestResource_CodeServer_CreateRetString(t *testing.T) {
 			return
 		}
 	}))
-	d := deadSimpleServerData{}
+	d := codeServerData{}
 	resource.Test(t, resource.TestCase{
 		CheckDestroy:             d.CheckDestroy(srv.URL, addr),
 		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
@@ -139,7 +141,56 @@ func TestResource_CodeServer_CreateRetString(t *testing.T) {
 	})
 }
 
-func (d deadSimpleServerData) CheckDestroy(url, addr string) func(*terraform.State) error {
+func TestResource_CodeServer_RetFullURL(t *testing.T) {
+	addr := "restful_resource.test"
+
+	type object struct {
+		b []byte
+	}
+	objs := map[int]object{}
+	mux := http.NewServeMux()
+	srv := httptest.NewUnstartedServer(mux)
+	idx := 0
+	mux.HandleFunc("POST /tests", func(w http.ResponseWriter, r *http.Request) {
+		resp := []byte(fmt.Sprintf(`{"self": "%s/tests/%d"}`, srv.URL, idx))
+		objs[idx] = object{b: resp}
+		idx++
+		w.Write(resp)
+		return
+	})
+	mux.HandleFunc("GET /{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, _ := strconv.Atoi(r.PathValue("id"))
+		obj, ok := objs[id]
+		if !ok {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Write(obj.b)
+		return
+	})
+	mux.HandleFunc("DELETE /{id}", func(w http.ResponseWriter, r *http.Request) {
+		idStr := filepath.Base(r.URL.Path)
+		id, _ := strconv.Atoi(idStr)
+		delete(objs, id)
+		return
+	})
+	srv.Start()
+	d := codeServerData{}
+	resource.Test(t, resource.TestCase{
+		CheckDestroy:             d.CheckDestroy(srv.URL, addr),
+		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+		Steps: []resource.TestStep{
+			{
+				Config: d.create_ret_url(srv.URL),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckNoResourceAttr(addr, "output.#"),
+				),
+			},
+		},
+	})
+}
+
+func (d codeServerData) CheckDestroy(url, addr string) func(*terraform.State) error {
 	return func(s *terraform.State) error {
 		c, err := client.New(context.TODO(), url, nil)
 		if err != nil {
@@ -162,7 +213,7 @@ func (d deadSimpleServerData) CheckDestroy(url, addr string) func(*terraform.Sta
 	}
 }
 
-func (d deadSimpleServerData) object_array(url, v string) string {
+func (d codeServerData) object_array(url, v string) string {
 	return fmt.Sprintf(`
 provider "restful" {
   base_url = %q
@@ -180,7 +231,7 @@ resource "restful_resource" "test" {
 `, url, v)
 }
 
-func (d deadSimpleServerData) create_ret_string(url string) string {
+func (d codeServerData) create_ret_string(url string) string {
 	return fmt.Sprintf(`
 provider "restful" {
   base_url = %q
@@ -190,6 +241,20 @@ resource "restful_resource" "test" {
   path = "test"
   create_method = "PUT"
   read_path = "$(path)/$(body)"
+  body = {}
+}
+`, url)
+}
+
+func (d codeServerData) create_ret_url(url string) string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+resource "restful_resource" "test" {
+  path = "/tests"
+  read_path = "$trim_path.url_path(body.self)"
   body = {}
 }
 `, url)

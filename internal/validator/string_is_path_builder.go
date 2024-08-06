@@ -27,11 +27,12 @@ func (_ stringsIsPathBuilder) ValidateString(ctx context.Context, req validator.
 		return
 	}
 
+	pathFuncs := buildpath.PathFuncFactory{}.Build()
 	check := func(matches [][]string) diag.Diagnostic {
 		for _, match := range matches {
 			fname, value := match[1], match[2]
 			if fname != "" {
-				if _, ok := buildpath.PathFuncs[fname]; !ok {
+				if _, ok := pathFuncs[buildpath.FuncName(fname)]; !ok {
 					return diag.NewAttributeErrorDiagnostic(
 						req.Path,
 						"Invalid String",
@@ -50,10 +51,6 @@ func (_ stringsIsPathBuilder) ValidateString(ctx context.Context, req validator.
 		return nil
 	}
 
-	resp.Diagnostics.Append(check(buildpath.IdPattern.FindAllStringSubmatch(str.ValueString(), -1)))
-	if resp.Diagnostics.HasError() {
-		return
-	}
 	resp.Diagnostics.Append(check(buildpath.ValuePattern.FindAllStringSubmatch(str.ValueString(), -1)))
 	if resp.Diagnostics.HasError() {
 		return
