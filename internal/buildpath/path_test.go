@@ -10,7 +10,6 @@ func TestBuildPath(t *testing.T) {
 	cases := []struct {
 		name    string
 		pattern string
-		baseURL string
 		path    string
 		body    string
 		expect  string
@@ -24,9 +23,9 @@ func TestBuildPath(t *testing.T) {
 		},
 		{
 			name:    "Multiple paths",
-			pattern: "$(path)/abc",
-			path:    "collections",
-			expect:  "collections/abc",
+			pattern: "$(path)/$(path)",
+			path:    "a",
+			expect:  "a/a",
 		},
 		{
 			name:    "Path and body value",
@@ -42,10 +41,36 @@ func TestBuildPath(t *testing.T) {
 			expect:  `a%2Fb%2Fc`,
 		},
 		{
-			name:    "Body value contains special chars, but explictly plain",
-			pattern: "$plain(body.name)",
+			name:    "Body value contains special chars with explicit escpae",
+			pattern: "$escape(body.name)",
 			body:    `{"name": "a/b/c"}`,
+			expect:  `a%2Fb%2Fc`,
+		},
+		{
+			name:    "Body value contains escaped path, and want to unescape",
+			pattern: "$unescape(body.path)",
+			body:    `{"path": "a%2Fb%2Fc"}`,
 			expect:  `a/b/c`,
+		},
+		{
+			name:    "Body value has a full path, and want to trim the current call path",
+			pattern: "$trim_path(body.path)",
+			path:    "/a/b",
+			body:    `{"path": "/a/b/c"}`,
+			expect:  `c`,
+		},
+		{
+			name:    "Body value has a full path, keep the base",
+			pattern: "$base(body.path)",
+			body:    `{"path": "/a/b/c"}`,
+			expect:  `c`,
+		},
+		{
+			name:    "Still trim path, but with ending slash",
+			pattern: "$trim_path(body.path)",
+			path:    "/a/b/",
+			body:    `{"path": "/a/b/c"}`,
+			expect:  `c`,
 		},
 		{
 			name:    "Body doesn't contain the expected property",
@@ -59,17 +84,23 @@ func TestBuildPath(t *testing.T) {
 			err:     `invalid match`,
 		},
 		{
-			name:    "Body id",
-			pattern: "#(body.id)",
+			name:    "Body returns URL, and wants to only keep the path segment",
+			pattern: "$url_path(body.id)",
 			body:    `{"id": "https://base/collections/abc"}`,
-			baseURL: "https://base/",
-			expect:  "collections/abc",
+			expect:  "/collections/abc",
+		},
+		{
+			name:    "Body returns URL, and wants to only keep the path segment, and then trim the call path",
+			pattern: "$url_path.trim_path(body.id)",
+			path:    "/foo",
+			body:    `{"id": "https://base/foo/bar/abc"}`,
+			expect:  "bar/abc",
 		},
 	}
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			actual, err := BuildPath(tt.pattern, tt.baseURL, tt.path, []byte(tt.body))
+			actual, err := BuildPath(tt.pattern, tt.path, []byte(tt.body))
 			if tt.err != "" {
 				require.ErrorContains(t, err, tt.err)
 				return

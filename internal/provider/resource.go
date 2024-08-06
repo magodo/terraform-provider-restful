@@ -328,7 +328,7 @@ func retryAttribute(s string) schema.SingleNestedAttribute {
 	}
 }
 
-const pathDescription = "This can be a string literal, or combined by followings: `$(path)` expanded to `path`, `$(body.x.y.z)` expands to the `x.y.z` property (urlencoded) in API body, `#(body.id)` expands to the `id` property, with `base_url` prefix trimmed."
+const pathDescription = "This can be a string literal, or combined by followings: `$(path)` expanded to `path`, `$(body.x.y.z)` expands to the `x.y.z` property of API body. Especially for body pattern, it can add a chain of functions (applied from left to right), in form of `$f1.f2(body.p)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`)"
 
 func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
@@ -701,7 +701,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	// Construct the resource id, which is used as the path to read the resource later on. By default, it is the same as the "path", unless "read_path" is specified.
 	resourceId := plan.Path.ValueString()
 	if !plan.ReadPath.IsNull() {
-		resourceId, err = buildpath.BuildPath(plan.ReadPath.ValueString(), r.p.apiOpt.BaseURL.String(), plan.Path.ValueString(), b)
+		resourceId, err = buildpath.BuildPath(plan.ReadPath.ValueString(), plan.Path.ValueString(), b)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				fmt.Sprintf("Failed to build the path for reading the resource"),
@@ -992,7 +992,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 				)
 				return
 			}
-			path, err = buildpath.BuildPath(plan.UpdatePath.ValueString(), r.p.apiOpt.BaseURL.String(), plan.Path.ValueString(), output)
+			path, err = buildpath.BuildPath(plan.UpdatePath.ValueString(), plan.Path.ValueString(), output)
 			if err != nil {
 				resp.Diagnostics.AddError(
 					"Failed to build the path for updating the resource",
@@ -1104,7 +1104,7 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 			)
 			return
 		}
-		path, err = buildpath.BuildPath(state.DeletePath.ValueString(), r.p.apiOpt.BaseURL.String(), state.Path.ValueString(), output)
+		path, err = buildpath.BuildPath(state.DeletePath.ValueString(), state.Path.ValueString(), output)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Failed to build the path for deleting the resource",

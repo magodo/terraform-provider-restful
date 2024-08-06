@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -11,65 +12,100 @@ import (
 )
 
 var (
-	// IdPattern matches against a full URL, which is meant to be prefix trimed by the server's base URL.
-	// This can be "#(body.x.y.z)".
-	IdPattern = regexp.MustCompile(`\#\(([\w.]+)\)`)
-
 	// ValuePattern matches against a normal string. This can be either "$(path)", or "$(body.x.y.z)"
-	ValuePattern = regexp.MustCompile(`\$(\w*)\(([\w.]+)\)`)
+	//
+	// Especially, when pattern matches to "body", the pattern can prefix with a chain of functions.
+	// The form is like: $f1.f2(body.x.y.z)
+	// By defaults, the "escape" is applied. Otherwise, if explicitly defined a function,
+	// the "escape" won't be applied automatically, and need manually define if needed.
+	ValuePattern = regexp.MustCompile(`\$([\w\.]*)\(([\w.]+)\)`)
 )
 
-type PathFunc func(string) string
+type FuncName string
 
-var PathFuncs = map[string]PathFunc{
-	"plain": func(s string) string { return s },
+const (
+	FuncEscape   FuncName = "escape"
+	FuncUnEscape FuncName = "unescape"
+	FuncBase     FuncName = "base"
+	FuncURLPath  FuncName = "url_path"
+	FuncTrimPath FuncName = "trim_path"
+)
+
+type PathFunc func(string) (string, error)
+
+type PathFuncFactory struct {
+	path string
 }
 
-func BuildPath(pattern string, baseURL, path string, body []byte) (string, error) {
-	out := pattern
+func (f PathFuncFactory) Build() map[FuncName]PathFunc {
+	return map[FuncName]PathFunc{
+		FuncEscape: func(s string) (string, error) {
+			return url.PathEscape(s), nil
+		},
+		FuncUnEscape: url.PathUnescape,
+		FuncBase: func(s string) (string, error) {
+			return filepath.Base(s), nil
+		},
+		FuncURLPath: func(uRL string) (string, error) {
+			u, err := url.Parse(uRL)
+			if err != nil {
+				return "", err
+			}
+			return u.Path, nil
+		},
+		FuncTrimPath: func(s string) (string, error) {
+			return filepath.Rel(f.path, s)
+		},
+	}
+}
 
+func BuildPath(pattern string, path string, body []byte) (string, error) {
+	out := pattern
+	pathFuncs := PathFuncFactory{path}.Build()
 	matches := ValuePattern.FindAllStringSubmatch(out, -1)
 	for _, match := range matches {
-		f := url.PathEscape
-		if fname := match[1]; fname != "" {
-			f = PathFuncs[fname]
-		}
 		if match[2] == "path" {
 			out = strings.ReplaceAll(out, match[0], path)
 			continue
 		}
+
+		var ts string
 		if match[2] == "body" {
-			var str string
-			if err := json.Unmarshal(body, &str); err != nil {
+			if err := json.Unmarshal(body, &ts); err != nil {
 				return "", fmt.Errorf(`"body" expects type of string, but failed to unmarshal as a string: %v`, err)
 			}
-			out = strings.ReplaceAll(out, match[0], str)
-			continue
-		}
-		if strings.HasPrefix(match[2], "body.") {
+		} else if strings.HasPrefix(match[2], "body.") {
 			jsonPath := strings.TrimPrefix(match[2], "body.")
 			prop := gjson.GetBytes(body, jsonPath)
 			if !prop.Exists() {
 				return "", fmt.Errorf("no property found at path %q in the body", jsonPath)
 			}
-			out = strings.ReplaceAll(out, match[0], f(prop.String()))
-			continue
+			ts = prop.String()
+		} else {
+			return "", fmt.Errorf("invalid match: %s", match[0])
 		}
-		return "", fmt.Errorf("invalid match: %s", match[0])
-	}
 
-	matches = IdPattern.FindAllStringSubmatch(out, -1)
-	for _, match := range matches {
-		if strings.HasPrefix(match[1], "body.") {
-			jsonPath := strings.TrimPrefix(match[1], "body.")
-			prop := gjson.GetBytes(body, jsonPath)
-			if !prop.Exists() {
-				return "", fmt.Errorf("no property found at path %q in the body", jsonPath)
+		// Apply path functions if any
+		fs := []PathFunc{pathFuncs[FuncEscape]}
+		if fnames := match[1]; fnames != "" {
+			// If specified any function, remove the default escape function
+			fs = []PathFunc{}
+			for _, fname := range strings.Split(fnames, ".") {
+				f, ok := pathFuncs[FuncName(fname)]
+				if !ok {
+					return "", fmt.Errorf("unknonw function %q", fname)
+				}
+				fs = append(fs, f)
 			}
-			out = strings.ReplaceAll(out, match[0], strings.TrimPrefix(prop.String(), baseURL))
-			continue
 		}
-		return "", fmt.Errorf("invalid match: %s", match[0])
+		for i, f := range fs {
+			var err error
+			ts, err = f(ts)
+			if err != nil {
+				return "", fmt.Errorf("failed to apply %d-th path functions: %v", i, err)
+			}
+		}
+		out = strings.ReplaceAll(out, match[0], ts)
 	}
 	return out, nil
 }
