@@ -11,7 +11,7 @@ import (
 )
 
 func ToJSON(d types.Dynamic) ([]byte, error) {
-	if d.IsNull() {
+	if d.IsNull() || d.IsUnknown() {
 		return nil, nil
 	}
 	return attrValueToJSON(d.UnderlyingValue())
@@ -42,7 +42,7 @@ func attrMapToJSON(in map[string]attr.Value) (map[string]json.RawMessage, error)
 }
 
 func attrValueToJSON(val attr.Value) ([]byte, error) {
-	if val.IsNull() {
+	if val.IsNull() || val.IsUnknown() {
 		return json.Marshal(nil)
 	}
 	switch value := val.(type) {

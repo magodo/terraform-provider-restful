@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/stretchr/testify/require"
 )
 
@@ -81,6 +82,8 @@ func TestToJSON(t *testing.T) {
 						"string": types.StringType,
 					},
 				},
+				"dynamic_unknwon": basetypes.DynamicType{},
+				"dynamic_null":    basetypes.DynamicType{},
 			},
 			map[string]attr.Value{
 				"bool":         types.BoolValue(true),
@@ -168,6 +171,8 @@ func TestToJSON(t *testing.T) {
 						"string": types.StringType,
 					},
 				),
+				"dynamic_unknwon": types.DynamicUnknown(),
+				"dynamic_null":    types.DynamicNull(),
 			},
 		),
 	)
@@ -203,7 +208,9 @@ func TestToJSON(t *testing.T) {
 		"string": "a"
 	},
 	"object_empty": {},
-	"object_null": null
+	"object_null": null,
+	"dynamic_unknwon": null,
+	"dynamic_null": null
 }`
 
 	b, err := ToJSON(input)
