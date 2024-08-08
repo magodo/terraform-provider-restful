@@ -62,7 +62,6 @@ locals {
     status_locator = "body.status"
     status = {
       success = "Succeeded"
-      failure = "Failed"
       pending = ["Pending"]
     }
     url_locator = "header.azure-asyncoperation"
