@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/objectvalidator"
@@ -23,6 +24,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/magodo/terraform-provider-restful/internal/client"
+	"github.com/magodo/terraform-provider-restful/internal/defaults"
 	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
 )
 
@@ -52,11 +54,12 @@ type providerConfig struct {
 }
 
 type clientData struct {
-	CookieEnabled          types.Bool `tfsdk:"cookie_enabled"`
-	TlsInsecureSkipVerify  types.Bool `tfsdk:"tls_insecure_skip_verify"`
-	Certificates           types.List `tfsdk:"certificates"`
-	RootCACertificates     types.List `tfsdk:"root_ca_certificates"`
-	RootCACertificateFiles types.List `tfsdk:"root_ca_certificate_files"`
+	CookieEnabled          types.Bool   `tfsdk:"cookie_enabled"`
+	TlsInsecureSkipVerify  types.Bool   `tfsdk:"tls_insecure_skip_verify"`
+	Certificates           types.List   `tfsdk:"certificates"`
+	RootCACertificates     types.List   `tfsdk:"root_ca_certificates"`
+	RootCACertificateFiles types.List   `tfsdk:"root_ca_certificate_files"`
+	Retry                  types.Object `tfsdk:"retry"`
 }
 
 type certificateData struct {
@@ -64,6 +67,13 @@ type certificateData struct {
 	CertificateFile types.String `tfsdk:"certificate_file"`
 	Key             types.String `tfsdk:"key"`
 	KeyFile         types.String `tfsdk:"key_file"`
+}
+
+type retryData struct {
+	StatusCodes  types.List  `tfsdk:"status_codes"`
+	Count        types.Int64 `tfsdk:"count"`
+	WaitInSec    types.Int64 `tfsdk:"wait_in_sec"`
+	MaxWaitInSec types.Int64 `tfsdk:"max_wait_in_sec"`
 }
 
 type securityData struct {
@@ -280,6 +290,34 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 							listvalidator.AlsoRequires(
 								path.MatchRoot("client").AtName("certificates"),
 							),
+						},
+					},
+					"retry": schema.SingleNestedAttribute{
+						Description:         "The retry option for the client",
+						MarkdownDescription: "The retry option for the client",
+						Optional:            true,
+						Attributes: map[string]schema.Attribute{
+							"status_codes": schema.ListAttribute{
+								Description:         "The status codes that will retry.",
+								MarkdownDescription: "The status codes that will retry.",
+								Required:            true,
+								ElementType:         types.Int64Type,
+							},
+							"count": schema.Int64Attribute{
+								Description:         fmt.Sprintf("The maximum allowed retries. Defaults to `%d`.", defaults.RetryCount),
+								MarkdownDescription: fmt.Sprintf("The maximum allowed retries. Defaults to `%d`.", defaults.RetryCount),
+								Optional:            true,
+							},
+							"wait_in_sec": schema.Int64Attribute{
+								Description:         fmt.Sprintf("The initial retry wait time between two retries in second, if there is no `Retry-After` in the response header, or the `Retry-After` is less than this. The wait time will be increased in capped exponential backoff with jitter, at most up to `max_wait_in_sec` (if not null). Defaults to `%v`.", defaults.RetryWaitTime.Seconds()),
+								MarkdownDescription: fmt.Sprintf("The initial retry wait time between two retries in second, if there is no `Retry-After` in the response header, or the `Retry-After` is less than this. The wait time will be increased in capped exponential backoff with jitter, at most up to `max_wait_in_sec` (if not null). Defaults to `%v`.", defaults.RetryWaitTime.Seconds()),
+								Optional:            true,
+							},
+							"max_wait_in_sec": schema.Int64Attribute{
+								Description:         fmt.Sprintf("The maximum allowed retry wait time. Defaults to `%v`.", defaults.RetryMaxWaitTime.Seconds()),
+								MarkdownDescription: fmt.Sprintf("The maximum allowed retry wait time. Defaults to `%v`.", defaults.RetryMaxWaitTime.Seconds()),
+								Optional:            true,
+							},
 						},
 					},
 				},
@@ -642,163 +680,12 @@ func (p *Provider) Init(ctx context.Context, config providerConfig) diag.Diagnos
 		}
 
 		if secRaw := config.Security; !secRaw.IsNull() {
-			var sec securityData
-			if diags := secRaw.As(ctx, &sec, basetypes.ObjectAsOptions{}); diags.HasError() {
+			security, diags := populateSecurity(ctx, secRaw)
+			if diags.HasError() {
 				odiags = diags
 				return
 			}
-			switch {
-			case !sec.HTTP.IsNull():
-				var http httpData
-				if diags := sec.HTTP.As(ctx, &http, basetypes.ObjectAsOptions{}); diags.HasError() {
-					odiags = diags
-					return
-				}
-				switch {
-				case !http.Basic.IsNull():
-					var basic httpBasicData
-					if diags := http.Basic.As(ctx, &basic, basetypes.ObjectAsOptions{}); diags.HasError() {
-						odiags = diags
-						return
-					}
-					opt := client.HTTPBasicOption{
-						Username: basic.Username.ValueString(),
-						Password: basic.Password.ValueString(),
-					}
-					clientOpt.Security = opt
-				case !http.Token.IsNull():
-					var token httpTokenData
-					if diags := http.Token.As(ctx, &token, basetypes.ObjectAsOptions{}); diags.HasError() {
-						odiags = diags
-						return
-					}
-					opt := client.HTTPTokenOption{
-						Token:  token.Token.ValueString(),
-						Scheme: token.Scheme.ValueString(),
-					}
-					clientOpt.Security = opt
-				}
-			case !sec.APIKey.IsNull():
-				opt := client.APIKeyAuthOption{}
-				for _, apikeyRaw := range sec.APIKey.Elements() {
-					apikeyObj := apikeyRaw.(types.Object)
-					if apikeyObj.IsNull() {
-						continue
-					}
-					var apikey apikeyData
-					if diags := apikeyObj.As(ctx, &apikey, basetypes.ObjectAsOptions{}); diags.HasError() {
-						odiags = diags
-						return
-					}
-					opt = append(opt, client.APIKeyAuthOpt{
-						Name:  apikey.Name.ValueString(),
-						In:    client.APIKeyAuthIn(apikey.In.ValueString()),
-						Value: apikey.Value.ValueString(),
-					})
-				}
-				clientOpt.Security = opt
-			case !sec.OAuth2.IsNull():
-				var oauth2 oauth2Data
-				if diags := sec.OAuth2.As(ctx, &oauth2, basetypes.ObjectAsOptions{}); diags.HasError() {
-					odiags = diags
-					return
-				}
-				switch {
-				case !oauth2.Password.IsNull():
-					var password oauth2PasswordData
-					if diags := oauth2.Password.As(ctx, &password, basetypes.ObjectAsOptions{}); diags.HasError() {
-						odiags = diags
-						return
-					}
-					opt := client.OAuth2PasswordOption{
-						TokenURL:     password.TokenUrl.ValueString(),
-						Username:     password.Username.ValueString(),
-						Password:     password.Password.ValueString(),
-						ClientId:     password.ClientID.ValueString(),
-						ClientSecret: password.ClientSecret.ValueString(),
-						AuthStyle:    client.OAuth2AuthStyle(password.In.ValueString()),
-					}
-					if !password.Scopes.IsNull() {
-						var scopes []string
-						for _, scope := range password.Scopes.Elements() {
-							scope := scope.(types.String)
-							if scope.IsNull() {
-								continue
-							}
-							scopes = append(scopes, scope.ValueString())
-						}
-						opt.Scopes = scopes
-					}
-					clientOpt.Security = opt
-				case !oauth2.ClientCredentials.IsNull():
-					var cc oauth2ClientCredentialsData
-					if diags := oauth2.ClientCredentials.As(ctx, &cc, basetypes.ObjectAsOptions{}); diags.HasError() {
-						odiags = diags
-						return
-					}
-					opt := client.OAuth2ClientCredentialOption{
-						TokenURL:     cc.TokenUrl.ValueString(),
-						ClientId:     cc.ClientID.ValueString(),
-						ClientSecret: cc.ClientSecret.ValueString(),
-						AuthStyle:    client.OAuth2AuthStyle(cc.In.ValueString()),
-					}
-					if !cc.Scopes.IsNull() {
-						var scopes []string
-						for _, scope := range cc.Scopes.Elements() {
-							scope := scope.(types.String)
-							if scope.IsNull() {
-								continue
-							}
-							scopes = append(scopes, scope.ValueString())
-						}
-						opt.Scopes = scopes
-					}
-					if !cc.EndpointParams.IsNull() {
-						endpointParams := map[string][]string{}
-						for k, values := range cc.EndpointParams.Elements() {
-							var vs []string
-							values := values.(types.List)
-							for _, value := range values.Elements() {
-								value := value.(types.String)
-								if value.IsNull() {
-									continue
-								}
-								vs = append(vs, value.ValueString())
-							}
-							endpointParams[k] = vs
-						}
-						opt.EndpointParams = endpointParams
-					}
-					clientOpt.Security = opt
-				case !oauth2.RefreshToken.IsNull():
-					var refreshToken oauth2RefreshTokenData
-					if diags := oauth2.RefreshToken.As(ctx, &refreshToken, basetypes.ObjectAsOptions{}); diags.HasError() {
-						odiags = diags
-						return
-					}
-
-					opt := client.OAuth2RefreshTokenOption{
-						TokenURL:     refreshToken.TokenUrl.ValueString(),
-						RefreshToken: refreshToken.RefreshToken.ValueString(),
-						ClientId:     refreshToken.ClientID.ValueString(),
-						ClientSecret: refreshToken.ClientSecret.ValueString(),
-						AuthStyle:    client.OAuth2AuthStyle(refreshToken.In.ValueString()),
-						TokenType:    refreshToken.TokenType.ValueString(),
-					}
-					if !refreshToken.Scopes.IsNull() {
-						var scopes []string
-						for _, scope := range refreshToken.Scopes.Elements() {
-							scope := scope.(types.String)
-							if scope.IsNull() {
-								continue
-							}
-							scopes = append(scopes, scope.ValueString())
-						}
-						opt.Scopes = scopes
-					}
-					clientOpt.Security = opt
-				}
-			}
+			clientOpt.Security = security
 		}
 
 		var (
@@ -968,5 +855,203 @@ func (c clientData) ToClientBuildOption(ctx context.Context) (*client.BuildOptio
 
 	clientOpt.CookieEnabled = c.CookieEnabled.ValueBool()
 
+	if !c.Retry.IsNull() {
+		retryOpt, diags := populateRetry(ctx, c.Retry)
+		if diags.HasError() {
+			return nil, diags
+		}
+		clientOpt.Retry = retryOpt
+	}
+
 	return &clientOpt, nil
+}
+
+func populateRetry(ctx context.Context, retryObj basetypes.ObjectValue) (*client.RetryOption, diag.Diagnostics) {
+	var retry retryData
+	if diags := retryObj.As(ctx, &retry, basetypes.ObjectAsOptions{}); diags.HasError() {
+		return nil, diags
+	}
+
+	var statusCodes []int64
+	for _, sc := range retry.StatusCodes.Elements() {
+		if sc.IsNull() || sc.IsUnknown() {
+			continue
+		}
+
+		statusCodes = append(statusCodes, sc.(basetypes.Int64Value).ValueInt64())
+	}
+
+	count := defaults.RetryCount
+	if !retry.Count.IsNull() && !retry.Count.IsUnknown() {
+		count = int(retry.Count.ValueInt64())
+	}
+
+	waitTime := defaults.RetryWaitTime
+	if !retry.WaitInSec.IsNull() && !retry.WaitInSec.IsUnknown() {
+		waitTime = time.Duration(int(retry.WaitInSec.ValueInt64())) * time.Second
+	}
+
+	maxWaitTime := defaults.RetryMaxWaitTime
+	if !retry.MaxWaitInSec.IsNull() && !retry.MaxWaitInSec.IsUnknown() {
+		waitTime = time.Duration(int(retry.MaxWaitInSec.ValueInt64())) * time.Second
+	}
+
+	return &client.RetryOption{
+		StatusCodes: statusCodes,
+		Count:       count,
+		WaitTime:    waitTime,
+		MaxWaitTime: maxWaitTime,
+	}, nil
+}
+
+func populateSecurity(ctx context.Context, secRaw basetypes.ObjectValue) (client.SecurityOption, diag.Diagnostics) {
+	var sec securityData
+	if diags := secRaw.As(ctx, &sec, basetypes.ObjectAsOptions{}); diags.HasError() {
+		return nil, diags
+	}
+	switch {
+	case !sec.HTTP.IsNull():
+		var http httpData
+		if diags := sec.HTTP.As(ctx, &http, basetypes.ObjectAsOptions{}); diags.HasError() {
+			return nil, diags
+		}
+		switch {
+		case !http.Basic.IsNull():
+			var basic httpBasicData
+			if diags := http.Basic.As(ctx, &basic, basetypes.ObjectAsOptions{}); diags.HasError() {
+				return nil, diags
+			}
+			opt := client.HTTPBasicOption{
+				Username: basic.Username.ValueString(),
+				Password: basic.Password.ValueString(),
+			}
+			return opt, nil
+		case !http.Token.IsNull():
+			var token httpTokenData
+			if diags := http.Token.As(ctx, &token, basetypes.ObjectAsOptions{}); diags.HasError() {
+				return nil, diags
+			}
+			opt := client.HTTPTokenOption{
+				Token:  token.Token.ValueString(),
+				Scheme: token.Scheme.ValueString(),
+			}
+			return opt, nil
+		}
+	case !sec.APIKey.IsNull():
+		opt := client.APIKeyAuthOption{}
+		for _, apikeyRaw := range sec.APIKey.Elements() {
+			apikeyObj := apikeyRaw.(types.Object)
+			if apikeyObj.IsNull() {
+				continue
+			}
+			var apikey apikeyData
+			if diags := apikeyObj.As(ctx, &apikey, basetypes.ObjectAsOptions{}); diags.HasError() {
+				return nil, diags
+			}
+			opt = append(opt, client.APIKeyAuthOpt{
+				Name:  apikey.Name.ValueString(),
+				In:    client.APIKeyAuthIn(apikey.In.ValueString()),
+				Value: apikey.Value.ValueString(),
+			})
+		}
+		return opt, nil
+	case !sec.OAuth2.IsNull():
+		var oauth2 oauth2Data
+		if diags := sec.OAuth2.As(ctx, &oauth2, basetypes.ObjectAsOptions{}); diags.HasError() {
+			return nil, diags
+		}
+		switch {
+		case !oauth2.Password.IsNull():
+			var password oauth2PasswordData
+			if diags := oauth2.Password.As(ctx, &password, basetypes.ObjectAsOptions{}); diags.HasError() {
+				return nil, diags
+			}
+			opt := client.OAuth2PasswordOption{
+				TokenURL:     password.TokenUrl.ValueString(),
+				Username:     password.Username.ValueString(),
+				Password:     password.Password.ValueString(),
+				ClientId:     password.ClientID.ValueString(),
+				ClientSecret: password.ClientSecret.ValueString(),
+				AuthStyle:    client.OAuth2AuthStyle(password.In.ValueString()),
+			}
+			if !password.Scopes.IsNull() {
+				var scopes []string
+				for _, scope := range password.Scopes.Elements() {
+					scope := scope.(types.String)
+					if scope.IsNull() {
+						continue
+					}
+					scopes = append(scopes, scope.ValueString())
+				}
+				opt.Scopes = scopes
+			}
+			return opt, nil
+		case !oauth2.ClientCredentials.IsNull():
+			var cc oauth2ClientCredentialsData
+			if diags := oauth2.ClientCredentials.As(ctx, &cc, basetypes.ObjectAsOptions{}); diags.HasError() {
+				return nil, diags
+			}
+			opt := client.OAuth2ClientCredentialOption{
+				TokenURL:     cc.TokenUrl.ValueString(),
+				ClientId:     cc.ClientID.ValueString(),
+				ClientSecret: cc.ClientSecret.ValueString(),
+				AuthStyle:    client.OAuth2AuthStyle(cc.In.ValueString()),
+			}
+			if !cc.Scopes.IsNull() {
+				var scopes []string
+				for _, scope := range cc.Scopes.Elements() {
+					scope := scope.(types.String)
+					if scope.IsNull() {
+						continue
+					}
+					scopes = append(scopes, scope.ValueString())
+				}
+				opt.Scopes = scopes
+			}
+			if !cc.EndpointParams.IsNull() {
+				endpointParams := map[string][]string{}
+				for k, values := range cc.EndpointParams.Elements() {
+					var vs []string
+					values := values.(types.List)
+					for _, value := range values.Elements() {
+						value := value.(types.String)
+						if value.IsNull() {
+							continue
+						}
+						vs = append(vs, value.ValueString())
+					}
+					endpointParams[k] = vs
+				}
+				opt.EndpointParams = endpointParams
+			}
+			return opt, nil
+		case !oauth2.RefreshToken.IsNull():
+			var refreshToken oauth2RefreshTokenData
+			if diags := oauth2.RefreshToken.As(ctx, &refreshToken, basetypes.ObjectAsOptions{}); diags.HasError() {
+				return nil, diags
+			}
+
+			opt := client.OAuth2RefreshTokenOption{
+				TokenURL:     refreshToken.TokenUrl.ValueString(),
+				RefreshToken: refreshToken.RefreshToken.ValueString(),
+				ClientId:     refreshToken.ClientID.ValueString(),
+				ClientSecret: refreshToken.ClientSecret.ValueString(),
+				AuthStyle:    client.OAuth2AuthStyle(refreshToken.In.ValueString()),
+				TokenType:    refreshToken.TokenType.ValueString(),
+			}
+			if !refreshToken.Scopes.IsNull() {
+				var scopes []string
+				for _, scope := range refreshToken.Scopes.Elements() {
+					scope := scope.(types.String)
+					if scope.IsNull() {
+						continue
+					}
+					scopes = append(scopes, scope.ValueString())
+				}
+				opt.Scopes = scopes
+			}
+			return opt, nil
+		}
+	}
+	return nil, nil
 }

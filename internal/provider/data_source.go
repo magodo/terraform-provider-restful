@@ -29,7 +29,6 @@ type dataSourceData struct {
 	OutputAttrs   types.Set     `tfsdk:"output_attrs"`
 	AllowNotExist types.Bool    `tfsdk:"allow_not_exist"`
 	Precheck      types.List    `tfsdk:"precheck"`
-	Retry         types.Object  `tfsdk:"retry"`
 	Output        types.Dynamic `tfsdk:"output"`
 }
 
@@ -84,7 +83,6 @@ func (d *DataSource) Schema(ctx context.Context, req datasource.SchemaRequest, r
 				Optional:            true,
 			},
 			"precheck": precheckAttribute("Read", true, ""),
-			"retry":    retryAttribute("Read"),
 			"output": schema.DynamicAttribute{
 				Description:         "The response body after reading the resource.",
 				MarkdownDescription: "The response body after reading the resource.",
@@ -144,7 +142,6 @@ func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp 
 		OutputAttrs:   config.OutputAttrs,
 		AllowNotExist: config.AllowNotExist,
 		Precheck:      config.Precheck,
-		Retry:         config.Retry,
 	}
 
 	response, err := c.ReadDS(ctx, config.ID.ValueString(), *opt)

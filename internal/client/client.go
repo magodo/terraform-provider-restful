@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -96,14 +95,14 @@ func New(ctx context.Context, baseURL string, opt *BuildOption) (*Client, error)
 	client := resty.NewWithClient(httpClient)
 	client.SetDebug(true)
 
+	if opt.Retry != nil {
+		setRetry(client, *opt.Retry)
+	}
+
 	if opt.Security != nil {
 		if err := opt.Security.configureClient(ctx, client); err != nil {
 			return nil, err
 		}
-	}
-
-	if _, err := url.Parse(baseURL); err != nil {
-		return nil, err
 	}
 
 	client.SetBaseURL(baseURL)
@@ -111,29 +110,14 @@ func New(ctx context.Context, baseURL string, opt *BuildOption) (*Client, error)
 	return &Client{client}, nil
 }
 
-// SetLoggerContext sets the ctx to the internal resty logger, as the tflog requires the current ctx.
-// This needs to be called at the start of each CRUD function.
-func (c *Client) SetLoggerContext(ctx context.Context) {
-	c.Client.SetLogger(tflogger{ctx: ctx})
-}
-
 type RetryOption struct {
-	StatusLocator ValueLocator
-	Status        PollingStatus
-	Count         int
-	WaitTime      time.Duration
-	MaxWaitTime   time.Duration
+	StatusCodes []int64
+	Count       int
+	WaitTime    time.Duration
+	MaxWaitTime time.Duration
 }
 
-func (c *Client) resetRetry() {
-	c.RetryCount = 0
-	c.RetryWaitTime = 0
-	c.RetryMaxWaitTime = 0
-	c.RetryAfter = nil
-	c.RetryConditions = nil
-}
-
-func (c *Client) setRetry(opt RetryOption) {
+func setRetry(c *resty.Client, opt RetryOption) {
 	c.RetryCount = opt.Count
 	c.RetryWaitTime = opt.WaitTime
 	c.RetryMaxWaitTime = opt.MaxWaitTime
@@ -155,17 +139,8 @@ func (c *Client) setRetry(opt RetryOption) {
 				return true
 			}
 
-			status, ok := opt.StatusLocator.LocateValueInResp(*r)
-			if !ok {
-				return false
-			}
-			// We tolerate case difference here to be pragmatic.
-			if strings.EqualFold(status, opt.Status.Success) {
-				return false
-			}
-
-			for _, ps := range opt.Status.Pending {
-				if strings.EqualFold(status, ps) {
+			for _, ps := range opt.StatusCodes {
+				if r.StatusCode() == int(ps) {
 					return true
 				}
 			}
@@ -175,20 +150,21 @@ func (c *Client) setRetry(opt RetryOption) {
 	}
 }
 
+// SetLoggerContext sets the ctx to the internal resty logger, as the tflog requires the current ctx.
+// This needs to be called at the start of each CRUD function.
+func (c *Client) SetLoggerContext(ctx context.Context) {
+	c.Client.SetLogger(tflogger{ctx: ctx})
+}
+
 type CreateOption struct {
 	Method string
 	Query  Query
 	Header Header
-	Retry  *RetryOption
 }
 
 func (c *Client) Create(ctx context.Context, path string, body interface{}, opt CreateOption) (*resty.Response, error) {
 	c.SetLoggerContext(ctx)
 
-	if opt.Retry != nil {
-		c.setRetry(*opt.Retry)
-		defer c.resetRetry()
-	}
 	req := c.R().SetContext(ctx).SetBody(body)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 	req.SetHeaders(opt.Header)
@@ -209,16 +185,10 @@ func (c *Client) Create(ctx context.Context, path string, body interface{}, opt 
 type ReadOption struct {
 	Query  Query
 	Header Header
-	Retry  *RetryOption
 }
 
 func (c *Client) Read(ctx context.Context, path string, opt ReadOption) (*resty.Response, error) {
 	c.SetLoggerContext(ctx)
-
-	if opt.Retry != nil {
-		c.setRetry(*opt.Retry)
-		defer c.resetRetry()
-	}
 
 	req := c.R().SetContext(ctx)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
@@ -232,16 +202,10 @@ type UpdateOption struct {
 	MergePatchDisabled bool
 	Query              Query
 	Header             Header
-	Retry              *RetryOption
 }
 
 func (c *Client) Update(ctx context.Context, path string, body interface{}, opt UpdateOption) (*resty.Response, error) {
 	c.SetLoggerContext(ctx)
-
-	if opt.Retry != nil {
-		c.setRetry(*opt.Retry)
-		defer c.resetRetry()
-	}
 
 	req := c.R().SetContext(ctx).SetBody(body)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
@@ -264,16 +228,10 @@ type DeleteOption struct {
 	Method string
 	Query  Query
 	Header Header
-	Retry  *RetryOption
 }
 
 func (c *Client) Delete(ctx context.Context, path string, opt DeleteOption) (*resty.Response, error) {
 	c.SetLoggerContext(ctx)
-
-	if opt.Retry != nil {
-		c.setRetry(*opt.Retry)
-		defer c.resetRetry()
-	}
 
 	req := c.R().SetContext(ctx)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
@@ -293,16 +251,10 @@ type OperationOption struct {
 	Method string
 	Query  Query
 	Header Header
-	Retry  *RetryOption
 }
 
 func (c *Client) Operation(ctx context.Context, path string, body interface{}, opt OperationOption) (*resty.Response, error) {
 	c.SetLoggerContext(ctx)
-
-	if opt.Retry != nil {
-		c.setRetry(*opt.Retry)
-		defer c.resetRetry()
-	}
 
 	req := c.R().SetContext(ctx)
 	if body != "" {
@@ -331,16 +283,10 @@ type ReadOptionDS struct {
 	Method string
 	Query  Query
 	Header Header
-	Retry  *RetryOption
 }
 
 func (c *Client) ReadDS(ctx context.Context, path string, opt ReadOptionDS) (*resty.Response, error) {
 	c.SetLoggerContext(ctx)
-
-	if opt.Retry != nil {
-		c.setRetry(*opt.Retry)
-		defer c.resetRetry()
-	}
 
 	req := c.R().SetContext(ctx)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
