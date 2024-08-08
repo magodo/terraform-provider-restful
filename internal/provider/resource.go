@@ -22,7 +22,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/magodo/terraform-provider-restful/internal/buildpath"
 	"github.com/magodo/terraform-provider-restful/internal/client"
-	"github.com/magodo/terraform-provider-restful/internal/defaults"
 	"github.com/magodo/terraform-provider-restful/internal/dynamic"
 	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
 	"github.com/tidwall/gjson"
@@ -62,11 +61,6 @@ type resourceData struct {
 	PollUpdate types.Object `tfsdk:"poll_update"`
 	PollDelete types.Object `tfsdk:"poll_delete"`
 
-	RetryCreate types.Object `tfsdk:"retry_create"`
-	RetryRead   types.Object `tfsdk:"retry_read"`
-	RetryUpdate types.Object `tfsdk:"retry_update"`
-	RetryDelete types.Object `tfsdk:"retry_delete"`
-
 	WriteOnlyAttributes types.List `tfsdk:"write_only_attrs"`
 	MergePatchDisabled  types.Bool `tfsdk:"merge_patch_disabled"`
 	Query               types.Map  `tfsdk:"query"`
@@ -104,14 +98,6 @@ type precheckDataApi struct {
 type statusDataGo struct {
 	Success string   `tfsdk:"success"`
 	Pending []string `tfsdk:"pending"`
-}
-
-type retryData struct {
-	StatusLocator types.String `tfsdk:"status_locator"`
-	Status        types.Object `tfsdk:"status"`
-	Count         types.Int64  `tfsdk:"count"`
-	WaitInSec     types.Int64  `tfsdk:"wait_in_sec"`
-	MaxWaitInSec  types.Int64  `tfsdk:"max_wait_in_sec"`
 }
 
 func (r *Resource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -274,67 +260,13 @@ func pollAttribute(s string) schema.SingleNestedAttribute {
 	}
 }
 
-func retryAttribute(s string) schema.SingleNestedAttribute {
-	return schema.SingleNestedAttribute{
-		Description:         fmt.Sprintf("The retry option for the %q operation", s),
-		MarkdownDescription: fmt.Sprintf("The retry option for the %q operation", s),
-		Optional:            true,
-		Attributes: map[string]schema.Attribute{
-			"status_locator": schema.StringAttribute{
-				Description:         "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the gjson syntax. In most case, you shall use `code`, as you most not expect a write-like operation to perform multiple times.",
-				MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the gjson syntax. In most case, you shall use `code`, as you most not expect a write-like operation to perform multiple times.",
-				Required:            true,
-				Validators: []validator.String{
-					myvalidator.StringIsParsable("locator", func(s string) error {
-						_, err := parseLocator(s)
-						return err
-					}),
-				},
-			},
-			"status": schema.SingleNestedAttribute{
-				Description:         "The expected status sentinels.",
-				MarkdownDescription: "The expected status sentinels.",
-				Required:            true,
-				Attributes: map[string]schema.Attribute{
-					"success": schema.StringAttribute{
-						Description:         "The expected status sentinel for suceess status.",
-						MarkdownDescription: "The expected status sentinel for suceess status.",
-						Required:            true,
-					},
-					"pending": schema.ListAttribute{
-						Description:         "The expected status sentinels for pending status.",
-						MarkdownDescription: "The expected status sentinels for pending status.",
-						Optional:            true,
-						ElementType:         types.StringType,
-					},
-				},
-			},
-			"count": schema.Int64Attribute{
-				Description:         fmt.Sprintf("The maximum allowed retries. Defaults to `%d`.", defaults.RetryCount),
-				MarkdownDescription: fmt.Sprintf("The maximum allowed retries. Defaults to `%d`.", defaults.RetryCount),
-				Optional:            true,
-			},
-			"wait_in_sec": schema.Int64Attribute{
-				Description:         fmt.Sprintf("The initial retry wait time between two retries in second, if there is no `Retry-After` in the response header, or the `Retry-After` is less than this. The wait time will be increased in capped exponential backoff with jitter, at most up to `max_wait_in_sec` (if not null). Defaults to `%v`.", defaults.RetryWaitTime.Seconds()),
-				MarkdownDescription: fmt.Sprintf("The initial retry wait time between two retries in second, if there is no `Retry-After` in the response header, or the `Retry-After` is less than this. The wait time will be increased in capped exponential backoff with jitter, at most up to `max_wait_in_sec` (if not null). Defaults to `%v`.", defaults.RetryWaitTime.Seconds()),
-				Optional:            true,
-			},
-			"max_wait_in_sec": schema.Int64Attribute{
-				Description:         fmt.Sprintf("The maximum allowed retry wait time. Defaults to `%v`.", defaults.RetryMaxWaitTime.Seconds()),
-				MarkdownDescription: fmt.Sprintf("The maximum allowed retry wait time. Defaults to `%v`.", defaults.RetryMaxWaitTime.Seconds()),
-				Optional:            true,
-			},
-		},
-	}
-}
-
 const pathDescription = "This can be a string literal, or combined by followings: `$(path)` expanded to `path`, `$(body.x.y.z)` expands to the `x.y.z` property of API body. Especially for body pattern, it can add a chain of functions (applied from left to right), in form of `$f1.f2(body.p)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`)"
 
 func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description:         "`restful_resource` manages a restful resource.",
 		MarkdownDescription: "`restful_resource` manages a restful resource.",
-		Version:             1,
+		Version:             2,
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Description:         "The ID of the Resource.",
@@ -402,11 +334,6 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 			"precheck_create": precheckAttribute("Create", true, ""),
 			"precheck_update": precheckAttribute("Update", false, "By default, the `id` of this resource is used."),
 			"precheck_delete": precheckAttribute("Delete", false, "By default, the `id` of this resource is used."),
-
-			"retry_create": retryAttribute("Create (i.e. PUT/POST)"),
-			"retry_read":   retryAttribute("Read (i.e. GET, but not include the `precheck_xxx`/`poll_xxx`)"),
-			"retry_update": retryAttribute("Update (i.e. PUT/PATCH/POST)"),
-			"retry_delete": retryAttribute("Delete (i.e. DELETE)"),
 
 			"create_method": schema.StringAttribute{
 				Description:         "The method used to create the resource. Possible values are `PUT`, `POST` and `PATCH`. This overrides the `create_method` set in the provider block (defaults to POST).",

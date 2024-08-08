@@ -134,6 +134,7 @@ Optional:
 
 - `certificates` (Attributes List) The client certificates for mTLS. (see [below for nested schema](#nestedatt--client--certificates))
 - `cookie_enabled` (Boolean) Save cookies during API contracting. Defaults to `false`.
+- `retry` (Attributes) The retry option for the client (see [below for nested schema](#nestedatt--client--retry))
 - `root_ca_certificate_files` (List of String) The list of certificate file paths of root certificate authorities that clients use when verifying server certificates. If not specified, TLS uses the host's root CA set. Conflicts with `root_ca_certificate_files`.
 - `root_ca_certificates` (List of String) The list of certificates of root certificate authorities that clients use when verifying server certificates. If not specified, TLS uses the host's root CA set. Conflicts with `root_ca_certificate_files`.
 - `tls_insecure_skip_verify` (Boolean) Whether a client verifies the server's certificate chain and host name. Defaults to `false`.
@@ -147,6 +148,33 @@ Optional:
 - `certificate_file` (String) The path of the client certificate file for mTLS. Conflicts with `certificate`. Requires `key_file` or `key`.
 - `key` (String) The client private key for mTLS. Conflicts with `key_file`.
 - `key_file` (String) The path of the client private key file for mTLS. Conflicts with `key`. Requires `certificate_file` or `certificate`.
+
+
+<a id="nestedatt--client--retry"></a>
+### Nested Schema for `client.retry`
+
+Required:
+
+- `status` (Attributes) The expected status sentinels. (see [below for nested schema](#nestedatt--client--retry--status))
+- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the gjson syntax. In most case, you shall use `code`, as you most not expect a write-like operation to perform multiple times.
+
+Optional:
+
+- `count` (Number) The maximum allowed retries. Defaults to `3`.
+- `max_wait_in_sec` (Number) The maximum allowed retry wait time. Defaults to `3600`.
+- `wait_in_sec` (Number) The initial retry wait time between two retries in second, if there is no `Retry-After` in the response header, or the `Retry-After` is less than this. The wait time will be increased in capped exponential backoff with jitter, at most up to `max_wait_in_sec` (if not null). Defaults to `1`.
+
+<a id="nestedatt--client--retry--status"></a>
+### Nested Schema for `client.retry.status`
+
+Required:
+
+- `success` (String) The expected status sentinel for suceess status.
+
+Optional:
+
+- `pending` (List of String) The expected status sentinels for pending status.
+
 
 
 

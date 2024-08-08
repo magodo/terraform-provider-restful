@@ -40,13 +40,11 @@ type operationResourceData struct {
 	Header         types.Map     `tfsdk:"header"`
 	Precheck       types.List    `tfsdk:"precheck"`
 	Poll           types.Object  `tfsdk:"poll"`
-	Retry          types.Object  `tfsdk:"retry"`
 	DeleteMethod   types.String  `tfsdk:"delete_method"`
 	DeleteBody     types.Dynamic `tfsdk:"delete_body"`
 	DeletePath     types.String  `tfsdk:"delete_path"`
 	PrecheckDelete types.List    `tfsdk:"precheck_delete"`
 	PollDelete     types.Object  `tfsdk:"poll_delete"`
-	RetryDelete    types.Object  `tfsdk:"retry_delete"`
 	OutputAttrs    types.Set     `tfsdk:"output_attrs"`
 	Output         types.Dynamic `tfsdk:"output"`
 }
@@ -60,13 +58,11 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 	precheckDelete.Validators = append(precheckDelete.Validators, listvalidator.AlsoRequires(path.MatchRelative().AtParent().AtName("delete_method")))
 	pollDelete := pollAttribute("`Delete`")
 	pollDelete.Validators = append(pollDelete.Validators, objectvalidator.AlsoRequires(path.MatchRelative().AtParent().AtName("delete_method")))
-	retryDelete := retryAttribute("`Delete`")
-	retryDelete.Validators = append(retryDelete.Validators, objectvalidator.AlsoRequires(path.MatchRelative().AtParent().AtName("delete_method")))
 
 	resp.Schema = schema.Schema{
 		Description:         "`restful_operation` represents a one-time API call operation.",
 		MarkdownDescription: "`restful_operation` represents a one-time API call operation.",
-		Version:             1,
+		Version:             2,
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Description:         "The ID of the operation.",
@@ -121,7 +117,6 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 
 			"precheck": precheckAttribute("`Create`/`Update`", true, ""),
 			"poll":     pollAttribute("`Create`/`Update`"),
-			"retry":    retryAttribute("`Create`/`Update`"),
 
 			"delete_method": schema.StringAttribute{
 				Description:         "The method for the `Delete` call. Possible values are `POST`, `PUT`, `PATCH` and `DELETE`. If this is not specified, no `Delete` call will occur.",
@@ -150,7 +145,6 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 
 			"precheck_delete": precheckDelete,
 			"poll_delete":     pollDelete,
-			"retry_delete":    retryDelete,
 
 			"output_attrs": schema.SetAttribute{
 				Description:         "A set of `output` attribute paths (in gjson syntax) that will be exported in the `output`. If this is not specified, all attributes will be exported by `output`.",

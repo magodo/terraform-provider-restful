@@ -12,12 +12,13 @@ import (
 )
 
 type BuildOption struct {
-	Security      securityOption
+	Security      SecurityOption
 	CookieEnabled bool
 	TLSConfig     tls.Config
+	Retry         *RetryOption
 }
 
-type securityOption interface {
+type SecurityOption interface {
 	configureClient(ctx context.Context, client *resty.Client) error
 }
 

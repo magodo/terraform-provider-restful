@@ -58,7 +58,7 @@ func (r *OperationResource) UpgradeState(context.Context) map[int64]resource.Sta
 					}
 				}
 
-				upgradedStateData := operationResourceData{
+				upgradedStateData := migrate.OperationDataV1{
 					ID:             pd.ID,
 					Path:           pd.Path,
 					Method:         pd.Method,
@@ -76,6 +76,38 @@ func (r *OperationResource) UpgradeState(context.Context) map[int64]resource.Sta
 					RetryDelete:    pd.RetryDelete,
 					OutputAttrs:    pd.OutputAttrs,
 					Output:         output,
+				}
+
+				resp.Diagnostics.Append(resp.State.Set(ctx, upgradedStateData)...)
+			},
+		},
+		1: {
+			PriorSchema: &migrate.OperationSchemaV1,
+			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
+				var pd migrate.OperationDataV1
+
+				resp.Diagnostics.Append(req.State.Get(ctx, &pd)...)
+
+				if resp.Diagnostics.HasError() {
+					return
+				}
+
+				upgradedStateData := operationResourceData{
+					ID:             pd.ID,
+					Path:           pd.Path,
+					Method:         pd.Method,
+					Body:           pd.Body,
+					Query:          pd.Query,
+					Header:         pd.Header,
+					Precheck:       pd.Precheck,
+					Poll:           pd.Poll,
+					DeleteMethod:   pd.DeleteMethod,
+					DeleteBody:     pd.DeleteBody,
+					DeletePath:     pd.DeletePath,
+					PrecheckDelete: pd.PrecheckDelete,
+					PollDelete:     pd.PollDelete,
+					OutputAttrs:    pd.OutputAttrs,
+					Output:         pd.Output,
 				}
 
 				resp.Diagnostics.Append(resp.State.Set(ctx, upgradedStateData)...)
