@@ -155,26 +155,13 @@ Optional:
 
 Required:
 
-- `status` (Attributes) The expected status sentinels. (see [below for nested schema](#nestedatt--client--retry--status))
-- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the gjson syntax. In most case, you shall use `code`, as you most not expect a write-like operation to perform multiple times.
+- `status_codes` (List of Number) The status codes that will retry.
 
 Optional:
 
 - `count` (Number) The maximum allowed retries. Defaults to `3`.
 - `max_wait_in_sec` (Number) The maximum allowed retry wait time. Defaults to `3600`.
 - `wait_in_sec` (Number) The initial retry wait time between two retries in second, if there is no `Retry-After` in the response header, or the `Retry-After` is less than this. The wait time will be increased in capped exponential backoff with jitter, at most up to `max_wait_in_sec` (if not null). Defaults to `1`.
-
-<a id="nestedatt--client--retry--status"></a>
-### Nested Schema for `client.retry.status`
-
-Required:
-
-- `success` (String) The expected status sentinel for suceess status.
-
-Optional:
-
-- `pending` (List of String) The expected status sentinels for pending status.
-
 
 
 

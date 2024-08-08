@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -112,11 +111,10 @@ func New(ctx context.Context, baseURL string, opt *BuildOption) (*Client, error)
 }
 
 type RetryOption struct {
-	StatusLocator ValueLocator
-	Status        PollingStatus
-	Count         int
-	WaitTime      time.Duration
-	MaxWaitTime   time.Duration
+	StatusCodes []int64
+	Count       int
+	WaitTime    time.Duration
+	MaxWaitTime time.Duration
 }
 
 func setRetry(c *resty.Client, opt RetryOption) {
@@ -141,17 +139,8 @@ func setRetry(c *resty.Client, opt RetryOption) {
 				return true
 			}
 
-			status, ok := opt.StatusLocator.LocateValueInResp(*r)
-			if !ok {
-				return false
-			}
-			// We tolerate case difference here to be pragmatic.
-			if strings.EqualFold(status, opt.Status.Success) {
-				return false
-			}
-
-			for _, ps := range opt.Status.Pending {
-				if strings.EqualFold(status, ps) {
+			for _, ps := range opt.StatusCodes {
+				if r.StatusCode() == int(ps) {
 					return true
 				}
 			}

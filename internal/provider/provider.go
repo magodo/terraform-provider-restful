@@ -70,11 +70,10 @@ type certificateData struct {
 }
 
 type retryData struct {
-	StatusLocator types.String `tfsdk:"status_locator"`
-	Status        types.Object `tfsdk:"status"`
-	Count         types.Int64  `tfsdk:"count"`
-	WaitInSec     types.Int64  `tfsdk:"wait_in_sec"`
-	MaxWaitInSec  types.Int64  `tfsdk:"max_wait_in_sec"`
+	StatusCodes  types.List  `tfsdk:"status_codes"`
+	Count        types.Int64 `tfsdk:"count"`
+	WaitInSec    types.Int64 `tfsdk:"wait_in_sec"`
+	MaxWaitInSec types.Int64 `tfsdk:"max_wait_in_sec"`
 }
 
 type securityData struct {
@@ -298,34 +297,11 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 						MarkdownDescription: "The retry option for the client",
 						Optional:            true,
 						Attributes: map[string]schema.Attribute{
-							"status_locator": schema.StringAttribute{
-								Description:         "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the gjson syntax. In most case, you shall use `code`, as you most not expect a write-like operation to perform multiple times.",
-								MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the gjson syntax. In most case, you shall use `code`, as you most not expect a write-like operation to perform multiple times.",
+							"status_codes": schema.ListAttribute{
+								Description:         "The status codes that will retry.",
+								MarkdownDescription: "The status codes that will retry.",
 								Required:            true,
-								Validators: []validator.String{
-									myvalidator.StringIsParsable("locator", func(s string) error {
-										_, err := parseLocator(s)
-										return err
-									}),
-								},
-							},
-							"status": schema.SingleNestedAttribute{
-								Description:         "The expected status sentinels.",
-								MarkdownDescription: "The expected status sentinels.",
-								Required:            true,
-								Attributes: map[string]schema.Attribute{
-									"success": schema.StringAttribute{
-										Description:         "The expected status sentinel for suceess status.",
-										MarkdownDescription: "The expected status sentinel for suceess status.",
-										Required:            true,
-									},
-									"pending": schema.ListAttribute{
-										Description:         "The expected status sentinels for pending status.",
-										MarkdownDescription: "The expected status sentinels for pending status.",
-										Optional:            true,
-										ElementType:         types.StringType,
-									},
-								},
+								ElementType:         types.Int64Type,
 							},
 							"count": schema.Int64Attribute{
 								Description:         fmt.Sprintf("The maximum allowed retries. Defaults to `%d`.", defaults.RetryCount),
@@ -896,13 +872,13 @@ func populateRetry(ctx context.Context, retryObj basetypes.ObjectValue) (*client
 		return nil, diags
 	}
 
-	var status statusDataGo
-	if diags := retry.Status.As(ctx, &status, basetypes.ObjectAsOptions{}); diags.HasError() {
-		return nil, diags
-	}
-	statusLocator, err := parseLocator(retry.StatusLocator.ValueString())
-	if err != nil {
-		return nil, diag.Diagnostics{diag.NewErrorDiagnostic("Failed to parse status locator", err.Error())}
+	var statusCodes []int64
+	for _, sc := range retry.StatusCodes.Elements() {
+		if sc.IsNull() || sc.IsUnknown() {
+			continue
+		}
+
+		statusCodes = append(statusCodes, sc.(basetypes.Int64Value).ValueInt64())
 	}
 
 	count := defaults.RetryCount
@@ -921,11 +897,7 @@ func populateRetry(ctx context.Context, retryObj basetypes.ObjectValue) (*client
 	}
 
 	return &client.RetryOption{
-		StatusLocator: statusLocator,
-		Status: client.PollingStatus{
-			Pending: status.Pending,
-			Success: status.Success,
-		},
+		StatusCodes: statusCodes,
 		Count:       count,
 		WaitTime:    waitTime,
 		MaxWaitTime: maxWaitTime,
