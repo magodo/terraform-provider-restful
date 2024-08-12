@@ -30,21 +30,23 @@ func (_ stringsIsPathBuilder) ValidateString(ctx context.Context, req validator.
 	pathFuncs := buildpath.PathFuncFactory{}.Build()
 	check := func(matches [][]string) diag.Diagnostic {
 		for _, match := range matches {
-			fname, value := match[1], match[2]
-			if fname != "" {
-				if _, ok := pathFuncs[buildpath.FuncName(fname)]; !ok {
-					return diag.NewAttributeErrorDiagnostic(
-						req.Path,
-						"Invalid String",
-						fmt.Sprintf("unknown function: %s", fname),
-					)
-				}
-				if !strings.HasPrefix(value, "body.") {
-					return diag.NewAttributeErrorDiagnostic(
-						req.Path,
-						"Invalid String",
-						fmt.Sprintf("value isn't a body reference"),
-					)
+			fnames, value := match[1], match[2]
+			for _, fname := range strings.Split(fnames, ".") {
+				if fname != "" {
+					if _, ok := pathFuncs[buildpath.FuncName(fname)]; !ok {
+						return diag.NewAttributeErrorDiagnostic(
+							req.Path,
+							"Invalid String",
+							fmt.Sprintf("unknown function: %s", fname),
+						)
+					}
+					if !strings.HasPrefix(value, "body.") {
+						return diag.NewAttributeErrorDiagnostic(
+							req.Path,
+							"Invalid String",
+							fmt.Sprintf("value isn't a body reference"),
+						)
+					}
 				}
 			}
 		}

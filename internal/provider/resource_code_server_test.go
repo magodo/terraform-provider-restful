@@ -254,7 +254,7 @@ provider "restful" {
 
 resource "restful_resource" "test" {
   path = "/tests"
-  read_path = "$trim_path.url_path(body.self)"
+  read_path = "$url_path.trim_path(body.self)"
   body = {}
 }
 `, url)
