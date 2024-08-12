@@ -38,7 +38,10 @@ type HTTPTokenOption struct {
 }
 
 func (opt HTTPTokenOption) configureClient(_ context.Context, client *resty.Client) error {
-	client.SetAuthToken(opt.Token).SetScheme(opt.Scheme)
+	client.SetAuthToken(opt.Token)
+	if opt.Scheme != "" {
+		client.SetAuthScheme(opt.Scheme)
+	}
 	return nil
 }
 
