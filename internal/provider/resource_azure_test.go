@@ -307,6 +307,23 @@ func TestOperationResource_Azure_Register_RP(t *testing.T) {
 	})
 }
 
+func TestOperationResource_Azure_GetToken(t *testing.T) {
+	addr := "restful_operation.test"
+	d := newAzureData()
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:                 func() { d.precheck(t) },
+		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+		Steps: []resource.TestStep{
+			{
+				Config: d.getToken(),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
+				),
+			},
+		},
+	})
+}
+
 func (d azureData) CheckDestroy(addr string) func(*terraform.State) error {
 	return func(s *terraform.State) error {
 		c, err := client.New(context.TODO(), d.url, &client.BuildOption{
@@ -1004,4 +1021,27 @@ resource "restful_operation" "test" {
   }
 }
 `, d.url, d.clientId, d.clientSecret, d.tenantId, d.subscriptionId, rp)
+}
+
+func (d azureData) getToken() string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = "https://login.microsoftonline.com"
+}
+
+resource "restful_operation" "test" {
+  path   = "/%s/oauth2/v2.0/token"
+  method = "POST"
+  header = {
+    Accept : "application/json",
+    Content-Type : "application/x-www-form-urlencoded",
+  }
+  body = {
+    client_id = "%s"
+    client_secret = "%s"
+    grant_type = "client_credentials"
+    scope = "https://management.azure.com/.default"
+  }
+}
+`, d.tenantId, d.clientId, d.clientSecret)
 }

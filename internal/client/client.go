@@ -11,6 +11,8 @@ import (
 	"github.com/go-resty/resty/v2"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+	"github.com/magodo/terraform-provider-restful/internal/dynamic"
 	"golang.org/x/net/publicsuffix"
 )
 
@@ -253,16 +255,42 @@ type OperationOption struct {
 	Header Header
 }
 
-func (c *Client) Operation(ctx context.Context, path string, body interface{}, opt OperationOption) (*resty.Response, error) {
+func (c *Client) Operation(ctx context.Context, path string, body basetypes.DynamicValue, opt OperationOption) (*resty.Response, error) {
 	c.SetLoggerContext(ctx)
 
 	req := c.R().SetContext(ctx)
-	if body != "" {
-		req.SetBody(body)
-	}
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
-	req.SetHeaders(opt.Header)
+
+	// By default set the content-type to application/json
+	// This can be replaced by the opt.Header if defined.
 	req = req.SetHeader("Content-Type", "application/json")
+	req.SetHeaders(opt.Header)
+
+	if !body.IsNull() {
+		switch req.Header.Get("Content-Type") {
+		case "application/json":
+			b, err := dynamic.ToJSON(body)
+			if err != nil {
+				return nil, fmt.Errorf("convert body from dynamic to json: %v", err)
+			}
+
+			req.SetBody(b)
+		case "application/x-www-form-urlencoded":
+			ov, ok := body.UnderlyingValue().(types.Object)
+			if !ok {
+				return nil, fmt.Errorf("body expects to be an object, got=%T", body.UnderlyingValue())
+			}
+			m := map[string]string{}
+			for k, v := range ov.Attributes() {
+				vs, ok := v.(types.String)
+				if !ok {
+					return nil, fmt.Errorf("body value expects to be a string, got=%T", v)
+				}
+				m[k] = vs.ValueString()
+			}
+			req.SetFormData(m)
+		}
+	}
 
 	switch opt.Method {
 	case "POST":

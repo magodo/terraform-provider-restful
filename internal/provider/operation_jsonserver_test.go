@@ -20,6 +20,14 @@ func (d jsonServerOperation) precheck(t *testing.T) {
 	return
 }
 
+func (d jsonServerOperation) precheckMigrate(t *testing.T) {
+	d.precheck(t)
+	if _, ok := os.LookupEnv(RESTFUL_MIGRATE_TEST); !ok {
+		t.Skipf("%q is not specified", RESTFUL_MIGRATE_TEST)
+	}
+	return
+}
+
 func newJsonServerOperation() jsonServerOperation {
 	return jsonServerOperation{
 		url: os.Getenv(RESTFUL_JSON_SERVER_URL),
@@ -76,7 +84,7 @@ func TestOperation_JSONServer_withDelete(t *testing.T) {
 func TestOperation_JSONServer_MigrateV0ToV1(t *testing.T) {
 	d := newJsonServerOperation()
 	resource.Test(t, resource.TestCase{
-		PreCheck: func() { d.precheck(t) },
+		PreCheck: func() { d.precheckMigrate(t) },
 		Steps: []resource.TestStep{
 			{
 				ProtoV6ProviderFactories: nil,

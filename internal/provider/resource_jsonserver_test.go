@@ -14,6 +14,7 @@ import (
 )
 
 const RESTFUL_JSON_SERVER_URL = "RESTFUL_JSON_SERVER_URL"
+const RESTFUL_MIGRATE_TEST = "RESTFUL_MIGRATE_TEST"
 
 type jsonServerData struct {
 	url string
@@ -22,6 +23,14 @@ type jsonServerData struct {
 func (d jsonServerData) precheck(t *testing.T) {
 	if d.url == "" {
 		t.Skipf("%q is not specified", RESTFUL_JSON_SERVER_URL)
+	}
+	return
+}
+
+func (d jsonServerData) precheckMigrate(t *testing.T) {
+	d.precheck(t)
+	if _, ok := os.LookupEnv(RESTFUL_MIGRATE_TEST); !ok {
+		t.Skipf("%q is not specified", RESTFUL_MIGRATE_TEST)
 	}
 	return
 }
@@ -181,7 +190,7 @@ func TestResource_JSONServer_MigrateV0ToV1(t *testing.T) {
 	addr := "restful_resource.test"
 	d := newJsonServerData()
 	resource.Test(t, resource.TestCase{
-		PreCheck:     func() { d.precheck(t) },
+		PreCheck:     func() { d.precheckMigrate(t) },
 		CheckDestroy: d.CheckDestroy(addr),
 		Steps: []resource.TestStep{
 			{

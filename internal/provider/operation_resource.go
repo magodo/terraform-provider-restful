@@ -205,16 +205,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 	}
 	defer unlockFunc()
 
-	b, err := dynamic.ToJSON(plan.Body)
-	if err != nil {
-		diagnostics.AddError(
-			"Error to marshal body",
-			err.Error(),
-		)
-		return
-	}
-
-	response, err := c.Operation(ctx, plan.Path.ValueString(), string(b), *opt)
+	response, err := c.Operation(ctx, plan.Path.ValueString(), plan.Body, *opt)
 	if err != nil {
 		diagnostics.AddError(
 			"Error to call operation",
@@ -236,7 +227,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 		if err != nil {
 			diagnostics.AddError(
 				fmt.Sprintf("Failed to build the id for this resource"),
-				fmt.Sprintf("Can't build resource id with `id_builder`: %q, `path`: %q, `body`: %q: %v", plan.IdBuilder.ValueString(), plan.Path.ValueString(), string(b), err),
+				fmt.Sprintf("Can't build resource id with `id_builder`: %q, `path`: %q: %v", plan.IdBuilder.ValueString(), plan.Path.ValueString(), err),
 			)
 			return
 		}
@@ -377,16 +368,7 @@ func (r *OperationResource) Delete(ctx context.Context, req resource.DeleteReque
 		}
 	}
 
-	b, err := dynamic.ToJSON(state.DeleteBody)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error to marshal delete body",
-			err.Error(),
-		)
-		return
-	}
-
-	response, err := c.Operation(ctx, path, string(b), *opt)
+	response, err := c.Operation(ctx, path, state.DeleteBody, *opt)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Delete: Error to call operation",
