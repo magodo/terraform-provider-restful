@@ -63,8 +63,18 @@ type resourceData struct {
 
 	WriteOnlyAttributes types.List `tfsdk:"write_only_attrs"`
 	MergePatchDisabled  types.Bool `tfsdk:"merge_patch_disabled"`
-	Query               types.Map  `tfsdk:"query"`
-	Header              types.Map  `tfsdk:"header"`
+
+	Query       types.Map `tfsdk:"query"`
+	CreateQuery types.Map `tfsdk:"create_query"`
+	ReadQuery   types.Map `tfsdk:"read_query"`
+	UpdateQuery types.Map `tfsdk:"update_query"`
+	DeleteQuery types.Map `tfsdk:"delete_query"`
+
+	Header       types.Map `tfsdk:"header"`
+	CreateHeader types.Map `tfsdk:"create_header"`
+	ReadHeader   types.Map `tfsdk:"read_header"`
+	UpdateHeader types.Map `tfsdk:"update_header"`
+	DeleteHeader types.Map `tfsdk:"delete_header"`
 
 	CheckExistance types.Bool `tfsdk:"check_existance"`
 	ForceNewAttrs  types.Set  `tfsdk:"force_new_attrs"`
@@ -262,6 +272,10 @@ func pollAttribute(s string) schema.SingleNestedAttribute {
 
 const pathDescription = "This can be a string literal, or combined by followings: `$(path)` expanded to `path`, `$(body.x.y.z)` expands to the `x.y.z` property of API body. Especially for body pattern, it can add a chain of functions (applied from left to right), in form of `$f1.f2(body.p)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`)"
 
+func operationOverridableAttrDescription(attr string, opkind string) string {
+	return fmt.Sprintf("The %[1]s parameters that are applied to each %[2]s request. This overrides the `%[1]s` set in the resource block.", attr, opkind)
+}
+
 func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description:         "`restful_resource` manages a restful resource.",
@@ -376,9 +390,57 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				ElementType:         types.ListType{ElemType: types.StringType},
 				Optional:            true,
 			},
+			"create_query": schema.MapAttribute{
+				Description:         operationOverridableAttrDescription("query", "create"),
+				MarkdownDescription: operationOverridableAttrDescription("query", "create"),
+				ElementType:         types.ListType{ElemType: types.StringType},
+				Optional:            true,
+			},
+			"update_query": schema.MapAttribute{
+				Description:         operationOverridableAttrDescription("query", "update"),
+				MarkdownDescription: operationOverridableAttrDescription("query", "update"),
+				ElementType:         types.ListType{ElemType: types.StringType},
+				Optional:            true,
+			},
+			"read_query": schema.MapAttribute{
+				Description:         operationOverridableAttrDescription("query", "read"),
+				MarkdownDescription: operationOverridableAttrDescription("query", "read"),
+				ElementType:         types.ListType{ElemType: types.StringType},
+				Optional:            true,
+			},
+			"delete_query": schema.MapAttribute{
+				Description:         operationOverridableAttrDescription("query", "delete"),
+				MarkdownDescription: operationOverridableAttrDescription("query", "delete"),
+				ElementType:         types.ListType{ElemType: types.StringType},
+				Optional:            true,
+			},
 			"header": schema.MapAttribute{
 				Description:         "The header parameters that are applied to each request. This overrides the `header` set in the provider block.",
 				MarkdownDescription: "The header parameters that are applied to each request. This overrides the `header` set in the provider block.",
+				ElementType:         types.StringType,
+				Optional:            true,
+			},
+			"create_header": schema.MapAttribute{
+				Description:         operationOverridableAttrDescription("header", "create"),
+				MarkdownDescription: operationOverridableAttrDescription("header", "create"),
+				ElementType:         types.StringType,
+				Optional:            true,
+			},
+			"update_header": schema.MapAttribute{
+				Description:         operationOverridableAttrDescription("header", "update"),
+				MarkdownDescription: operationOverridableAttrDescription("header", "update"),
+				ElementType:         types.StringType,
+				Optional:            true,
+			},
+			"read_header": schema.MapAttribute{
+				Description:         operationOverridableAttrDescription("header", "read"),
+				MarkdownDescription: operationOverridableAttrDescription("header", "read"),
+				ElementType:         types.StringType,
+				Optional:            true,
+			},
+			"delete_header": schema.MapAttribute{
+				Description:         operationOverridableAttrDescription("header", "delete"),
+				MarkdownDescription: operationOverridableAttrDescription("header", "delete"),
 				ElementType:         types.StringType,
 				Optional:            true,
 			},

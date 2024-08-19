@@ -190,6 +190,64 @@ func TestResource_CodeServer_RetFullURL(t *testing.T) {
 	})
 }
 
+func TestResource_CodeServer_HeaderQuery(t *testing.T) {
+	addr := "restful_resource.test"
+
+	mux := http.NewServeMux()
+	srv := httptest.NewUnstartedServer(mux)
+	mux.HandleFunc("POST /tests/1", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("type") != "create" {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		if r.URL.Query().Get("type") != "create" {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		return
+	})
+	mux.HandleFunc("PUT /tests/1", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("type") != "update" {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		if r.URL.Query().Get("type") != "update" {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		return
+	})
+	mux.HandleFunc("GET /tests/1", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("type") != "read" {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		if r.URL.Query().Get("type") != "read" {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		w.Write([]byte(`{}`))
+		return
+	})
+	mux.HandleFunc("DELETE /tests/1", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("type") != "delete" {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		if r.URL.Query().Get("type") != "delete" {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		return
+	})
+	srv.Start()
+	d := codeServerData{}
+	resource.Test(t, resource.TestCase{
+		//CheckDestroy:             d.CheckDestroy(srv.URL, addr),
+		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+		Steps: []resource.TestStep{
+			{
+				Config: d.headerquery(srv.URL),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckNoResourceAttr(addr, "output.#"),
+				),
+			},
+		},
+	})
+}
+
 func (d codeServerData) CheckDestroy(url, addr string) func(*terraform.State) error {
 	return func(s *terraform.State) error {
 		c, err := client.New(context.TODO(), url, nil)
@@ -255,6 +313,43 @@ provider "restful" {
 resource "restful_resource" "test" {
   path = "/tests"
   read_path = "$url_path.trim_path(body.self)"
+  body = {}
+}
+`, url)
+}
+
+func (d codeServerData) headerquery(url string) string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+resource "restful_resource" "test" {
+  path = "/tests/1"
+  create_header = {
+  	type = "create"
+  }
+  create_query = {
+  	type = ["create"]
+  }
+  update_header = {
+  	type = "update"
+  }
+  update_query = {
+  	type = ["update"]
+  }
+  read_header = {
+  	type = "read"
+  }
+  read_query = {
+  	type = ["read"]
+  }
+  delete_header = {
+  	type = "delete"
+  }
+  delete_query = {
+  	type = ["delete"]
+  }
   body = {}
 }
 `, url)
