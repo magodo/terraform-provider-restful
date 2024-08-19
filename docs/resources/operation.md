@@ -35,17 +35,21 @@ resource "restful_operation" "register_rp" {
 
 ### Required
 
-- `method` (String) The HTTP method for the `Create`/`Update` call. Possible values are `PUT`, `POST`, `PATCH` and `DELETE`.
+- `method` (String) The HTTP method for the `Create`/`Update` call. Possible values are `GET`, `PUT`, `POST`, `PATCH` and `DELETE`.
 - `path` (String) The path for the `Create`/`Update` call, relative to the `base_url` of the provider.
 
 ### Optional
 
 - `body` (Dynamic) The payload for the `Create`/`Update` call.
 - `delete_body` (Dynamic) The payload for the `Delete` call.
+- `delete_header` (Map of String) The header parameters that are applied to each delete request. This overrides the `header` set in the resource block.
 - `delete_method` (String) The method for the `Delete` call. Possible values are `POST`, `PUT`, `PATCH` and `DELETE`. If this is not specified, no `Delete` call will occur.
 - `delete_path` (String) The path for the `Delete` call, relative to the `base_url` of the provider. The `path` is used instead if `delete_path` is absent.
+- `delete_query` (Map of List of String) The query parameters that are applied to each delete request. This overrides the `query` set in the resource block.
 - `header` (Map of String) The header parameters that are applied to each request. This overrides the `header` set in the provider block.
 - `id_builder` (String) The pattern used to build the `id`. The `path` is used as the `id` instead if absent.This can be a string literal, or combined by followings: `$(path)` expanded to `path`, `$(body.x.y.z)` expands to the `x.y.z` property of API body. Especially for body pattern, it can add a chain of functions (applied from left to right), in form of `$f1.f2(body.p)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`)
+- `operation_header` (Map of String) The header parameters that are applied to each read request. This overrides the `header` set in the resource block.
+- `operation_query` (Map of List of String) The query parameters that are applied to each operation request. This overrides the `query` set in the resource block.
 - `output_attrs` (Set of String) A set of `output` attribute paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) that will be exported in the `output`. If this is not specified, all attributes will be exported by `output`.
 - `poll` (Attributes) The polling option for the "`Create`/`Update`" operation (see [below for nested schema](#nestedatt--poll))
 - `poll_delete` (Attributes) The polling option for the "`Delete`" operation (see [below for nested schema](#nestedatt--poll_delete))

@@ -68,6 +68,45 @@ func TestOperation_CodeServer_idBuilder(t *testing.T) {
 	})
 }
 
+func TestOperation_CodeServer_HeaderQuery(t *testing.T) {
+	addr := "restful_operation.test"
+
+	mux := http.NewServeMux()
+	srv := httptest.NewUnstartedServer(mux)
+	mux.HandleFunc("POST /tests/1", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("type") != "operation" {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		if r.URL.Query().Get("type") != "operation" {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		return
+	})
+	mux.HandleFunc("DELETE /tests/1", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("type") != "delete" {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		if r.URL.Query().Get("type") != "delete" {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		return
+	})
+	srv.Start()
+	d := codeServerOperation{}
+	resource.Test(t, resource.TestCase{
+		//CheckDestroy:             d.CheckDestroy(srv.URL, addr),
+		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+		Steps: []resource.TestStep{
+			{
+				Config: d.headerquery(srv.URL),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckNoResourceAttr(addr, "output.#"),
+				),
+			},
+		},
+	})
+}
+
 func (d codeServerOperation) empty() string {
 	return fmt.Sprintf(`
 provider "restful" {
@@ -100,4 +139,34 @@ resource "restful_operation" "test" {
   }
 }
 `, d.url)
+}
+
+func (d codeServerOperation) headerquery(url string) string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+resource "restful_operation" "test" {
+  path = "/tests/1"
+  method = "POST"
+  operation_header = {
+  	type = "operation"
+  }
+  operation_query = {
+  	type = ["operation"]
+  }
+
+  delete_path = "/tests/1"
+  delete_method = "DELETE"
+  delete_header = {
+  	type = "delete"
+  }
+  delete_query = {
+  	type = ["delete"]
+  }
+
+  body = {}
+}
+`, url)
 }

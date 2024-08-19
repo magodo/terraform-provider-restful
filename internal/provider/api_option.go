@@ -48,8 +48,8 @@ func parseLocator(locator string) (client.ValueLocator, error) {
 func (opt apiOption) ForResourceCreate(ctx context.Context, d resourceData) (*client.CreateOption, diag.Diagnostics) {
 	out := client.CreateOption{
 		Method: opt.CreateMethod,
-		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
-		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
+		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query).TakeOrSelf(ctx, d.CreateQuery),
+		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header).TakeOrSelf(ctx, d.CreateHeader),
 	}
 	if !d.CreateMethod.IsUnknown() && !d.CreateMethod.IsNull() {
 		out.Method = d.CreateMethod.ValueString()
@@ -60,8 +60,8 @@ func (opt apiOption) ForResourceCreate(ctx context.Context, d resourceData) (*cl
 
 func (opt apiOption) ForResourceRead(ctx context.Context, d resourceData) (*client.ReadOption, diag.Diagnostics) {
 	out := client.ReadOption{
-		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
-		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
+		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query).TakeOrSelf(ctx, d.ReadQuery),
+		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header).TakeOrSelf(ctx, d.ReadHeader),
 	}
 
 	return &out, nil
@@ -71,8 +71,8 @@ func (opt apiOption) ForResourceUpdate(ctx context.Context, d resourceData) (*cl
 	out := client.UpdateOption{
 		Method:             opt.UpdateMethod,
 		MergePatchDisabled: opt.MergePatchDisabled,
-		Query:              opt.Query.Clone().TakeOrSelf(ctx, d.Query),
-		Header:             opt.Header.Clone().TakeOrSelf(ctx, d.Header),
+		Query:              opt.Query.Clone().TakeOrSelf(ctx, d.Query).TakeOrSelf(ctx, d.UpdateQuery),
+		Header:             opt.Header.Clone().TakeOrSelf(ctx, d.Header).TakeOrSelf(ctx, d.UpdateHeader),
 	}
 	if !d.UpdateMethod.IsUnknown() && !d.UpdateMethod.IsNull() {
 		out.Method = d.UpdateMethod.ValueString()
@@ -87,8 +87,8 @@ func (opt apiOption) ForResourceUpdate(ctx context.Context, d resourceData) (*cl
 func (opt apiOption) ForResourceDelete(ctx context.Context, d resourceData) (*client.DeleteOption, diag.Diagnostics) {
 	out := client.DeleteOption{
 		Method: opt.DeleteMethod,
-		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
-		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
+		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query).TakeOrSelf(ctx, d.DeleteQuery),
+		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header).TakeOrSelf(ctx, d.DeleteHeader),
 	}
 
 	if !d.DeleteMethod.IsUnknown() && !d.DeleteMethod.IsNull() {
@@ -111,8 +111,8 @@ func (opt apiOption) ForDataSourceRead(ctx context.Context, d dataSourceData) (*
 func (opt apiOption) ForResourceOperation(ctx context.Context, d operationResourceData) (*client.OperationOption, diag.Diagnostics) {
 	out := client.OperationOption{
 		Method: d.Method.ValueString(),
-		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
-		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
+		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query).TakeOrSelf(ctx, d.OperationQuery),
+		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header).TakeOrSelf(ctx, d.OperationHeader),
 	}
 
 	return &out, nil
@@ -121,8 +121,8 @@ func (opt apiOption) ForResourceOperation(ctx context.Context, d operationResour
 func (opt apiOption) ForResourceOperationDelete(ctx context.Context, d operationResourceData) (*client.OperationOption, diag.Diagnostics) {
 	out := client.OperationOption{
 		Method: d.DeleteMethod.ValueString(),
-		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
-		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
+		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query).TakeOrSelf(ctx, d.DeleteQuery),
+		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header).TakeOrSelf(ctx, d.DeleteHeader),
 	}
 
 	return &out, nil

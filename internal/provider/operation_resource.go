@@ -31,13 +31,20 @@ var _ resource.Resource = &OperationResource{}
 var _ resource.ResourceWithUpgradeState = &OperationResource{}
 
 type operationResourceData struct {
-	ID             types.String  `tfsdk:"id"`
-	Path           types.String  `tfsdk:"path"`
-	IdBuilder      types.String  `tfsdk:"id_builder"`
-	Method         types.String  `tfsdk:"method"`
-	Body           types.Dynamic `tfsdk:"body"`
-	Query          types.Map     `tfsdk:"query"`
-	Header         types.Map     `tfsdk:"header"`
+	ID        types.String  `tfsdk:"id"`
+	Path      types.String  `tfsdk:"path"`
+	IdBuilder types.String  `tfsdk:"id_builder"`
+	Method    types.String  `tfsdk:"method"`
+	Body      types.Dynamic `tfsdk:"body"`
+
+	Query          types.Map `tfsdk:"query"`
+	OperationQuery types.Map `tfsdk:"operation_query"`
+	DeleteQuery    types.Map `tfsdk:"delete_query"`
+
+	Header          types.Map `tfsdk:"header"`
+	OperationHeader types.Map `tfsdk:"operation_header"`
+	DeleteHeader    types.Map `tfsdk:"delete_header"`
+
 	Precheck       types.List    `tfsdk:"precheck"`
 	Poll           types.Object  `tfsdk:"poll"`
 	DeleteMethod   types.String  `tfsdk:"delete_method"`
@@ -90,11 +97,11 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 				},
 			},
 			"method": schema.StringAttribute{
-				Description:         "The HTTP method for the `Create`/`Update` call. Possible values are `PUT`, `POST`, `PATCH` and `DELETE`.",
-				MarkdownDescription: "The HTTP method for the `Create`/`Update` call. Possible values are `PUT`, `POST`, `PATCH` and `DELETE`.",
+				Description:         "The HTTP method for the `Create`/`Update` call. Possible values are `GEE`, `PUT`, `POST`, `PATCH` and `DELETE`.",
+				MarkdownDescription: "The HTTP method for the `Create`/`Update` call. Possible values are `GET`, `PUT`, `POST`, `PATCH` and `DELETE`.",
 				Required:            true,
 				Validators: []validator.String{
-					stringvalidator.OneOf("PUT", "POST", "PATCH", "DELETE"),
+					stringvalidator.OneOf("GET", "PUT", "POST", "PATCH", "DELETE"),
 				},
 			},
 			"body": schema.DynamicAttribute{
@@ -108,9 +115,33 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 				ElementType:         types.ListType{ElemType: types.StringType},
 				Optional:            true,
 			},
+			"operation_query": schema.MapAttribute{
+				Description:         operationOverridableAttrDescription("query", "operation"),
+				MarkdownDescription: operationOverridableAttrDescription("query", "operation"),
+				ElementType:         types.ListType{ElemType: types.StringType},
+				Optional:            true,
+			},
+			"delete_query": schema.MapAttribute{
+				Description:         operationOverridableAttrDescription("query", "delete"),
+				MarkdownDescription: operationOverridableAttrDescription("query", "delete"),
+				ElementType:         types.ListType{ElemType: types.StringType},
+				Optional:            true,
+			},
 			"header": schema.MapAttribute{
 				Description:         "The header parameters that are applied to each request. This overrides the `header` set in the provider block.",
 				MarkdownDescription: "The header parameters that are applied to each request. This overrides the `header` set in the provider block.",
+				ElementType:         types.StringType,
+				Optional:            true,
+			},
+			"operation_header": schema.MapAttribute{
+				Description:         operationOverridableAttrDescription("header", "read"),
+				MarkdownDescription: operationOverridableAttrDescription("header", "read"),
+				ElementType:         types.StringType,
+				Optional:            true,
+			},
+			"delete_header": schema.MapAttribute{
+				Description:         operationOverridableAttrDescription("header", "delete"),
+				MarkdownDescription: operationOverridableAttrDescription("header", "delete"),
 				ElementType:         types.StringType,
 				Optional:            true,
 			},
