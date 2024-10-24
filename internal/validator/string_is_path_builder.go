@@ -7,7 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
-	"github.com/magodo/terraform-provider-restful/internal/buildpath"
+	"github.com/magodo/terraform-provider-restful/internal/exparam"
 )
 
 type stringsIsPathBuilder struct{}
@@ -27,13 +27,13 @@ func (_ stringsIsPathBuilder) ValidateString(ctx context.Context, req validator.
 		return
 	}
 
-	pathFuncs := buildpath.PathFuncFactory{}.Build()
+	pathFuncs := exparam.FuncFactory{}.Build()
 	check := func(matches [][]string) diag.Diagnostic {
 		for _, match := range matches {
 			fnames, value := match[1], match[2]
 			for _, fname := range strings.Split(fnames, ".") {
 				if fname != "" {
-					if _, ok := pathFuncs[buildpath.FuncName(fname)]; !ok {
+					if _, ok := pathFuncs[exparam.FuncName(fname)]; !ok {
 						return diag.NewAttributeErrorDiagnostic(
 							req.Path,
 							"Invalid String",
@@ -53,7 +53,7 @@ func (_ stringsIsPathBuilder) ValidateString(ctx context.Context, req validator.
 		return nil
 	}
 
-	resp.Diagnostics.Append(check(buildpath.ValuePattern.FindAllStringSubmatch(str.ValueString(), -1)))
+	resp.Diagnostics.Append(check(exparam.Pattern.FindAllStringSubmatch(str.ValueString(), -1)))
 	if resp.Diagnostics.HasError() {
 		return
 	}
