@@ -284,6 +284,7 @@ Import is supported using the following syntax:
 #                                 If you omit this, then all the properties will be keeping track, which in most cases is 
 #                                 not what you want (e.g. the read only attributes shouldn't be managed).
 #                                 The value of each property is not important here, hence leave them as `null`.
+# - read_selector (Optional)    : The read_selector used to specify the resource from a collection of resources.
 terraform import restful_resource.example '{
   "id": "/subscriptions/0-0-0-0/resourceGroups/example",
   "path": "/subscriptions/0-0-0-0/resourceGroups/example",
