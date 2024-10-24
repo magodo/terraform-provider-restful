@@ -803,7 +803,17 @@ func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *reso
 
 	b := response.Body()
 
+	stateBody, err := dynamic.ToJSON(state.Body)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Read failure",
+			fmt.Sprintf("marshal state body: %v", err),
+		)
+		return
+	}
+
 	if sel := state.ReadSelector.ValueString(); sel != "" {
+		sel, err = buildpath.BuildQuery(sel, stateBody)
 		// Guaranteed by schema
 		bodyLocator := client.BodyLocator(sel)
 		sb, ok := bodyLocator.LocateValueInResp(*response)
@@ -825,14 +835,6 @@ func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *reso
 
 		// Update the read response by compensating the write only attributes from state
 		if len(writeOnlyAttributes) != 0 {
-			stateBody, err := dynamic.ToJSON(state.Body)
-			if err != nil {
-				resp.Diagnostics.AddError(
-					"Read failure",
-					fmt.Sprintf("marshal state body: %v", err),
-				)
-				return
-			}
 			pb := string(b)
 			for _, path := range writeOnlyAttributes {
 				if gjson.Get(string(stateBody), path).Exists() && !gjson.Get(string(b), path).Exists() {
@@ -1171,6 +1173,10 @@ type importSpec struct {
 	// Body represents the properties expected to be managed and tracked by Terraform. The value of these properties can be null as a place holder.
 	// When absent, all the response payload read wil be set to `body`.
 	Body json.RawMessage `json:"body"`
+
+	// ReadSelector is only required when reading the ID returns a list of resources, and you'd like to read only one of them.
+	// Note that in this case, the value of the `Body` is likely required if the selector reference the body.
+	ReadSelector string `json:"read_selector"`
 }
 
 func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
@@ -1179,6 +1185,7 @@ func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest
 	queryPath := tfpath.Root("query")
 	headerPath := tfpath.Root("header")
 	bodyPath := tfpath.Root("body")
+	readSelector := tfpath.Root("read_selector")
 
 	var imp importSpec
 	if err := json.Unmarshal([]byte(req.ID), &imp); err != nil {
@@ -1219,4 +1226,5 @@ func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, bodyPath, body)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, queryPath, imp.Query)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, headerPath, imp.Header)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, readSelector, imp.ReadSelector)...)
 }

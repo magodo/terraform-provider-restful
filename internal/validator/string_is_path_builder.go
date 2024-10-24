@@ -27,7 +27,7 @@ func (_ stringsIsPathBuilder) ValidateString(ctx context.Context, req validator.
 		return
 	}
 
-	pathFuncs := buildpath.PathFuncFactory{}.Build()
+	pathFuncs := buildpath.FuncFactory{}.Build()
 	check := func(matches [][]string) diag.Diagnostic {
 		for _, match := range matches {
 			fnames, value := match[1], match[2]

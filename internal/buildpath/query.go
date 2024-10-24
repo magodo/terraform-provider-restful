@@ -3,61 +3,16 @@ package buildpath
 import (
 	"encoding/json"
 	"fmt"
-	"net/url"
-	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/tidwall/gjson"
 )
 
-var (
-	ValuePattern = regexp.MustCompile(`\$([\w\.]*)\(([\w.]+)\)`)
-)
-
-type FuncName string
-
-const (
-	FuncEscape   FuncName = "escape"
-	FuncUnEscape FuncName = "unescape"
-	FuncBase     FuncName = "base"
-	FuncURLPath  FuncName = "url_path"
-	FuncTrimPath FuncName = "trim_path"
-)
-
-type Func func(string) (string, error)
-
-type FuncFactory struct {
-	path string
-}
-
-func (f FuncFactory) Build() map[FuncName]Func {
-	return map[FuncName]Func{
-		FuncEscape: func(s string) (string, error) {
-			return url.PathEscape(s), nil
-		},
-		FuncUnEscape: url.PathUnescape,
-		FuncBase: func(s string) (string, error) {
-			return filepath.Base(s), nil
-		},
-		FuncURLPath: func(uRL string) (string, error) {
-			u, err := url.Parse(uRL)
-			if err != nil {
-				return "", err
-			}
-			return u.Path, nil
-		},
-		FuncTrimPath: func(s string) (string, error) {
-			return filepath.Rel(f.path, s)
-		},
-	}
-}
-
-func BuildPath(pattern string, path string, body []byte) (string, error) {
+func BuildQuery(pattern string, body []byte) (string, error) {
 	out := pattern
-	ff := FuncFactory{path}.Build()
+	ff := FuncFactory{}.Build()
 
-	// Matches either "$(path)", or "$(body.x.y.z)"
+	// Matches "$(body.x.y.z)"
 	//
 	// Especially, when pattern matches to "body", the pattern can prefix with a chain of functions.
 	// The form is like: $f1.f2(body.x.y.z)
@@ -65,11 +20,6 @@ func BuildPath(pattern string, path string, body []byte) (string, error) {
 	// the "escape" won't be applied automatically, and need manually define if needed.
 	matches := ValuePattern.FindAllStringSubmatch(out, -1)
 	for _, match := range matches {
-		if match[2] == "path" {
-			out = strings.ReplaceAll(out, match[0], path)
-			continue
-		}
-
 		var ts string
 		if match[2] == "body" {
 			if err := json.Unmarshal(body, &ts); err != nil {
