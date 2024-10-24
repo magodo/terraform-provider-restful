@@ -186,6 +186,46 @@ func TestResource_JSONServer_OutputAttrs(t *testing.T) {
 	})
 }
 
+func TestResource_JSONServer_ReadSelectorParam(t *testing.T) {
+	addr := "restful_resource.test"
+	d := newJsonServerData()
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { d.precheck(t) },
+		CheckDestroy:             d.CheckDestroyWithReadSelector(addr),
+		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+		Steps: []resource.TestStep{
+			{
+				Config: d.readSelectorParam("bar"),
+				Check:  resource.ComposeTestCheckFunc(),
+			},
+			{
+				ResourceName:            addr,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"read_path", "update_path", "delete_path", "read_selector"},
+				ImportStateIdFunc: func(s *terraform.State) (string, error) {
+					attrs := s.RootModule().Resources[addr].Primary.Attributes
+					return fmt.Sprintf(`{"id": "%s", "path": "posts", "body": {"foo": null}, "read_selector": "#(id == %s)"}`, attrs["id"], attrs["output.id"]), nil
+				},
+			},
+			{
+				Config: d.readSelectorParam("baz"),
+				Check:  resource.ComposeTestCheckFunc(),
+			},
+			{
+				ResourceName:            addr,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"read_path", "update_path", "delete_path", "read_selector"},
+				ImportStateIdFunc: func(s *terraform.State) (string, error) {
+					attrs := s.RootModule().Resources[addr].Primary.Attributes
+					return fmt.Sprintf(`{"id": "%s", "path": "posts", "body": {"foo": null}, "read_selector": "#(id == %s)"}`, attrs["id"], attrs["output.id"]), nil
+				},
+			},
+		},
+	})
+}
+
 func TestResource_JSONServer_MigrateV0ToV1(t *testing.T) {
 	addr := "restful_resource.test"
 	d := newJsonServerData()
@@ -224,6 +264,30 @@ func (d jsonServerData) CheckDestroy(addr string) func(*terraform.State) error {
 				continue
 			}
 			resp, err := c.Read(context.TODO(), resource.Primary.ID, client.ReadOption{})
+			if err != nil {
+				return fmt.Errorf("reading %s: %v", addr, err)
+			}
+			if resp.StatusCode() != http.StatusNotFound {
+				return fmt.Errorf("%s: still exists", addr)
+			}
+			return nil
+		}
+		panic("unreachable")
+	}
+}
+
+func (d jsonServerData) CheckDestroyWithReadSelector(addr string) func(*terraform.State) error {
+	return func(s *terraform.State) error {
+		c, err := client.New(context.TODO(), d.url, nil)
+		if err != nil {
+			return err
+		}
+
+		for key, resource := range s.RootModule().Resources {
+			if key != addr {
+				continue
+			}
+			resp, err := c.Read(context.TODO(), fmt.Sprintf("%s/%s", resource.Primary.ID, resource.Primary.Attributes["output.id"]), client.ReadOption{})
 			if err != nil {
 				return fmt.Errorf("reading %s: %v", addr, err)
 			}
@@ -339,4 +403,22 @@ resource "restful_resource" "test" {
   read_path = "$(path)/$(body.id)"
 }
 `, d.url)
+}
+
+func (d jsonServerData) readSelectorParam(v string) string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+resource "restful_resource" "test" {
+  path = "posts"
+  body = {
+  	foo = "%s"
+  }
+  update_path = "$(path)/$(body.id)"
+  delete_path = "$(path)/$(body.id)"
+  read_selector = "#(id == $(body.id))"
+}
+`, d.url, v)
 }

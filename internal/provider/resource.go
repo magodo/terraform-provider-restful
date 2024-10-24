@@ -20,9 +20,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
-	"github.com/magodo/terraform-provider-restful/internal/buildpath"
 	"github.com/magodo/terraform-provider-restful/internal/client"
 	"github.com/magodo/terraform-provider-restful/internal/dynamic"
+	"github.com/magodo/terraform-provider-restful/internal/exparam"
 	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
@@ -270,7 +270,9 @@ func pollAttribute(s string) schema.SingleNestedAttribute {
 	}
 }
 
-const pathDescription = "This can be a string literal, or combined by followings: `$(path)` expanded to `path`, `$(body.x.y.z)` expands to the `x.y.z` property of API body. Especially for body pattern, it can add a chain of functions (applied from left to right), in form of `$f1.f2(body.p)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`)"
+const paramFuncDescription = "Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`)."
+
+const pathDescription = "This can be a string literal, or combined by following params: path param: `$(path)` expanded to `path`, body param: `$(body.x.y.z)` expands to the `x.y.z` property of the API body. Especially for the body param, it can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. " + paramFuncDescription
 
 func operationOverridableAttrDescription(attr string, opkind string) string {
 	return fmt.Sprintf("The %[1]s parameters that are applied to each %[2]s request. This overrides the `%[1]s` set in the resource block.", attr, opkind)
@@ -305,8 +307,8 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				Optional:            true,
 			},
 			"read_selector": schema.StringAttribute{
-				Description:         "A selector in gjson query syntax, that is used when read returns a collection of resources, to select exactly one member resource of from it. By default, the whole response body is used as the body.",
-				MarkdownDescription: "A selector in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries) query syntax, that is used when read returns a collection of resources, to select exactly one member resource of from it. By default, the whole response body is used as the body.",
+				Description:         "A selector expression in gjson query syntax, that is used when read returns a collection of resources, to select exactly one member resource of from it. By default, the whole response body is used as the body. The expression can contain parameters in the form of `$(body.x.y.z)`, which expands to the `x.y.z` property of the `output` of the resource state. Specially, the param can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. " + paramFuncDescription,
+				MarkdownDescription: "A selector expression in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries), that is used when read returns a collection of resources, to select exactly one member resource of from it. By default, the whole response body is used as the body. The expression can contain parameters in the form of `$(body.x.y.z)`, which expands to the `x.y.z` property of the `output` of the resource state. Specially, the param can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. " + paramFuncDescription,
 				Optional:            true,
 			},
 
@@ -674,7 +676,6 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	b = response.Body()
 
 	if sel := plan.CreateSelector.ValueString(); sel != "" {
-		// Guaranteed by schema
 		bodyLocator := client.BodyLocator(sel)
 		sb, ok := bodyLocator.LocateValueInResp(*response)
 		if !ok {
@@ -690,7 +691,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	// Construct the resource id, which is used as the path to read the resource later on. By default, it is the same as the "path", unless "read_path" is specified.
 	resourceId := plan.Path.ValueString()
 	if !plan.ReadPath.IsNull() {
-		resourceId, err = buildpath.BuildPath(plan.ReadPath.ValueString(), plan.Path.ValueString(), b)
+		resourceId, err = exparam.ExpandWithPath(plan.ReadPath.ValueString(), plan.Path.ValueString(), b)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				fmt.Sprintf("Failed to build the path for reading the resource"),
@@ -703,8 +704,18 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	// Set resource ID
 	plan.ID = types.StringValue(resourceId)
 
-	// Early set the state using the plan. There is another state setting in the read right after the polling (if any).
-	// Here is mainly for setting the resource id to the state, in order to avoid resource halfly created not tracked by terraform.
+	// Temporarily set the output here, so that the Read at the end can
+	// expand the `$(body)` parameters.
+	output, err := dynamic.FromJSONImplied(b)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Evaluating `output` during Read",
+			err.Error(),
+		)
+		return
+	}
+	plan.Output = output
+
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
@@ -803,18 +814,16 @@ func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *reso
 
 	b := response.Body()
 
-	stateBody, err := dynamic.ToJSON(state.Body)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Read failure",
-			fmt.Sprintf("marshal state body: %v", err),
-		)
-		return
-	}
-
 	if sel := state.ReadSelector.ValueString(); sel != "" {
-		sel, err = buildpath.BuildQuery(sel, stateBody)
-		// Guaranteed by schema
+		stateOutput, err := dynamic.ToJSON(state.Output)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Read failure",
+				fmt.Sprintf("marshal state output: %v", err),
+			)
+			return
+		}
+		sel, err = exparam.Expand(sel, stateOutput)
 		bodyLocator := client.BodyLocator(sel)
 		sb, ok := bodyLocator.LocateValueInResp(*response)
 		// This means the tracked resource selected (filtered) from the response now disappears (deleted out of band).
@@ -836,6 +845,16 @@ func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *reso
 		// Update the read response by compensating the write only attributes from state
 		if len(writeOnlyAttributes) != 0 {
 			pb := string(b)
+
+			stateBody, err := dynamic.ToJSON(state.Body)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Read failure",
+					fmt.Sprintf("marshal state body: %v", err),
+				)
+				return
+			}
+
 			for _, path := range writeOnlyAttributes {
 				if gjson.Get(string(stateBody), path).Exists() && !gjson.Get(string(b), path).Exists() {
 					pb, err = sjson.Set(pb, path, gjson.Get(string(stateBody), path).Value())
@@ -918,6 +937,10 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 		return
 	}
 
+	// Temporarily set the output here, so that the Read at the end can
+	// expand the `$(body)` parameters.
+	plan.Output = state.Output
+
 	c := r.p.client
 
 	opt, diags := r.p.apiOpt.ForResourceUpdate(ctx, plan)
@@ -983,7 +1006,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 				)
 				return
 			}
-			path, err = buildpath.BuildPath(plan.UpdatePath.ValueString(), plan.Path.ValueString(), output)
+			path, err = exparam.ExpandWithPath(plan.UpdatePath.ValueString(), plan.Path.ValueString(), output)
 			if err != nil {
 				resp.Diagnostics.AddError(
 					"Failed to build the path for updating the resource",
@@ -1095,7 +1118,7 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 			)
 			return
 		}
-		path, err = buildpath.BuildPath(state.DeletePath.ValueString(), state.Path.ValueString(), output)
+		path, err = exparam.ExpandWithPath(state.DeletePath.ValueString(), state.Path.ValueString(), output)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Failed to build the path for deleting the resource",
@@ -1158,25 +1181,25 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 }
 
 type importSpec struct {
-	// Id is the resource id, which is always required.
+	// Id is the resource id. Required.
 	Id string `json:"id"`
 
-	// Path is the path used to create the resource.
+	// Path is the path used to create the resource. Required.
 	Path string `json:"path"`
 
 	// Query is only required when it is mandatory for reading the resource.
-	Query url.Values `json:"query"`
+	Query *url.Values `json:"query"`
 
 	// Header is only required when it is mandatory for reading the resource.
-	Header url.Values `json:"header"`
+	Header *url.Values `json:"header"`
 
 	// Body represents the properties expected to be managed and tracked by Terraform. The value of these properties can be null as a place holder.
 	// When absent, all the response payload read wil be set to `body`.
-	Body json.RawMessage `json:"body"`
+	Body *json.RawMessage `json:"body"`
 
 	// ReadSelector is only required when reading the ID returns a list of resources, and you'd like to read only one of them.
 	// Note that in this case, the value of the `Body` is likely required if the selector reference the body.
-	ReadSelector string `json:"read_selector"`
+	ReadSelector *string `json:"read_selector"`
 }
 
 func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
@@ -1211,20 +1234,28 @@ func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest
 		)
 		return
 	}
-
-	body, err := dynamic.FromJSONImplied(imp.Body)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Resource Import Error",
-			fmt.Sprintf("unmarshal `body`: %v", err),
-		)
-		return
-	}
-
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, idPath, imp.Id)...)
+
+	if imp.Body != nil {
+		body, err := dynamic.FromJSONImplied(*imp.Body)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Resource Import Error",
+				fmt.Sprintf("unmarshal `body`: %v", err),
+			)
+			return
+		}
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, bodyPath, body)...)
+	}
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path, imp.Path)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, bodyPath, body)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, queryPath, imp.Query)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, headerPath, imp.Header)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, readSelector, imp.ReadSelector)...)
+
+	if imp.Query != nil {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, queryPath, imp.Query)...)
+	}
+	if imp.Header != nil {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, headerPath, imp.Header)...)
+	}
+	if imp.ReadSelector != nil {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, readSelector, imp.ReadSelector)...)
+	}
 }

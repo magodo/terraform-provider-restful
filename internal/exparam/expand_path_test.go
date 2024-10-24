@@ -1,4 +1,4 @@
-package buildpath
+package exparam
 
 import (
 	"testing"
@@ -100,7 +100,7 @@ func TestBuildPath(t *testing.T) {
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			actual, err := BuildPath(tt.pattern, tt.path, []byte(tt.body))
+			actual, err := ExpandWithPath(tt.pattern, tt.path, []byte(tt.body))
 			if tt.err != "" {
 				require.ErrorContains(t, err, tt.err)
 				return
