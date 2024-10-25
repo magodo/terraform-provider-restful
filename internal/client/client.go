@@ -165,8 +165,6 @@ type CreateOption struct {
 }
 
 func (c *Client) Create(ctx context.Context, path string, body interface{}, opt CreateOption) (*resty.Response, error) {
-	c.SetLoggerContext(ctx)
-
 	req := c.R().SetContext(ctx).SetBody(body)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 	req.SetHeaders(opt.Header)
@@ -190,8 +188,6 @@ type ReadOption struct {
 }
 
 func (c *Client) Read(ctx context.Context, path string, opt ReadOption) (*resty.Response, error) {
-	c.SetLoggerContext(ctx)
-
 	req := c.R().SetContext(ctx)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 	req.SetHeaders(opt.Header)
@@ -207,8 +203,6 @@ type UpdateOption struct {
 }
 
 func (c *Client) Update(ctx context.Context, path string, body interface{}, opt UpdateOption) (*resty.Response, error) {
-	c.SetLoggerContext(ctx)
-
 	req := c.R().SetContext(ctx).SetBody(body)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 	req.SetHeaders(opt.Header)
@@ -233,8 +227,6 @@ type DeleteOption struct {
 }
 
 func (c *Client) Delete(ctx context.Context, path string, opt DeleteOption) (*resty.Response, error) {
-	c.SetLoggerContext(ctx)
-
 	req := c.R().SetContext(ctx)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 	req.SetHeaders(opt.Header)
@@ -256,8 +248,6 @@ type OperationOption struct {
 }
 
 func (c *Client) Operation(ctx context.Context, path string, body basetypes.DynamicValue, opt OperationOption) (*resty.Response, error) {
-	c.SetLoggerContext(ctx)
-
 	req := c.R().SetContext(ctx)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 
@@ -314,8 +304,6 @@ type ReadOptionDS struct {
 }
 
 func (c *Client) ReadDS(ctx context.Context, path string, opt ReadOptionDS) (*resty.Response, error) {
-	c.SetLoggerContext(ctx)
-
 	req := c.R().SetContext(ctx)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 	req.SetHeaders(opt.Header)

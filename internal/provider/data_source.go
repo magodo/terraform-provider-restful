@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/magodo/terraform-provider-restful/internal/client"
 	"github.com/magodo/terraform-provider-restful/internal/dynamic"
 )
@@ -82,7 +83,7 @@ func (d *DataSource) Schema(ctx context.Context, req datasource.SchemaRequest, r
 				MarkdownDescription: "Whether to throw error if the data source being queried doesn't exist (i.e. status code is 404). Defaults to `false`.",
 				Optional:            true,
 			},
-			"precheck": precheckAttribute("Read", true, ""),
+			"precheck": precheckAttribute("Read", true, "", false),
 			"output": schema.DynamicAttribute{
 				Description:         "The response body after reading the resource.",
 				MarkdownDescription: "The response body after reading the resource.",
@@ -112,6 +113,9 @@ func (d *DataSource) Configure(ctx context.Context, req datasource.ConfigureRequ
 }
 
 func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
+	c := d.p.client
+	c.SetLoggerContext(ctx)
+
 	var config dataSourceData
 	diags := req.Config.Get(ctx, &config)
 	resp.Diagnostics.Append(diags...)
@@ -119,20 +123,20 @@ func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp 
 		return
 	}
 
-	c := d.p.client
-
 	opt, diags := d.p.apiOpt.ForDataSourceRead(ctx, config)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
 	}
 
-	unlockFunc, diags := precheck(ctx, c, d.p.apiOpt, "", opt.Header, opt.Query, config.Precheck)
-	if diags.HasError() {
-		resp.Diagnostics.Append(diags...)
-		return
+	if !config.Precheck.IsNull() {
+		unlockFunc, diags := precheck(ctx, c, d.p.apiOpt, "", opt.Header, opt.Query, config.Precheck, basetypes.NewDynamicNull())
+		if diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
+		defer unlockFunc()
 	}
-	defer unlockFunc()
 
 	state := dataSourceData{
 		ID:            config.ID,

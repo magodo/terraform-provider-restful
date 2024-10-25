@@ -226,6 +226,26 @@ func TestResource_JSONServer_ReadSelectorParam(t *testing.T) {
 	})
 }
 
+func TestResource_JSONServer_StatusLocatorParam(t *testing.T) {
+	addr := "restful_resource.test"
+	d := newJsonServerData()
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { d.precheck(t) },
+		CheckDestroy:             d.CheckDestroyWithReadSelector(addr),
+		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+		Steps: []resource.TestStep{
+			{
+				Config: d.statusLocatorParam("bar"),
+				Check:  resource.ComposeTestCheckFunc(),
+			},
+			{
+				Config: d.statusLocatorParam("baz"),
+				Check:  resource.ComposeTestCheckFunc(),
+			},
+		},
+	})
+}
+
 func TestResource_JSONServer_MigrateV0ToV1(t *testing.T) {
 	addr := "restful_resource.test"
 	d := newJsonServerData()
@@ -255,15 +275,17 @@ func TestResource_JSONServer_MigrateV0ToV1(t *testing.T) {
 
 func (d jsonServerData) CheckDestroy(addr string) func(*terraform.State) error {
 	return func(s *terraform.State) error {
-		c, err := client.New(context.TODO(), d.url, nil)
+		ctx := context.TODO()
+		c, err := client.New(ctx, d.url, nil)
 		if err != nil {
 			return err
 		}
+		c.SetLoggerContext(ctx)
 		for key, resource := range s.RootModule().Resources {
 			if key != addr {
 				continue
 			}
-			resp, err := c.Read(context.TODO(), resource.Primary.ID, client.ReadOption{})
+			resp, err := c.Read(ctx, resource.Primary.ID, client.ReadOption{})
 			if err != nil {
 				return fmt.Errorf("reading %s: %v", addr, err)
 			}
@@ -278,16 +300,18 @@ func (d jsonServerData) CheckDestroy(addr string) func(*terraform.State) error {
 
 func (d jsonServerData) CheckDestroyWithReadSelector(addr string) func(*terraform.State) error {
 	return func(s *terraform.State) error {
-		c, err := client.New(context.TODO(), d.url, nil)
+		ctx := context.TODO()
+		c, err := client.New(ctx, d.url, nil)
 		if err != nil {
 			return err
 		}
+		c.SetLoggerContext(ctx)
 
 		for key, resource := range s.RootModule().Resources {
 			if key != addr {
 				continue
 			}
-			resp, err := c.Read(context.TODO(), fmt.Sprintf("%s/%s", resource.Primary.ID, resource.Primary.Attributes["output.id"]), client.ReadOption{})
+			resp, err := c.Read(ctx, fmt.Sprintf("%s/%s", resource.Primary.ID, resource.Primary.Attributes["output.id"]), client.ReadOption{})
 			if err != nil {
 				return fmt.Errorf("reading %s: %v", addr, err)
 			}
@@ -419,6 +443,55 @@ resource "restful_resource" "test" {
   update_path = "$(path)/$(body.id)"
   delete_path = "$(path)/$(body.id)"
   read_selector = "#(id == $(body.id))"
+}
+`, d.url, v)
+}
+
+func (d jsonServerData) statusLocatorParam(v string) string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %[1]q
+}
+
+resource "restful_resource" "test" {
+  path = "posts"
+  read_path = "$(path)/$(body.id)"
+  body = {
+  	foo = "%[2]s"
+  }
+
+  poll_create = {
+  	url_locator = "exact.posts"
+	status_locator = "body.#(id == $(body.id)).foo"
+	status = {
+		success = "bar"
+	}
+  }
+  poll_update = {
+  	url_locator = "exact.posts"
+	status_locator = "body.#(id == $(body.id)).foo"
+	status = {
+		success = "baz"
+	}
+  }
+  precheck_update = [{
+  	api = {
+  		path = "posts"
+		status_locator = "body.#(id == $(body.id)).foo"
+		status = {
+			success = "bar"
+		}
+	}
+  }]
+  precheck_delete = [{
+  	api = {
+  		path = "posts"
+		status_locator = "body.#(id == $(body.id)).foo"
+		status = {
+			success = "baz"
+		}
+	}
+  }]
 }
 `, d.url, v)
 }
