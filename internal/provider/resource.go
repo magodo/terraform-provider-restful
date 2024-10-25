@@ -130,7 +130,7 @@ func precheckAttribute(s string, pathIsRequired bool, suffixDesc string, statusL
 
 	var statusLocatorSuffixDesc string
 	if statusLocatorSupportParam {
-		statusLocatorSuffixDesc = " The `path` can contain parameter that reference the `body` (except for `create`). The `body` parameter comes from the state.output."
+		statusLocatorSuffixDesc = " The `path` can contain `$(body.x.y.z)` parameter that reference property from the `state.output`."
 	}
 
 	return schema.ListNestedAttribute{
@@ -226,8 +226,8 @@ func pollAttribute(s string) schema.SingleNestedAttribute {
 		Optional:            true,
 		Attributes: map[string]schema.Attribute{
 			"status_locator": schema.StringAttribute{
-				Description:         "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the gjson syntax. The `path` can contain parameter that reference the `body`. Note that `body` parameter comes from the following: Create - response body, Read/Update/Delete - state.output.",
-				MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md). The `path` can contain parameter that reference the `body`. Note that `body` parameter comes from the following: Create - response body, Read/Update/Delete - state.output.",
+				Description:         "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the gjson syntax. The `path` can contain `$(body.x.y.z)` parameter that reference property from either the response body (for `Create`, after selector), and `state.output` (for `Read`/`Update`/`Delete`).",
+				MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md). The `path` can contain `$(body.x.y.z)` parameter that reference property from either the response body (for `Create`, after selector), and `state.output` (for `Read`/`Update`/`Delete`).",
 				Required:            true,
 				Validators: []validator.String{
 					myvalidator.StringIsParsable("status_locator", func(s string) error {
@@ -349,7 +349,7 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 			"poll_update": pollAttribute("Update"),
 			"poll_delete": pollAttribute("Delete"),
 
-			"precheck_create": precheckAttribute("Create", true, "", true),
+			"precheck_create": precheckAttribute("Create", true, "", false),
 			"precheck_update": precheckAttribute("Update", false, "By default, the `id` of this resource is used.", true),
 			"precheck_delete": precheckAttribute("Delete", false, "By default, the `id` of this resource is used.", true),
 
