@@ -326,7 +326,8 @@ func TestOperationResource_Azure_GetToken(t *testing.T) {
 
 func (d azureData) CheckDestroy(addr string) func(*terraform.State) error {
 	return func(s *terraform.State) error {
-		c, err := client.New(context.TODO(), d.url, &client.BuildOption{
+		ctx := context.TODO()
+		c, err := client.New(ctx, d.url, &client.BuildOption{
 			Security: client.OAuth2ClientCredentialOption{
 				ClientId:     d.clientId,
 				ClientSecret: d.clientSecret,
@@ -339,10 +340,12 @@ func (d azureData) CheckDestroy(addr string) func(*terraform.State) error {
 		if err != nil {
 			return err
 		}
+		c.SetLoggerContext(ctx)
+
 		resource := s.RootModule().Resources[addr]
 		if resource != nil {
 			ver := resource.Primary.Attributes["query.api-version.0"]
-			resp, err := c.Read(context.TODO(), resource.Primary.ID, client.ReadOption{Query: map[string][]string{"api-version": {ver}}})
+			resp, err := c.Read(ctx, resource.Primary.ID, client.ReadOption{Query: map[string][]string{"api-version": {ver}}})
 			if err != nil {
 				return fmt.Errorf("reading %s: %v", addr, err)
 			}

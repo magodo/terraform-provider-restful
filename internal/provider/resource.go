@@ -114,10 +114,23 @@ func (r *Resource) Metadata(ctx context.Context, req resource.MetadataRequest, r
 	resp.TypeName = req.ProviderTypeName + "_resource"
 }
 
-func precheckAttribute(s string, pathIsRequired bool, suffixDesc string) schema.ListNestedAttribute {
+const paramFuncDescription = "Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`)."
+
+const pathDescription = "This can be a string literal, or combined by following params: path param: `$(path)` expanded to `path`, body param: `$(body.x.y.z)` expands to the `x.y.z` property of the API body. Especially for the body param, it can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. " + paramFuncDescription
+
+func operationOverridableAttrDescription(attr string, opkind string) string {
+	return fmt.Sprintf("The %[1]s parameters that are applied to each %[2]s request. This overrides the `%[1]s` set in the resource block.", attr, opkind)
+}
+
+func precheckAttribute(s string, pathIsRequired bool, suffixDesc string, statusLocatorSupportParam bool) schema.ListNestedAttribute {
 	pathDesc := "The path used to query readiness, relative to the `base_url` of the provider."
 	if suffixDesc != "" {
 		pathDesc += " " + suffixDesc
+	}
+
+	var statusLocatorSuffixDesc string
+	if statusLocatorSupportParam {
+		statusLocatorSuffixDesc = " The `path` can contain `$(body.x.y.z)` parameter that reference property from the `state.output`."
 	}
 
 	return schema.ListNestedAttribute{
@@ -142,13 +155,12 @@ func precheckAttribute(s string, pathIsRequired bool, suffixDesc string) schema.
 					Optional:            true,
 					Attributes: map[string]schema.Attribute{
 						"status_locator": schema.StringAttribute{
-							Description:         "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the gjson syntax.",
-							MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).",
+							Description:         "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the gjson syntax." + statusLocatorSuffixDesc,
+							MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)." + statusLocatorSuffixDesc,
 							Required:            true,
 							Validators: []validator.String{
-								myvalidator.StringIsParsable("locator", func(s string) error {
-									_, err := parseLocator(s)
-									return err
+								myvalidator.StringIsParsable("status_locator", func(s string) error {
+									return validateLocator(s)
 								}),
 							},
 						},
@@ -214,13 +226,12 @@ func pollAttribute(s string) schema.SingleNestedAttribute {
 		Optional:            true,
 		Attributes: map[string]schema.Attribute{
 			"status_locator": schema.StringAttribute{
-				Description:         "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the gjson syntax.",
-				MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).",
+				Description:         "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the gjson syntax. The `path` can contain `$(body.x.y.z)` parameter that reference property from either the response body (for `Create`, after selector), and `state.output` (for `Read`/`Update`/`Delete`).",
+				MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md). The `path` can contain `$(body.x.y.z)` parameter that reference property from either the response body (for `Create`, after selector), and `state.output` (for `Read`/`Update`/`Delete`).",
 				Required:            true,
 				Validators: []validator.String{
-					myvalidator.StringIsParsable("locator", func(s string) error {
-						_, err := parseLocator(s)
-						return err
+					myvalidator.StringIsParsable("status_locator", func(s string) error {
+						return validateLocator(s)
 					}),
 				},
 			},
@@ -247,9 +258,8 @@ func pollAttribute(s string) schema.SingleNestedAttribute {
 				MarkdownDescription: "Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the current operation's URL is used for polling, execpt `Create` where it fallbacks to use the resource id as the polling URL.",
 				Optional:            true,
 				Validators: []validator.String{
-					myvalidator.StringIsParsable("locator", func(s string) error {
-						_, err := parseLocator(s)
-						return err
+					myvalidator.StringIsParsable("url_locator", func(s string) error {
+						return validateLocator(s)
 					}),
 				},
 			},
@@ -268,14 +278,6 @@ func pollAttribute(s string) schema.SingleNestedAttribute {
 			},
 		},
 	}
-}
-
-const paramFuncDescription = "Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`)."
-
-const pathDescription = "This can be a string literal, or combined by following params: path param: `$(path)` expanded to `path`, body param: `$(body.x.y.z)` expands to the `x.y.z` property of the API body. Especially for the body param, it can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. " + paramFuncDescription
-
-func operationOverridableAttrDescription(attr string, opkind string) string {
-	return fmt.Sprintf("The %[1]s parameters that are applied to each %[2]s request. This overrides the `%[1]s` set in the resource block.", attr, opkind)
 }
 
 func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
@@ -347,9 +349,9 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 			"poll_update": pollAttribute("Update"),
 			"poll_delete": pollAttribute("Delete"),
 
-			"precheck_create": precheckAttribute("Create", true, ""),
-			"precheck_update": precheckAttribute("Update", false, "By default, the `id` of this resource is used."),
-			"precheck_delete": precheckAttribute("Delete", false, "By default, the `id` of this resource is used."),
+			"precheck_create": precheckAttribute("Create", true, "", false),
+			"precheck_update": precheckAttribute("Update", false, "By default, the `id` of this resource is used.", true),
+			"precheck_delete": precheckAttribute("Delete", false, "By default, the `id` of this resource is used.", true),
 
 			"create_method": schema.StringAttribute{
 				Description:         "The method used to create the resource. Possible values are `PUT`, `POST` and `PATCH`. This overrides the `create_method` set in the provider block (defaults to POST).",
@@ -602,14 +604,15 @@ func (r *Resource) Configure(ctx context.Context, req resource.ConfigureRequest,
 }
 
 func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	c := r.p.client
+	c.SetLoggerContext(ctx)
+
 	var plan resourceData
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
 	}
-
-	c := r.p.client
 
 	opt, diags := r.p.apiOpt.ForResourceCreate(ctx, plan)
 	resp.Diagnostics.Append(diags...)
@@ -641,12 +644,14 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	}
 
 	// Precheck
-	unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, "", opt.Header, opt.Query, plan.PrecheckCreate)
-	if diags.HasError() {
-		resp.Diagnostics.Append(diags...)
-		return
+	if !plan.PrecheckCreate.IsNull() {
+		unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, "", opt.Header, opt.Query, plan.PrecheckCreate, basetypes.NewDynamicNull())
+		if diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
+		defer unlockFunc()
 	}
-	defer unlockFunc()
 
 	// Create the resource
 	b, err := dynamic.ToJSON(plan.Body)
@@ -729,7 +734,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 			resp.Diagnostics.Append(diags...)
 			return
 		}
-		opt, diags := r.p.apiOpt.ForPoll(ctx, opt.Header, opt.Query, d)
+		opt, diags := r.p.apiOpt.ForPoll(ctx, opt.Header, opt.Query, d, output)
 		if diags.HasError() {
 			resp.Diagnostics.Append(diags...)
 			return
@@ -773,18 +778,19 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 }
 
 func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	r.p.client.SetLoggerContext(ctx)
 	r.read(ctx, req, resp, true)
 }
 
 func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse, updateBody bool) {
+	c := r.p.client
+
 	var state resourceData
 	diags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
 	}
-
-	c := r.p.client
 
 	opt, diags := r.p.apiOpt.ForResourceRead(ctx, state)
 	resp.Diagnostics.Append(diags...)
@@ -923,6 +929,9 @@ func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *reso
 }
 
 func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	c := r.p.client
+	c.SetLoggerContext(ctx)
+
 	var state resourceData
 	diags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
@@ -940,8 +949,6 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 	// Temporarily set the output here, so that the Read at the end can
 	// expand the `$(body)` parameters.
 	plan.Output = state.Output
-
-	c := r.p.client
 
 	opt, diags := r.p.apiOpt.ForResourceUpdate(ctx, plan)
 	resp.Diagnostics.Append(diags...)
@@ -969,12 +976,14 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 	// Invoke API to Update the resource only when there are changes in the body (regardless of the TF type diff).
 	if string(stateBody) != string(planBody) {
 		// Precheck
-		unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, state.ID.ValueString(), opt.Header, opt.Query, plan.PrecheckUpdate)
-		if diags.HasError() {
-			resp.Diagnostics.Append(diags...)
-			return
+		if !plan.PrecheckUpdate.IsNull() {
+			unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, state.ID.ValueString(), opt.Header, opt.Query, plan.PrecheckUpdate, state.Output)
+			if diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			}
+			defer unlockFunc()
 		}
-		defer unlockFunc()
 
 		if opt.Method == "PATCH" && !opt.MergePatchDisabled {
 			stateBodyJSON, err := dynamic.ToJSON(state.Body)
@@ -1039,7 +1048,8 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 				resp.Diagnostics.Append(diags...)
 				return
 			}
-			opt, diags := r.p.apiOpt.ForPoll(ctx, opt.Header, opt.Query, d)
+
+			opt, diags := r.p.apiOpt.ForPoll(ctx, opt.Header, opt.Query, d, state.Output)
 			if diags.HasError() {
 				resp.Diagnostics.Append(diags...)
 				return
@@ -1085,14 +1095,15 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 }
 
 func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	c := r.p.client
+	c.SetLoggerContext(ctx)
+
 	var state resourceData
 	diags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
 	}
-
-	c := r.p.client
 
 	opt, diags := r.p.apiOpt.ForResourceDelete(ctx, state)
 	resp.Diagnostics.Append(diags...)
@@ -1101,12 +1112,14 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 	}
 
 	// Precheck
-	unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, state.ID.ValueString(), opt.Header, opt.Query, state.PrecheckDelete)
-	if diags.HasError() {
-		resp.Diagnostics.Append(diags...)
-		return
+	if !state.PrecheckDelete.IsNull() {
+		unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, state.ID.ValueString(), opt.Header, opt.Query, state.PrecheckDelete, state.Output)
+		if diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
+		defer unlockFunc()
 	}
-	defer unlockFunc()
 
 	path := state.ID.ValueString()
 	if !state.DeletePath.IsNull() {
@@ -1155,7 +1168,7 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 			resp.Diagnostics.Append(diags...)
 			return
 		}
-		opt, diags := r.p.apiOpt.ForPoll(ctx, opt.Header, opt.Query, d)
+		opt, diags := r.p.apiOpt.ForPoll(ctx, opt.Header, opt.Query, d, state.Output)
 		if diags.HasError() {
 			resp.Diagnostics.Append(diags...)
 			return

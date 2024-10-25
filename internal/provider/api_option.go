@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"regexp"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/magodo/terraform-provider-restful/internal/client"
+	"github.com/magodo/terraform-provider-restful/internal/dynamic"
+	"github.com/magodo/terraform-provider-restful/internal/exparam"
 )
 
 type apiOption struct {
@@ -22,26 +24,63 @@ type apiOption struct {
 	Header             client.Header
 }
 
-func parseLocator(locator string) (client.ValueLocator, error) {
+func validateLocator(locator string) error {
+	if locator == "code" {
+		return nil
+	}
+	l, r, ok := strings.Cut(locator, ".")
+	if !ok {
+		return fmt.Errorf("locator does't contain `.`: %s", locator)
+	}
+	if r == "" {
+		return fmt.Errorf("empty right hand value for locator: %s", locator)
+	}
+	switch l {
+	case "exact", "header", "body":
+		return nil
+	default:
+		return fmt.Errorf("unknown locator key: %s", l)
+	}
+}
+
+func expandLocator(locator string, body basetypes.DynamicValue) (client.ValueLocator, error) {
 	if locator == "code" {
 		return client.CodeLocator{}, nil
 	}
-	p := regexp.MustCompile(`^(\w+)\.(.+)$`)
-	matches := p.FindAllStringSubmatch(locator, 1)
-	if len(matches) != 1 {
-		return nil, fmt.Errorf("invalid locator: %s", locator)
+	l, r, ok := strings.Cut(locator, ".")
+	if !ok {
+		return nil, fmt.Errorf("locator does't contain `.`: %s", locator)
 	}
-	submatches := matches[0]
-	k, v := submatches[1], submatches[2]
-	switch k {
+	if r == "" {
+		return nil, fmt.Errorf("empty right hand value for locator: %s", locator)
+	}
+	switch l {
 	case "exact":
-		return client.ExactLocator(v), nil
+		return client.ExactLocator(r), nil
 	case "header":
-		return client.HeaderLocator(v), nil
+		b, err := dynamic.ToJSON(body)
+		if err != nil {
+			return nil, fmt.Errorf("dynamic to json: %v", err)
+		}
+
+		rr, err := exparam.Expand(r, b)
+		if err != nil {
+			return nil, fmt.Errorf("expand param of %q: %v", r, err)
+		}
+		return client.HeaderLocator(rr), nil
 	case "body":
-		return client.BodyLocator(v), nil
+		b, err := dynamic.ToJSON(body)
+		if err != nil {
+			return nil, fmt.Errorf("dynamic to json: %v", err)
+		}
+
+		rr, err := exparam.Expand(r, b)
+		if err != nil {
+			return nil, fmt.Errorf("expand param of %q: %v", r, err)
+		}
+		return client.BodyLocator(rr), nil
 	default:
-		return nil, fmt.Errorf("unknown locator key: %s", k)
+		return nil, fmt.Errorf("unknown locator key: %s", l)
 	}
 }
 
@@ -128,7 +167,7 @@ func (opt apiOption) ForResourceOperationDelete(ctx context.Context, d operation
 	return &out, nil
 }
 
-func (opt apiOption) ForPoll(ctx context.Context, defaultHeader client.Header, defaultQuery client.Query, d pollData) (*client.PollOption, diag.Diagnostics) {
+func (opt apiOption) ForPoll(ctx context.Context, defaultHeader client.Header, defaultQuery client.Query, d pollData, body basetypes.DynamicValue) (*client.PollOption, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
 	var status statusDataGo
@@ -137,7 +176,7 @@ func (opt apiOption) ForPoll(ctx context.Context, defaultHeader client.Header, d
 		return nil, diags
 	}
 
-	statusLocator, err := parseLocator(d.StatusLocator.ValueString())
+	statusLocator, err := expandLocator(d.StatusLocator.ValueString(), body)
 	if err != nil {
 		diags.AddError("Failed to parse status locator", err.Error())
 		return nil, diags
@@ -145,7 +184,7 @@ func (opt apiOption) ForPoll(ctx context.Context, defaultHeader client.Header, d
 
 	var urlLocator client.ValueLocator
 	if !d.UrlLocator.IsNull() {
-		loc, err := parseLocator(d.UrlLocator.ValueString())
+		loc, err := expandLocator(d.UrlLocator.ValueString(), body)
 		if err != nil {
 			diags.AddError("Failed to parse url locator", err.Error())
 			return nil, diags
@@ -174,7 +213,7 @@ func (opt apiOption) ForPoll(ctx context.Context, defaultHeader client.Header, d
 	}, nil
 }
 
-func (opt apiOption) ForPrecheck(ctx context.Context, defaultPath string, defaultHeader client.Header, defaultQuery client.Query, d precheckDataApi) (*client.PollOption, diag.Diagnostics) {
+func (opt apiOption) ForPrecheck(ctx context.Context, defaultPath string, defaultHeader client.Header, defaultQuery client.Query, d precheckDataApi, body basetypes.DynamicValue) (*client.PollOption, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
 	var status statusDataGo
@@ -183,7 +222,7 @@ func (opt apiOption) ForPrecheck(ctx context.Context, defaultPath string, defaul
 		return nil, diags
 	}
 
-	statusLocator, err := parseLocator(d.StatusLocator.ValueString())
+	statusLocator, err := expandLocator(d.StatusLocator.ValueString(), body)
 	if err != nil {
 		diags.AddError("Failed to parse status locator", err.Error())
 		return nil, diags

@@ -61,8 +61,9 @@ func (r *OperationResource) Metadata(ctx context.Context, req resource.MetadataR
 }
 
 func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
-	precheckDelete := precheckAttribute("`Delete`", false, "By default, the `path` of this resource is used.")
+	precheckDelete := precheckAttribute("`Delete`", false, "By default, the `path` of this resource is used.", true)
 	precheckDelete.Validators = append(precheckDelete.Validators, listvalidator.AlsoRequires(path.MatchRelative().AtParent().AtName("delete_method")))
+
 	pollDelete := pollAttribute("`Delete`")
 	pollDelete.Validators = append(pollDelete.Validators, objectvalidator.AlsoRequires(path.MatchRelative().AtParent().AtName("delete_method")))
 
@@ -146,7 +147,7 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 				Optional:            true,
 			},
 
-			"precheck": precheckAttribute("`Create`/`Update`", true, ""),
+			"precheck": precheckAttribute("`Create`/`Update`", true, "", false),
 			"poll":     pollAttribute("`Create`/`Update`"),
 
 			"delete_method": schema.StringAttribute{
@@ -212,15 +213,16 @@ func (r *OperationResource) Configure(ctx context.Context, req resource.Configur
 	r.p = providerData.provider
 }
 
-func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Plan, state *tfsdk.State, diagnostics *diag.Diagnostics) {
+func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Plan, tfstate *tfsdk.State, diagnostics *diag.Diagnostics, forCreate bool) {
+	c := r.p.client
+	c.SetLoggerContext(ctx)
+
 	var plan operationResourceData
 	diags := tfplan.Get(ctx, &plan)
 	diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
 	}
-
-	c := r.p.client
 
 	opt, diags := r.p.apiOpt.ForResourceOperation(ctx, plan)
 	diagnostics.Append(diags...)
@@ -229,12 +231,14 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 	}
 
 	// Precheck
-	unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, plan.Path.ValueString(), opt.Header, opt.Query, plan.Precheck)
-	diagnostics.Append(diags...)
-	if diags.HasError() {
-		return
+	if !plan.Precheck.IsNull() {
+		unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, plan.Path.ValueString(), opt.Header, opt.Query, plan.Precheck, basetypes.NewDynamicNull())
+		diagnostics.Append(diags...)
+		if diags.HasError() {
+			return
+		}
+		defer unlockFunc()
 	}
-	defer unlockFunc()
 
 	response, err := c.Operation(ctx, plan.Path.ValueString(), plan.Body, *opt)
 	if err != nil {
@@ -271,7 +275,28 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 			diagnostics.Append(diags...)
 			return
 		}
-		opt, diags := r.p.apiOpt.ForPoll(ctx, opt.Header, opt.Query, d)
+
+		var body basetypes.DynamicValue
+		if forCreate {
+			body, err = dynamic.FromJSONImplied(response.Body())
+			if err != nil {
+				diagnostics.AddError(
+					"Operation: Failed to get dynamic from JSON for the operation response",
+					err.Error(),
+				)
+				return
+			}
+		} else {
+			var state operationResourceData
+			diags = tfstate.Get(ctx, &state)
+			diagnostics.Append(diags...)
+			if diags.HasError() {
+				return
+			}
+			body = state.Output
+		}
+		opt, diags := r.p.apiOpt.ForPoll(ctx, opt.Header, opt.Query, d, body)
+
 		if diags.HasError() {
 			diagnostics.Append(diags...)
 			return
@@ -330,7 +355,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 	}
 	plan.Output = output
 
-	diags = state.Set(ctx, plan)
+	diags = tfstate.Set(ctx, plan)
 	diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
@@ -338,12 +363,12 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 }
 
 func (r *OperationResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	r.createOrUpdate(ctx, req.Plan, &resp.State, &resp.Diagnostics)
+	r.createOrUpdate(ctx, req.Plan, &resp.State, &resp.Diagnostics, true)
 	return
 }
 
 func (r *OperationResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	r.createOrUpdate(ctx, req.Plan, &resp.State, &resp.Diagnostics)
+	r.createOrUpdate(ctx, req.Plan, &resp.State, &resp.Diagnostics, false)
 	return
 }
 
@@ -352,6 +377,9 @@ func (r *OperationResource) Read(ctx context.Context, req resource.ReadRequest, 
 }
 
 func (r *OperationResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	c := r.p.client
+	c.SetLoggerContext(ctx)
+
 	var state operationResourceData
 	diags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
@@ -363,8 +391,6 @@ func (r *OperationResource) Delete(ctx context.Context, req resource.DeleteReque
 		return
 	}
 
-	c := r.p.client
-
 	opt, diags := r.p.apiOpt.ForResourceOperationDelete(ctx, state)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
@@ -372,12 +398,14 @@ func (r *OperationResource) Delete(ctx context.Context, req resource.DeleteReque
 	}
 
 	// Precheck
-	unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, state.ID.ValueString(), opt.Header, opt.Query, state.PrecheckDelete)
-	if diags.HasError() {
-		resp.Diagnostics.Append(diags...)
-		return
+	if !state.PrecheckDelete.IsNull() {
+		unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, state.ID.ValueString(), opt.Header, opt.Query, state.PrecheckDelete, state.Output)
+		if diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
+		defer unlockFunc()
 	}
-	defer unlockFunc()
 
 	path := state.ID.ValueString()
 	if !state.DeletePath.IsNull() {
@@ -422,7 +450,7 @@ func (r *OperationResource) Delete(ctx context.Context, req resource.DeleteReque
 			resp.Diagnostics.Append(diags...)
 			return
 		}
-		opt, diags := r.p.apiOpt.ForPoll(ctx, opt.Header, opt.Query, d)
+		opt, diags := r.p.apiOpt.ForPoll(ctx, opt.Header, opt.Query, d, state.Output)
 		if diags.HasError() {
 			resp.Diagnostics.Append(diags...)
 			return

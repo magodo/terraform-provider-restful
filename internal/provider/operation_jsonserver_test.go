@@ -81,6 +81,23 @@ func TestOperation_JSONServer_withDelete(t *testing.T) {
 	})
 }
 
+func TestOperation_JSONServer_statusLocatorParam(t *testing.T) {
+	addr := "restful_operation.test"
+	d := newJsonServerOperation()
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { d.precheck(t) },
+		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+		Steps: []resource.TestStep{
+			{
+				Config: d.statusLocatorParam(),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttrSet(addr, "output.%"),
+				),
+			},
+		},
+	})
+}
+
 func TestOperation_JSONServer_MigrateV0ToV1(t *testing.T) {
 	d := newJsonServerOperation()
 	resource.Test(t, resource.TestCase{
@@ -154,6 +171,38 @@ resource "restful_operation" "test" {
 }`
 	}
 	return tpl
+}
+
+func (d jsonServerOperation) statusLocatorParam() string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+resource "restful_operation" "test" {
+  path = "posts"
+  method = "POST"
+  delete_method = "DELETE"
+  delete_path = "$(path)/$(body.id)"
+  body = {
+  	foo = "bar"
+  }
+  poll = {
+	status_locator = "body.#(id == $(body.id)).foo"
+	status = {
+		success = "bar"
+	}
+  }
+  precheck_delete = [{
+  	api = {
+		status_locator = "body.#(id == $(body.id)).foo"
+		status = {
+			success = "bar"
+		}
+	}
+  }]
+}
+`, d.url)
 }
 
 func (d jsonServerOperation) migrate_v0() string {

@@ -86,7 +86,7 @@ resource "restful_resource" "rg" {
 Required:
 
 - `status` (Attributes) The expected status sentinels for each polling state. (see [below for nested schema](#nestedatt--poll_create--status))
-- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).
+- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md). The `path` can contain `$(body.x.y.z)` parameter that reference property from either the response body (for `Create`, after selector), and `state.output` (for `Read`/`Update`/`Delete`).
 
 Optional:
 
@@ -113,7 +113,7 @@ Optional:
 Required:
 
 - `status` (Attributes) The expected status sentinels for each polling state. (see [below for nested schema](#nestedatt--poll_delete--status))
-- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).
+- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md). The `path` can contain `$(body.x.y.z)` parameter that reference property from either the response body (for `Create`, after selector), and `state.output` (for `Read`/`Update`/`Delete`).
 
 Optional:
 
@@ -140,7 +140,7 @@ Optional:
 Required:
 
 - `status` (Attributes) The expected status sentinels for each polling state. (see [below for nested schema](#nestedatt--poll_update--status))
-- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).
+- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md). The `path` can contain `$(body.x.y.z)` parameter that reference property from either the response body (for `Create`, after selector), and `state.output` (for `Read`/`Update`/`Delete`).
 
 Optional:
 
@@ -212,7 +212,7 @@ Optional:
 Required:
 
 - `status` (Attributes) The expected status sentinels for each polling state. (see [below for nested schema](#nestedatt--precheck_delete--api--status))
-- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).
+- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md). The `path` can contain `$(body.x.y.z)` parameter that reference property from the `state.output`.
 
 Optional:
 
@@ -249,7 +249,7 @@ Optional:
 Required:
 
 - `status` (Attributes) The expected status sentinels for each polling state. (see [below for nested schema](#nestedatt--precheck_update--api--status))
-- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).
+- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md). The `path` can contain `$(body.x.y.z)` parameter that reference property from the `state.output`.
 
 Optional:
 

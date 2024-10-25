@@ -250,15 +250,17 @@ func TestResource_CodeServer_HeaderQuery(t *testing.T) {
 
 func (d codeServerData) CheckDestroy(url, addr string) func(*terraform.State) error {
 	return func(s *terraform.State) error {
+		ctx := context.TODO()
 		c, err := client.New(context.TODO(), url, nil)
 		if err != nil {
 			return err
 		}
+		c.SetLoggerContext(ctx)
 		for key, resource := range s.RootModule().Resources {
 			if key != addr {
 				continue
 			}
-			resp, err := c.Read(context.TODO(), resource.Primary.ID, client.ReadOption{})
+			resp, err := c.Read(ctx, resource.Primary.ID, client.ReadOption{})
 			if err != nil {
 				return fmt.Errorf("reading %s: %v", addr, err)
 			}
