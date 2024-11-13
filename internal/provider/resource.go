@@ -359,7 +359,7 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 					Attributes: map[string]schema.Attribute{
 						"path": schema.StringAttribute{
 							Description:         "The path (in gjson syntax) to the attribute to patch.",
-							MarkdownDescription: "The path (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attribute to patch.",
+							MarkdownDescription: "The path (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attribute to [patch](https://github.com/tidwall/sjson?tab=readme-ov-file#set-a-value).",
 							Required:            true,
 						},
 						"raw_json": schema.StringAttribute{
