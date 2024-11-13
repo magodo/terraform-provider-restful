@@ -246,6 +246,32 @@ func TestResource_JSONServer_StatusLocatorParam(t *testing.T) {
 	})
 }
 
+func TestResource_JSONServer_UpdateBodyPatch(t *testing.T) {
+	addr := "restful_resource.test"
+	d := newJsonServerData()
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { d.precheck(t) },
+		CheckDestroy:             d.CheckDestroy(addr),
+		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+		Steps: []resource.TestStep{
+			{
+				Config: d.updateBodyPatch("foo"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckNoResourceAttr(addr, "output.addon.a"),
+					resource.TestCheckNoResourceAttr(addr, "output.addon.b"),
+				),
+			},
+			{
+				Config: d.updateBodyPatch("bar"),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(addr, "output.addon.a", "hmm"),
+					resource.TestCheckResourceAttrSet(addr, "output.addon.b"),
+				),
+			},
+		},
+	})
+}
+
 func TestResource_JSONServer_MigrateV0ToV1(t *testing.T) {
 	addr := "restful_resource.test"
 	d := newJsonServerData()
@@ -492,6 +518,32 @@ resource "restful_resource" "test" {
 		}
 	}
   }]
+}
+`, d.url, v)
+}
+
+func (d jsonServerData) updateBodyPatch(v string) string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+resource "restful_resource" "test" {
+  path = "posts"
+  body = {
+  	foo = %q
+  }
+  update_body_patches = [
+    {
+	  path = "addon.a"
+	  raw_json = "\"hmm\""
+	},
+    {
+	  path = "addon.b"
+	  raw_json = "$(body.id)"
+	},
+  ]
+  read_path = "$(path)/$(body.id)"
 }
 `, d.url, v)
 }

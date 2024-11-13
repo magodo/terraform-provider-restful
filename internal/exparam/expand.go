@@ -3,7 +3,6 @@ package exparam
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/tidwall/gjson"
@@ -18,6 +17,7 @@ func Expand(expr string, body []byte) (string, error) {
 	ff := FuncFactory{}.Build()
 
 	matches := Pattern.FindAllStringSubmatch(out, -1)
+
 	for _, match := range matches {
 		var ts string
 		if match[2] == "body" {
@@ -35,11 +35,9 @@ func Expand(expr string, body []byte) (string, error) {
 			return "", fmt.Errorf("invalid match: %s", match[0])
 		}
 
-		// Apply path functions if any
+		// Apply functions if any
 		fs := []Func{}
 		if fnames := match[1]; fnames != "" {
-			// If specified any function, remove the default escape function
-			fs = []Func{}
 			for _, fname := range strings.Split(fnames, ".") {
 				f, ok := ff[FuncName(fname)]
 				if !ok {
@@ -48,16 +46,15 @@ func Expand(expr string, body []byte) (string, error) {
 				fs = append(fs, f)
 			}
 		}
+
 		for i, f := range fs {
 			var err error
 			ts, err = f(ts)
 			if err != nil {
-				return "", fmt.Errorf("failed to apply %d-th path functions: %v", i, err)
+				return "", fmt.Errorf("failed to apply %d-th functions: %v", i, err)
 			}
 		}
-		log.Printf("[DEBUG] out=%s match0=%s ts=%s\n", out, match[0], ts)
 		out = strings.ReplaceAll(out, match[0], ts)
-		log.Printf("[DEBUG] out=%s match0=%s ts=%s\n", out, match[0], ts)
 	}
 	return out, nil
 }

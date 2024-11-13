@@ -41,7 +41,7 @@ func ExpandWithPath(expr string, path string, body []byte) (string, error) {
 			return "", fmt.Errorf("invalid match: %s", match[0])
 		}
 
-		// Apply path functions if any
+		// Apply functions if any
 		fs := []Func{ff[FuncEscape]}
 		if fnames := match[1]; fnames != "" {
 			// If specified any function, remove the default escape function
@@ -58,7 +58,7 @@ func ExpandWithPath(expr string, path string, body []byte) (string, error) {
 			var err error
 			ts, err = f(ts)
 			if err != nil {
-				return "", fmt.Errorf("failed to apply %d-th path functions: %v", i, err)
+				return "", fmt.Errorf("failed to apply %d-th functions: %v", i, err)
 			}
 		}
 		out = strings.ReplaceAll(out, match[0], ts)
