@@ -31,7 +31,6 @@ func Expand(expr string, body []byte) (string, error) {
 				return "", fmt.Errorf("no property found at path %q in the body", jsonPath)
 			}
 			ts = prop.String()
-			log.Printf("[DEBUG] body=%s ts=%s\n", string(body), ts)
 		} else {
 			return "", fmt.Errorf("invalid match: %s", match[0])
 		}

@@ -55,7 +55,8 @@ type resourceData struct {
 	PrecheckUpdate types.List `tfsdk:"precheck_update"`
 	PrecheckDelete types.List `tfsdk:"precheck_delete"`
 
-	Body types.Dynamic `tfsdk:"body"`
+	Body              types.Dynamic `tfsdk:"body"`
+	UpdateBodyPatches types.List    `tfsdk:"update_body_patches"`
 
 	PollCreate types.Object `tfsdk:"poll_create"`
 	PollUpdate types.Object `tfsdk:"poll_update"`
@@ -81,6 +82,11 @@ type resourceData struct {
 	OutputAttrs    types.Set  `tfsdk:"output_attrs"`
 
 	Output types.Dynamic `tfsdk:"output"`
+}
+
+type bodyPatchData struct {
+	Path  types.String  `tfsdk:"path"`
+	Value types.Dynamic `tfsdk:"value"`
 }
 
 type pollData struct {
@@ -1004,6 +1010,43 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 			}
 			planBody = b
 		}
+
+		// Optionally patch the body.
+		var patches []bodyPatchData
+		if diags := plan.UpdateBodyPatches.ElementsAs(ctx, &patches, false); diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
+		planBodyStr := string(planBody)
+		for i, p := range patches {
+			pv, err := dynamic.ToJSON(p.Value)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					fmt.Sprintf("Failed to marshal json for the %d-th element in `update_body_patches`", i),
+					err.Error(),
+				)
+				return
+			}
+
+			spv, err := exparam.Expand(string(pv), stateBody)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					fmt.Sprintf("Failed to expand the expression param for %d-th element in `update_body_patches`", i),
+					err.Error(),
+				)
+				return
+			}
+
+			planBodyStr, err = sjson.SetRaw(planBodyStr, p.Path.String(), spv)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					fmt.Sprintf("Failed to patch via sjson with the %d-th element in `update_body_patches`", i),
+					err.Error(),
+				)
+				return
+			}
+		}
+		planBody = []byte(planBodyStr)
 
 		path := plan.ID.ValueString()
 		if !plan.UpdatePath.IsNull() {
