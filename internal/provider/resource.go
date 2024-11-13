@@ -352,8 +352,8 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 			},
 
 			"update_body_patches": schema.ListNestedAttribute{
-				Description:         "The body patches for update only. Any change here won't cause a plan diff. Note that this is almost only useful for APIs that require *after-create* attribute for an update (e.g. the resource ID).",
-				MarkdownDescription: "The body patches for update only. Any change here won't cause a plan diff. Note that this is almost only useful for APIs that require *after-create* attribute for an update (e.g. the resource ID).",
+				Description:         "The body patches for update only. Any change here won't cause a update API call by its own, only changes from `body` does. Note that this is almost only useful for APIs that require *after-create* attribute for an update (e.g. the resource ID).",
+				MarkdownDescription: "The body patches for update only. Any change here won't cause a update API call by its own, only changes from `body` does. Note that this is almost only useful for APIs that require *after-create* attribute for an update (e.g. the resource ID).",
 				Optional:            true,
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
