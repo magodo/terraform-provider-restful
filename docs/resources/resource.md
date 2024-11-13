@@ -69,6 +69,7 @@ resource "restful_resource" "rg" {
 - `read_path` (String) The API path used to read the resource, which is used as the `id`. The `path` is used as the `id` instead if `read_path` is absent. This can be a string literal, or combined by following params: path param: `$(path)` expanded to `path`, body param: `$(body.x.y.z)` expands to the `x.y.z` property of the API body. Especially for the body param, it can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`).
 - `read_query` (Map of List of String) The query parameters that are applied to each read request. This overrides the `query` set in the resource block.
 - `read_selector` (String) A selector expression in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries), that is used when read returns a collection of resources, to select exactly one member resource of from it. By default, the whole response body is used as the body. The expression can contain parameters in the form of `$(body.x.y.z)`, which expands to the `x.y.z` property of the `output` of the resource state. Specially, the param can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`).
+- `update_body_patches` (Attributes List) The body patches for update only. Any change here won't cause a update API call by its own, only changes from `body` does. Note that this is almost only useful for APIs that require *after-create* attribute for an update (e.g. the resource ID). (see [below for nested schema](#nestedatt--update_body_patches))
 - `update_header` (Map of String) The header parameters that are applied to each update request. This overrides the `header` set in the resource block.
 - `update_method` (String) The method used to update the resource. Possible values are `PUT`, `POST`, and `PATCH`. This overrides the `update_method` set in the provider block (defaults to PUT).
 - `update_path` (String) The API path used to update the resource. The `id` is used instead if `update_path` is absent. This can be a string literal, or combined by following params: path param: `$(path)` expanded to `path`, body param: `$(body.x.y.z)` expands to the `x.y.z` property of the API body. Especially for the body param, it can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`).
@@ -268,6 +269,17 @@ Required:
 Optional:
 
 - `pending` (List of String) The expected status sentinels for pending status.
+
+
+
+
+<a id="nestedatt--update_body_patches"></a>
+### Nested Schema for `update_body_patches`
+
+Required:
+
+- `path` (String) The path (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attribute to [patch](https://github.com/tidwall/sjson?tab=readme-ov-file#set-a-value).
+- `raw_json` (String) The raw json used as the patch value. It can contain `$(body.x.y.z)` parameter that reference property from the `state.output`.
 
 ## Import
 

@@ -55,7 +55,8 @@ type resourceData struct {
 	PrecheckUpdate types.List `tfsdk:"precheck_update"`
 	PrecheckDelete types.List `tfsdk:"precheck_delete"`
 
-	Body types.Dynamic `tfsdk:"body"`
+	Body              types.Dynamic `tfsdk:"body"`
+	UpdateBodyPatches types.List    `tfsdk:"update_body_patches"`
 
 	PollCreate types.Object `tfsdk:"poll_create"`
 	PollUpdate types.Object `tfsdk:"poll_update"`
@@ -81,6 +82,11 @@ type resourceData struct {
 	OutputAttrs    types.Set  `tfsdk:"output_attrs"`
 
 	Output types.Dynamic `tfsdk:"output"`
+}
+
+type bodyPatchData struct {
+	Path    types.String `tfsdk:"path"`
+	RawJSON types.String `tfsdk:"raw_json"`
 }
 
 type pollData struct {
@@ -343,6 +349,26 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				Description:         "The properties of the resource.",
 				MarkdownDescription: "The properties of the resource.",
 				Required:            true,
+			},
+
+			"update_body_patches": schema.ListNestedAttribute{
+				Description:         "The body patches for update only. Any change here won't cause a update API call by its own, only changes from `body` does. Note that this is almost only useful for APIs that require *after-create* attribute for an update (e.g. the resource ID).",
+				MarkdownDescription: "The body patches for update only. Any change here won't cause a update API call by its own, only changes from `body` does. Note that this is almost only useful for APIs that require *after-create* attribute for an update (e.g. the resource ID).",
+				Optional:            true,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"path": schema.StringAttribute{
+							Description:         "The path (in gjson syntax) to the attribute to patch.",
+							MarkdownDescription: "The path (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attribute to [patch](https://github.com/tidwall/sjson?tab=readme-ov-file#set-a-value).",
+							Required:            true,
+						},
+						"raw_json": schema.StringAttribute{
+							Description:         "The raw json used as the patch value. It can contain `$(body.x.y.z)` parameter that reference property from the `state.output`.",
+							MarkdownDescription: "The raw json used as the patch value. It can contain `$(body.x.y.z)` parameter that reference property from the `state.output`.",
+							Required:            true,
+						},
+					},
+				},
 			},
 
 			"poll_create": pollAttribute("Create"),
@@ -1003,6 +1029,44 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 				return
 			}
 			planBody = b
+		}
+
+		// Optionally patch the body.
+		var patches []bodyPatchData
+		if diags := plan.UpdateBodyPatches.ElementsAs(ctx, &patches, false); diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
+		if len(patches) != 0 {
+			stateOutput, err := dynamic.ToJSON(state.Output)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Read failure",
+					fmt.Sprintf("marshal state output: %v", err),
+				)
+				return
+			}
+			planBodyStr := string(planBody)
+			for i, patch := range patches {
+				pv, err := exparam.Expand(patch.RawJSON.ValueString(), stateOutput)
+				if err != nil {
+					resp.Diagnostics.AddError(
+						fmt.Sprintf("Failed to expand the %d-th patch for expression params", i),
+						err.Error(),
+					)
+					return
+				}
+
+				planBodyStr, err = sjson.SetRaw(planBodyStr, patch.Path.ValueString(), pv)
+				if err != nil {
+					resp.Diagnostics.AddError(
+						fmt.Sprintf("Failed to set json for the %d-th patch for expression params", i),
+						err.Error(),
+					)
+					return
+				}
+			}
+			planBody = []byte(planBodyStr)
 		}
 
 		path := plan.ID.ValueString()
