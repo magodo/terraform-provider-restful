@@ -224,7 +224,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 		return
 	}
 
-	opt, diags := r.p.apiOpt.ForResourceOperation(ctx, plan)
+	opt, diags := r.p.apiOpt.ForOperation(ctx, plan.Method, plan.Query, plan.Header, plan.OperationQuery, plan.OperationHeader)
 	diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
@@ -348,7 +348,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 	output, err := dynamic.FromJSONImplied(rb)
 	if err != nil {
 		diagnostics.AddError(
-			"Evaluating `output` during Read",
+			"Converting `output` from JSON to dynamic",
 			err.Error(),
 		)
 		return
@@ -391,7 +391,7 @@ func (r *OperationResource) Delete(ctx context.Context, req resource.DeleteReque
 		return
 	}
 
-	opt, diags := r.p.apiOpt.ForResourceOperationDelete(ctx, state)
+	opt, diags := r.p.apiOpt.ForOperation(ctx, state.DeleteMethod, state.Query, state.Header, state.DeleteQuery, state.DeleteHeader)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return

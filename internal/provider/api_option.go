@@ -11,7 +11,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/magodo/terraform-provider-restful/internal/client"
 	"github.com/magodo/terraform-provider-restful/internal/dynamic"
-	"github.com/magodo/terraform-provider-restful/internal/exparam"
 )
 
 type apiOption struct {
@@ -40,47 +39,6 @@ func validateLocator(locator string) error {
 		return nil
 	default:
 		return fmt.Errorf("unknown locator key: %s", l)
-	}
-}
-
-func expandLocator(locator string, body basetypes.DynamicValue) (client.ValueLocator, error) {
-	if locator == "code" {
-		return client.CodeLocator{}, nil
-	}
-	l, r, ok := strings.Cut(locator, ".")
-	if !ok {
-		return nil, fmt.Errorf("locator does't contain `.`: %s", locator)
-	}
-	if r == "" {
-		return nil, fmt.Errorf("empty right hand value for locator: %s", locator)
-	}
-	switch l {
-	case "exact":
-		return client.ExactLocator(r), nil
-	case "header":
-		b, err := dynamic.ToJSON(body)
-		if err != nil {
-			return nil, fmt.Errorf("dynamic to json: %v", err)
-		}
-
-		rr, err := exparam.Expand(r, b)
-		if err != nil {
-			return nil, fmt.Errorf("expand param of %q: %v", r, err)
-		}
-		return client.HeaderLocator(rr), nil
-	case "body":
-		b, err := dynamic.ToJSON(body)
-		if err != nil {
-			return nil, fmt.Errorf("dynamic to json: %v", err)
-		}
-
-		rr, err := exparam.Expand(r, b)
-		if err != nil {
-			return nil, fmt.Errorf("expand param of %q: %v", r, err)
-		}
-		return client.BodyLocator(rr), nil
-	default:
-		return nil, fmt.Errorf("unknown locator key: %s", l)
 	}
 }
 
@@ -147,21 +105,11 @@ func (opt apiOption) ForDataSourceRead(ctx context.Context, d dataSourceData) (*
 	return &out, nil
 }
 
-func (opt apiOption) ForResourceOperation(ctx context.Context, d operationResourceData) (*client.OperationOption, diag.Diagnostics) {
+func (opt apiOption) ForOperation(ctx context.Context, method basetypes.StringValue, defQuery, defHeader, ovQuery, ovHeader basetypes.MapValue) (*client.OperationOption, diag.Diagnostics) {
 	out := client.OperationOption{
-		Method: d.Method.ValueString(),
-		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query).TakeOrSelf(ctx, d.OperationQuery),
-		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header).TakeOrSelf(ctx, d.OperationHeader),
-	}
-
-	return &out, nil
-}
-
-func (opt apiOption) ForResourceOperationDelete(ctx context.Context, d operationResourceData) (*client.OperationOption, diag.Diagnostics) {
-	out := client.OperationOption{
-		Method: d.DeleteMethod.ValueString(),
-		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query).TakeOrSelf(ctx, d.DeleteQuery),
-		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header).TakeOrSelf(ctx, d.DeleteHeader),
+		Method: method.ValueString(),
+		Query:  opt.Query.Clone().TakeOrSelf(ctx, defQuery).TakeOrSelf(ctx, ovQuery),
+		Header: opt.Header.Clone().TakeOrSelf(ctx, defHeader).TakeOrSelf(ctx, ovHeader),
 	}
 
 	return &out, nil
@@ -176,7 +124,13 @@ func (opt apiOption) ForPoll(ctx context.Context, defaultHeader client.Header, d
 		return nil, diags
 	}
 
-	statusLocator, err := expandLocator(d.StatusLocator.ValueString(), body)
+	bodyJSON, err := dynamic.ToJSON(body)
+	if err != nil {
+		diags.AddError("Failed to convert dynamic body to json", err.Error())
+		return nil, diags
+	}
+
+	statusLocator, err := expandValueLocatorWithParam(d.StatusLocator.ValueString(), bodyJSON)
 	if err != nil {
 		diags.AddError("Failed to parse status locator", err.Error())
 		return nil, diags
@@ -184,7 +138,7 @@ func (opt apiOption) ForPoll(ctx context.Context, defaultHeader client.Header, d
 
 	var urlLocator client.ValueLocator
 	if !d.UrlLocator.IsNull() {
-		loc, err := expandLocator(d.UrlLocator.ValueString(), body)
+		loc, err := expandValueLocatorWithParam(d.UrlLocator.ValueString(), bodyJSON)
 		if err != nil {
 			diags.AddError("Failed to parse url locator", err.Error())
 			return nil, diags
@@ -222,7 +176,13 @@ func (opt apiOption) ForPrecheck(ctx context.Context, defaultPath string, defaul
 		return nil, diags
 	}
 
-	statusLocator, err := expandLocator(d.StatusLocator.ValueString(), body)
+	bodyJSON, err := dynamic.ToJSON(body)
+	if err != nil {
+		diags.AddError("Failed to convert dynamic body to json", err.Error())
+		return nil, diags
+	}
+
+	statusLocator, err := expandValueLocatorWithParam(d.StatusLocator.ValueString(), bodyJSON)
 	if err != nil {
 		diags.AddError("Failed to parse status locator", err.Error())
 		return nil, diags
