@@ -55,7 +55,11 @@ data "restful_resource" "track" {
 resource "restful_operation" "add_tracks_to_playlist" {
   path   = "${restful_resource.playlist.id}/tracks"
   method = "PUT"
+  delete_method = "DELETE"
   body = {
     uris = [for d in data.restful_resource.track : d.output.tracks.items[0].uri]
+  }
+  delete_body = {
+    tracks = [for d in data.restful_resource.track : { uri: d.output.tracks.items[0].uri }]
   }
 }
