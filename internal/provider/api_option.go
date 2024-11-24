@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -21,25 +20,6 @@ type apiOption struct {
 	MergePatchDisabled bool
 	Query              client.Query
 	Header             client.Header
-}
-
-func validateLocator(locator string) error {
-	if locator == "code" {
-		return nil
-	}
-	l, r, ok := strings.Cut(locator, ".")
-	if !ok {
-		return fmt.Errorf("locator does't contain `.`: %s", locator)
-	}
-	if r == "" {
-		return fmt.Errorf("empty right hand value for locator: %s", locator)
-	}
-	switch l {
-	case "exact", "header", "body":
-		return nil
-	default:
-		return fmt.Errorf("unknown locator key: %s", l)
-	}
 }
 
 func (opt apiOption) ForResourceCreate(ctx context.Context, d resourceData) (*client.CreateOption, diag.Diagnostics) {

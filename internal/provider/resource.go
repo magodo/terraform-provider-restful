@@ -20,6 +20,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/magodo/terraform-provider-restful/internal/client"
 	"github.com/magodo/terraform-provider-restful/internal/dynamic"
 	"github.com/magodo/terraform-provider-restful/internal/exparam"
@@ -640,6 +641,8 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 		return
 	}
 
+	tflog.Info(ctx, "Create a resource", map[string]interface{}{"path": plan.Path.ValueString()})
+
 	opt, diags := r.p.apiOpt.ForResourceCreate(ctx, plan)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
@@ -818,6 +821,10 @@ func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *reso
 		return
 	}
 
+	if updateBody {
+		tflog.Info(ctx, "Read a resource", map[string]interface{}{"id": state.ID.ValueString()})
+	}
+
 	opt, diags := r.p.apiOpt.ForResourceRead(ctx, state)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
@@ -964,6 +971,8 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 	if diags.HasError() {
 		return
 	}
+
+	tflog.Info(ctx, "Update a resource", map[string]interface{}{"id": state.ID.ValueString()})
 
 	var plan resourceData
 	diags = req.Plan.Get(ctx, &plan)
@@ -1168,6 +1177,8 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 	if diags.HasError() {
 		return
 	}
+
+	tflog.Info(ctx, "Delete a resource", map[string]interface{}{"id": state.ID.ValueString()})
 
 	opt, diags := r.p.apiOpt.ForResourceDelete(ctx, state)
 	resp.Diagnostics.Append(diags...)

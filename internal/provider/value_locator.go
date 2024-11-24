@@ -8,13 +8,32 @@ import (
 	"github.com/magodo/terraform-provider-restful/internal/exparam"
 )
 
+func validateLocator(locator string) error {
+	if locator == "code" {
+		return nil
+	}
+	l, r, ok := strings.Cut(locator, ".")
+	if !ok {
+		return fmt.Errorf("locator doesn't contain `.`: %s", locator)
+	}
+	if r == "" {
+		return fmt.Errorf("empty right hand value for locator: %s", locator)
+	}
+	switch l {
+	case "exact", "header", "body":
+		return nil
+	default:
+		return fmt.Errorf("unknown locator key: %s", l)
+	}
+}
+
 func expandValueLocatorWithParam(locator string, body []byte) (client.ValueLocator, error) {
 	if locator == "code" {
 		return client.CodeLocator{}, nil
 	}
 	l, r, ok := strings.Cut(locator, ".")
 	if !ok {
-		return nil, fmt.Errorf("locator does't contain `.`: %s", locator)
+		return nil, fmt.Errorf("locator doesn't contain `.`: %s", locator)
 	}
 	if r == "" {
 		return nil, fmt.Errorf("empty right hand value for locator: %s", locator)
@@ -42,7 +61,7 @@ func expandValueLocatorWithParam(locator string, body []byte) (client.ValueLocat
 func expandValueLocator(locator string) (client.ValueLocator, error) {
 	l, r, ok := strings.Cut(locator, ".")
 	if !ok {
-		return nil, fmt.Errorf("locator does't contain `.`: %s", locator)
+		return nil, fmt.Errorf("locator doesn't contain `.`: %s", locator)
 	}
 	if r == "" {
 		return nil, fmt.Errorf("empty right hand value for locator: %s", locator)

@@ -7,8 +7,9 @@ toolchain go1.23.3
 require (
 	github.com/evanphx/json-patch v0.5.2
 	github.com/go-resty/resty/v2 v2.10.0
+	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/terraform-plugin-framework v1.13.0
-	github.com/hashicorp/terraform-plugin-framework-validators v0.12.0
+	github.com/hashicorp/terraform-plugin-framework-validators v0.15.0
 	github.com/hashicorp/terraform-plugin-go v0.25.0
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.33.0
 	github.com/stretchr/testify v1.8.3
@@ -26,7 +27,6 @@ require (
 	github.com/hashicorp/go-checkpoint v0.5.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-cty v1.4.1-0.20200414143053-d3edf31b6320 // indirect
-	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-version v1.6.0 // indirect
 	github.com/hashicorp/hc-install v0.6.3 // indirect
 	github.com/hashicorp/hcl/v2 v2.19.1 // indirect

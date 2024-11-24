@@ -283,6 +283,8 @@ func (c *Client) Operation(ctx context.Context, path string, body basetypes.Dyna
 	}
 
 	switch opt.Method {
+	case "GET":
+		return req.Get(path)
 	case "POST":
 		return req.Post(path)
 	case "PUT":

@@ -4,10 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/mapvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/ephemeral"
+	"github.com/hashicorp/terraform-plugin-framework/ephemeral/schema"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/magodo/terraform-provider-restful/internal/dynamic"
+	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
 )
 
 type EphemeralResource struct {
@@ -24,8 +32,8 @@ const (
 )
 
 type ephemeralResourceData struct {
-	Path       types.String  `tfsdk:"path"`
 	Method     types.String  `tfsdk:"method"`
+	Path       types.String  `tfsdk:"path"`
 	Body       types.Dynamic `tfsdk:"body"`
 	OpenQuery  types.Map     `tfsdk:"open_query"`
 	OpenHeader types.Map     `tfsdk:"open_header"`
@@ -76,7 +84,215 @@ func (r *EphemeralResource) Configure(ctx context.Context, req ephemeral.Configu
 	r.p = providerData.provider
 }
 
-func (e *EphemeralResource) Schema(context.Context, ephemeral.SchemaRequest, *ephemeral.SchemaResponse) {
+func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequest, resp *ephemeral.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Description:         "`restful_resource` manages an ephemeral resource.",
+		MarkdownDescription: "`restful_resource` manages an ephemeral resource.",
+		Attributes: map[string]schema.Attribute{
+			"method": schema.StringAttribute{
+				Description:         "The HTTP method to open the ephemeral resource. Possible values are `GET`, `PUT`, `POST`, `PATCH`.",
+				MarkdownDescription: "The HTTP method to open the ephemeral resource. Possible values are `GET`, `PUT`, `POST`, `PATCH`.",
+				Required:            true,
+				Validators: []validator.String{
+					stringvalidator.OneOf("GET", "PUT", "POST", "PATCH"),
+				},
+			},
+			"path": schema.StringAttribute{
+				Description:         "The path used to open the ephemeral resource, relative to the `base_url` of the provider.",
+				MarkdownDescription: "The path used to open the ephemeral resource, relative to the `base_url` of the provider.",
+				Required:            true,
+			},
+			"body": schema.DynamicAttribute{
+				Description:         "The payload to open the ephemeral resource.",
+				MarkdownDescription: "The payload to open the ephemeral resource.",
+				Optional:            true,
+			},
+			"open_query": schema.MapAttribute{
+				Description:         operationOverridableAttrDescription("query", "open"),
+				MarkdownDescription: operationOverridableAttrDescription("query", "open"),
+				ElementType:         types.ListType{ElemType: types.StringType},
+				Optional:            true,
+			},
+			"open_header": schema.MapAttribute{
+				Description:         operationOverridableAttrDescription("header", "open"),
+				MarkdownDescription: operationOverridableAttrDescription("header", "open"),
+				ElementType:         types.StringType,
+				Optional:            true,
+			},
+			"query": schema.MapAttribute{
+				Description:         "The query parameters that are applied to each request. This overrides the `query` set in the provider block.",
+				MarkdownDescription: "The query parameters that are applied to each request. This overrides the `query` set in the provider block.",
+				ElementType:         types.ListType{ElemType: types.StringType},
+				Optional:            true,
+			},
+			"header": schema.MapAttribute{
+				Description:         "The header parameters that are applied to each request. This overrides the `header` set in the provider block.",
+				MarkdownDescription: "The header parameters that are applied to each request. This overrides the `header` set in the provider block.",
+				ElementType:         types.StringType,
+				Optional:            true,
+			},
+
+			"renew_method": schema.StringAttribute{
+				Description:         "The HTTP method to renew the ephemeral resource. Possible values are `GET`, `PUT`, `POST`, `PATCH`.",
+				MarkdownDescription: "The HTTP method to renew the ephemeral resource. Possible values are `GET`, `PUT`, `POST`, `PATCH`.",
+				Optional:            true,
+				Validators: []validator.String{
+					stringvalidator.OneOf("GET", "PUT", "POST", "PATCH"),
+					stringvalidator.AlsoRequires(
+						path.MatchRoot("renew_path"),
+					),
+				},
+			},
+			"renew_path": schema.StringAttribute{
+				Description:         "The path used to renew the ephemeral resource, relative to the `base_url` of the provider.",
+				MarkdownDescription: "The path used to renew the ephemeral resource, relative to the `base_url` of the provider.",
+				Optional:            true,
+				Validators: []validator.String{
+					stringvalidator.AlsoRequires(
+						path.MatchRoot("renew_method"),
+					),
+				},
+			},
+			"renew_body": schema.DynamicAttribute{
+				Description:         "The payload to renew the ephemeral resource.",
+				MarkdownDescription: "The payload to renew the ephemeral resource.",
+				Optional:            true,
+				// TODO: Depends on https://github.com/hashicorp/terraform-plugin-framework-validators/pull/249
+				Validators: []validator.Dynamic{},
+			},
+			"renew_query": schema.MapAttribute{
+				Description:         operationOverridableAttrDescription("query", "renew"),
+				MarkdownDescription: operationOverridableAttrDescription("query", "renew"),
+				ElementType:         types.ListType{ElemType: types.StringType},
+				Optional:            true,
+				Validators: []validator.Map{
+					mapvalidator.AlsoRequires(
+						path.MatchRoot("renew_method"),
+					),
+				},
+			},
+			"renew_header": schema.MapAttribute{
+				Description:         operationOverridableAttrDescription("header", "renew"),
+				MarkdownDescription: operationOverridableAttrDescription("header", "renew"),
+				ElementType:         types.StringType,
+				Optional:            true,
+				Validators: []validator.Map{
+					mapvalidator.AlsoRequires(
+						path.MatchRoot("renew_method"),
+					),
+				},
+			},
+
+			"expiry_type": schema.StringAttribute{
+				Description:         `The type of the ephemeral resource expiry time. Possible values are: "duration", "time" and "time.[layout]". "duration" means the expiry time is a duration; "time" means the expiry time is a time, which defaults to RF3339 layout, unless the "layout" is explicitly specified (following Go's convention: https://pkg.go.dev/time).`,
+				MarkdownDescription: `The type of the ephemeral resource expiry time. Possible values are: "duration", "time" and "time.[layout]". "duration" means the expiry time is a [duration](https://pkg.go.dev/time#ParseDuration); "time" means the expiry time is a time, which defaults to RF3339 layout, unless the "layout" is explicitly specified (following Go's [convention](https://pkg.go.dev/time)).`,
+				Optional:            true,
+				Validators: []validator.String{
+					stringvalidator.AlsoRequires(
+						path.MatchRoot("renew_method"),
+						path.MatchRoot("expiry_locator"),
+					),
+					myvalidator.StringIsParsable("expiry_type", func(s string) error {
+						return validateExpiryType(s)
+					}),
+				},
+			},
+
+			"expiry_locator": schema.StringAttribute{
+				Description:         "Specifies how to discover the expiry time. The format is `scope.path`, where `scope` can be one of `exact`, `header` and `body`, and the `path` is using the gjson syntax.",
+				MarkdownDescription: "Specifies how to discover the expiry time. The format is `scope.path`, where `scope` can be one of `exact`, `header` and `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).",
+				Required:            true,
+				Validators: []validator.String{
+					stringvalidator.AlsoRequires(
+						path.MatchRoot("renew_method"),
+						path.MatchRoot("expiry_type"),
+					),
+					myvalidator.StringIsParsable("expiry_locator", func(s string) error {
+						return validateLocator(s)
+					}),
+				},
+			},
+			"expiry_ahead": schema.StringAttribute{
+				Description:         "Advance the ephemeral resource expiry time by this duration. The format is same as Go's ParseDuration.",
+				MarkdownDescription: "Advance the ephemeral resource expiry time by this duration. The format is same as Go's [ParseDuration](https://pkg.go.dev/time#ParseDuration).",
+				Optional:            true,
+				Validators: []validator.String{
+					stringvalidator.AlsoRequires(
+						path.MatchRoot("renew_method"),
+					),
+					myvalidator.StringIsParsable("expiry_ahead", func(s string) error {
+						_, err := time.ParseDuration(s)
+						return err
+					}),
+				},
+			},
+
+			"close_method": schema.StringAttribute{
+				Description:         "The HTTP method to close the ephemeral resource. Possible values are `PUT`, `POST`, `PATCH`, `DELETE`.",
+				MarkdownDescription: "The HTTP method to close the ephemeral resource. Possible values are `PUT`, `POST`, `PATCH`, `DELETE`.",
+				Optional:            true,
+				Validators: []validator.String{
+					stringvalidator.OneOf("PUT", "POST", "PATCH", "DELETE"),
+					stringvalidator.AlsoRequires(
+						path.MatchRoot("close_path"),
+					),
+				},
+			},
+			"close_path": schema.StringAttribute{
+				Description:         "The path used to close the ephemeral resource, relative to the `base_url` of the provider.",
+				MarkdownDescription: "The path used to close the ephemeral resource, relative to the `base_url` of the provider.",
+				Optional:            true,
+				Validators: []validator.String{
+					stringvalidator.AlsoRequires(
+						path.MatchRoot("close_method"),
+					),
+				},
+			},
+			"close_body": schema.DynamicAttribute{
+				Description:         "The payload to close the ephemeral resource.",
+				MarkdownDescription: "The payload to close the ephemeral resource.",
+				Optional:            true,
+				// TODO: Depends on https://github.com/hashicorp/terraform-plugin-framework-validators/pull/249
+				Validators: []validator.Dynamic{},
+			},
+			"close_query": schema.MapAttribute{
+				Description:         operationOverridableAttrDescription("query", "close"),
+				MarkdownDescription: operationOverridableAttrDescription("query", "close"),
+				ElementType:         types.ListType{ElemType: types.StringType},
+				Optional:            true,
+				Validators: []validator.Map{
+					mapvalidator.AlsoRequires(
+						path.MatchRoot("close_method"),
+					),
+				},
+			},
+			"close_header": schema.MapAttribute{
+				Description:         operationOverridableAttrDescription("header", "close"),
+				MarkdownDescription: operationOverridableAttrDescription("header", "close"),
+				ElementType:         types.StringType,
+				Optional:            true,
+				Validators: []validator.Map{
+					mapvalidator.AlsoRequires(
+						path.MatchRoot("close_method"),
+					),
+				},
+			},
+
+			"output_attrs": schema.SetAttribute{
+				Description:         "A set of `output` attribute paths (in gjson syntax) that will be exported in the `output`. If this is not specified, all attributes will be exported by `output`.",
+				MarkdownDescription: "A set of `output` attribute paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) that will be exported in the `output`. If this is not specified, all attributes will be exported by `output`.",
+				Optional:            true,
+				ElementType:         types.StringType,
+			},
+
+			"output": schema.DynamicAttribute{
+				Description:         "The response body.",
+				MarkdownDescription: "The response body.",
+				Computed:            true,
+			},
+		},
+	}
+	return
 }
 
 func (e *EphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequest, resp *ephemeral.OpenResponse) {
@@ -89,6 +305,8 @@ func (e *EphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequest,
 	if diags.HasError() {
 		return
 	}
+
+	tflog.Info(ctx, "Open an ephemeral resource", map[string]interface{}{"path": config.Path.ValueString()})
 
 	opt, diags := e.p.apiOpt.ForOperation(ctx, config.Method, config.Query, config.Header, config.OpenQuery, config.OpenHeader)
 	resp.Diagnostics.Append(diags...)
@@ -122,17 +340,21 @@ func (e *EphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequest,
 			)
 			return
 		}
+		tflog.Info(ctx, fmt.Sprintf("renew_at=%v", t))
 		resp.RenewAt = t
 	}
 
 	// Set Renew and Close, if any
 	if !config.RenewMethod.IsNull() {
 		ed := ephemeralResourcePrivateData{
-			Method: config.RenewMethod,
-			Path:   config.RenewPath,
-			Body:   config.RenewBody,
-			Header: config.RenewHeader,
-			Query:  config.RenewQuery,
+			Method:        config.RenewMethod,
+			Path:          config.RenewPath,
+			Body:          config.RenewBody,
+			Header:        config.RenewHeader,
+			Query:         config.RenewQuery,
+			ExpiryType:    config.ExpiryType,
+			ExpiryLocator: config.ExpiryLocator,
+			ExpiryAhead:   config.ExpiryAhead,
 		}
 		b, err := json.Marshal(ed)
 		if err != nil {
@@ -227,6 +449,8 @@ func (e *EphemeralResource) Renew(ctx context.Context, req ephemeral.RenewReques
 		return
 	}
 
+	tflog.Info(ctx, "Renew an ephemeral resource", map[string]interface{}{"path": pd.Path.ValueString()})
+
 	opt, diags := e.p.apiOpt.ForOperation(ctx, pd.Method, pd.DefaultQuery, pd.DefaultHeader, pd.Query, pd.Header)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
@@ -278,6 +502,8 @@ func (e *EphemeralResource) Close(ctx context.Context, req ephemeral.CloseReques
 		)
 		return
 	}
+
+	tflog.Info(ctx, "Close an ephemeral resource", map[string]interface{}{"path": pd.Path.ValueString()})
 
 	opt, diags := e.p.apiOpt.ForOperation(ctx, pd.Method, pd.DefaultQuery, pd.DefaultHeader, pd.Query, pd.Header)
 	resp.Diagnostics.Append(diags...)

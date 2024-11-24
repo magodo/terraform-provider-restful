@@ -17,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/magodo/terraform-provider-restful/internal/client"
 	"github.com/magodo/terraform-provider-restful/internal/dynamic"
 	"github.com/magodo/terraform-provider-restful/internal/exparam"
@@ -98,7 +99,7 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 				},
 			},
 			"method": schema.StringAttribute{
-				Description:         "The HTTP method for the `Create`/`Update` call. Possible values are `GEE`, `PUT`, `POST`, `PATCH` and `DELETE`.",
+				Description:         "The HTTP method for the `Create`/`Update` call. Possible values are `GET`, `PUT`, `POST`, `PATCH` and `DELETE`.",
 				MarkdownDescription: "The HTTP method for the `Create`/`Update` call. Possible values are `GET`, `PUT`, `POST`, `PATCH` and `DELETE`.",
 				Required:            true,
 				Validators: []validator.String{
@@ -135,8 +136,8 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 				Optional:            true,
 			},
 			"operation_header": schema.MapAttribute{
-				Description:         operationOverridableAttrDescription("header", "read"),
-				MarkdownDescription: operationOverridableAttrDescription("header", "read"),
+				Description:         operationOverridableAttrDescription("header", "operation"),
+				MarkdownDescription: operationOverridableAttrDescription("header", "operation"),
 				ElementType:         types.StringType,
 				Optional:            true,
 			},
@@ -222,6 +223,12 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 	diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
+	}
+
+	if forCreate {
+		tflog.Info(ctx, "Create an operation resource", map[string]interface{}{"id": plan.Path.ValueString()})
+	} else {
+		tflog.Info(ctx, "Update an operation resource", map[string]interface{}{"id": plan.ID.ValueString()})
 	}
 
 	opt, diags := r.p.apiOpt.ForOperation(ctx, plan.Method, plan.Query, plan.Header, plan.OperationQuery, plan.OperationHeader)
@@ -386,6 +393,8 @@ func (r *OperationResource) Delete(ctx context.Context, req resource.DeleteReque
 	if diags.HasError() {
 		return
 	}
+
+	tflog.Info(ctx, "Delete an operation resource", map[string]interface{}{"id": state.ID.ValueString()})
 
 	if state.DeleteMethod.IsNull() {
 		return

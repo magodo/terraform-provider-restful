@@ -59,3 +59,22 @@ func GetExpiryTime(typ string, loc string, ahead string, resp resty.Response) (t
 		return time.Time{}, fmt.Errorf("invalid format of expiry type")
 	}
 }
+
+func validateExpiryType(v string) error {
+	l, r, ok := strings.Cut(v, ".")
+	switch l {
+	case "time":
+		if ok {
+			if _, err := time.Parse(r, v); err != nil {
+				return err
+			}
+		}
+	case "duration":
+		if ok {
+			return fmt.Errorf("invalid format of expiry type")
+		}
+	default:
+		return fmt.Errorf("invalid format of expiry type")
+	}
+	return nil
+}
