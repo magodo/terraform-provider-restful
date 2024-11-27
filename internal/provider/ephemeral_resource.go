@@ -13,8 +13,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/magodo/terraform-provider-restful/internal/dynamic"
+	"github.com/magodo/terraform-provider-restful/internal/exparam"
 	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
 )
 
@@ -144,8 +146,8 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 				},
 			},
 			"renew_path": schema.StringAttribute{
-				Description:         "The path used to renew the ephemeral resource, relative to the `base_url` of the provider.",
-				MarkdownDescription: "The path used to renew the ephemeral resource, relative to the `base_url` of the provider.",
+				Description:         "The path used to renew the ephemeral resource, relative to the `base_url` of the provider. " + pathDescription,
+				MarkdownDescription: "The path used to renew the ephemeral resource, relative to the `base_url` of the provider. " + pathDescription,
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.AlsoRequires(
@@ -239,8 +241,8 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 				},
 			},
 			"close_path": schema.StringAttribute{
-				Description:         "The path used to close the ephemeral resource, relative to the `base_url` of the provider.",
-				MarkdownDescription: "The path used to close the ephemeral resource, relative to the `base_url` of the provider.",
+				Description:         "The path used to close the ephemeral resource, relative to the `base_url` of the provider. " + pathDescription,
+				MarkdownDescription: "The path used to close the ephemeral resource, relative to the `base_url` of the provider. " + pathDescription,
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.AlsoRequires(
@@ -346,9 +348,16 @@ func (e *EphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequest,
 
 	// Set Renew and Close, if any
 	if !config.RenewMethod.IsNull() {
+		path, err := exparam.ExpandWithPath(config.RenewPath.ValueString(), config.Path.ValueString(), response.Body())
+		if err != nil {
+			resp.Diagnostics.AddError(
+				fmt.Sprintf("Failed to build the path for renew the resource"),
+				err.Error(),
+			)
+		}
 		ed := ephemeralResourcePrivateData{
 			Method:        config.RenewMethod,
-			Path:          config.RenewPath,
+			Path:          basetypes.NewStringValue(path),
 			Body:          config.RenewBody,
 			Header:        config.RenewHeader,
 			Query:         config.RenewQuery,
@@ -371,9 +380,16 @@ func (e *EphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequest,
 	}
 
 	if !config.CloseMethod.IsNull() {
+		path, err := exparam.ExpandWithPath(config.ClosePath.ValueString(), config.Path.ValueString(), response.Body())
+		if err != nil {
+			resp.Diagnostics.AddError(
+				fmt.Sprintf("Failed to build the path for renew the resource"),
+				err.Error(),
+			)
+		}
 		ed := ephemeralResourcePrivateData{
 			Method: config.CloseMethod,
-			Path:   config.ClosePath,
+			Path:   basetypes.NewStringValue(path),
 			Body:   config.CloseBody,
 			Header: config.CloseHeader,
 			Query:  config.CloseQuery,
