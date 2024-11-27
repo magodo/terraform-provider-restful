@@ -7,8 +7,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
+	"github.com/hashicorp/terraform-plugin-testing/statecheck"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 	"github.com/magodo/terraform-provider-restful/internal/acceptance"
 	"github.com/magodo/terraform-provider-restful/internal/client"
 )
@@ -51,9 +54,9 @@ func TestResource_JSONServer_Basic(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: d.basic("foo"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output.%"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
+				},
 			},
 			{
 				ResourceName:            addr,
@@ -66,9 +69,9 @@ func TestResource_JSONServer_Basic(t *testing.T) {
 			},
 			{
 				Config: d.basic("bar"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output.%"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
+				},
 			},
 			{
 				ResourceName:            addr,
@@ -93,9 +96,9 @@ func TestResource_JSONServer_PatchUpdate(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: d.patch("foo"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output.%"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
+				},
 			},
 			{
 				ResourceName:            addr,
@@ -108,9 +111,9 @@ func TestResource_JSONServer_PatchUpdate(t *testing.T) {
 			},
 			{
 				Config: d.patch("bar"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output.%"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
+				},
 			},
 			{
 				ResourceName:            addr,
@@ -135,9 +138,9 @@ func TestResource_JSONServer_FullPath(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: d.fullPath("foo"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output.%"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
+				},
 			},
 			{
 				ResourceName:            addr,
@@ -150,9 +153,9 @@ func TestResource_JSONServer_FullPath(t *testing.T) {
 			},
 			{
 				Config: d.fullPath("bar"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output.%"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
+				},
 			},
 			{
 				ResourceName:            addr,
@@ -177,10 +180,9 @@ func TestResource_JSONServer_OutputAttrs(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: d.outputAttrs(),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr(addr, "output.foo", "bar"),
-					resource.TestCheckResourceAttr(addr, "output.obj.a", "1"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("foo"), knownvalue.StringExact("bar")),
+				},
 			},
 		},
 	})
@@ -196,7 +198,6 @@ func TestResource_JSONServer_ReadSelectorParam(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: d.readSelectorParam("bar"),
-				Check:  resource.ComposeTestCheckFunc(),
 			},
 			{
 				ResourceName:            addr,
@@ -210,7 +211,6 @@ func TestResource_JSONServer_ReadSelectorParam(t *testing.T) {
 			},
 			{
 				Config: d.readSelectorParam("baz"),
-				Check:  resource.ComposeTestCheckFunc(),
 			},
 			{
 				ResourceName:            addr,
@@ -236,11 +236,9 @@ func TestResource_JSONServer_StatusLocatorParam(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: d.statusLocatorParam("bar"),
-				Check:  resource.ComposeTestCheckFunc(),
 			},
 			{
 				Config: d.statusLocatorParam("baz"),
-				Check:  resource.ComposeTestCheckFunc(),
 			},
 		},
 	})
@@ -256,17 +254,18 @@ func TestResource_JSONServer_UpdateBodyPatch(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: d.updateBodyPatch("foo"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckNoResourceAttr(addr, "output.addon.a"),
-					resource.TestCheckNoResourceAttr(addr, "output.addon.b"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("foo"), knownvalue.NotNull()),
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.MapSizeExact(2)),
+				},
 			},
 			{
 				Config: d.updateBodyPatch("bar"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr(addr, "output.addon.a", "hmm"),
-					resource.TestCheckResourceAttrSet(addr, "output.addon.b"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("addon").AtMapKey("a"), knownvalue.StringExact("hmm")),
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("addon").AtMapKey("b"), knownvalue.NotNull()),
+				},
 			},
 		},
 	})

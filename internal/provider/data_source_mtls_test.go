@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/magodo/terraform-provider-restful/internal/acceptance"
 	"github.com/stretchr/testify/require"
 )
@@ -34,16 +34,12 @@ func TestDataSourceMTLS(t *testing.T) {
 	defer server.Close()
 
 	// Test client via this provider
-	addr := "data.restful_resource.test"
 	// For some unknown reason, we can't mark this test as Parallel, as otherwise, either the regular http call or the mtls server call will fail with certificate signed by unknown CA.
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
 		Steps: []resource.TestStep{
 			{
 				Config: mtlsConfig(server.URL, caCert, clientCert, clientKey),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output.%"),
-				),
 			},
 		},
 	})

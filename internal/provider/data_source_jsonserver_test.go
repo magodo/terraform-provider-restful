@@ -2,9 +2,13 @@ package provider_test
 
 import (
 	"fmt"
+	"math/big"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
+	"github.com/hashicorp/terraform-plugin-testing/statecheck"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 	"github.com/magodo/terraform-provider-restful/internal/acceptance"
 )
 
@@ -19,9 +23,9 @@ func TestDataSource_JSONServer_Basic(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: d.dsBasic(),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(dsaddr, "output.%"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(dsaddr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
+				},
 			},
 		},
 	})
@@ -38,9 +42,9 @@ func TestDataSource_JSONServer_WithSelector(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: d.dsWithSelector(),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(dsaddr, "output.%"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(dsaddr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
+				},
 			},
 		},
 	})
@@ -57,10 +61,10 @@ func TestDataSource_JSONServer_WithOutputAttrs(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: d.dsWithOutputAttrs(),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr(dsaddr, "output.foo", "bar"),
-					resource.TestCheckResourceAttr(dsaddr, "output.obj.a", "1"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(dsaddr, tfjsonpath.New("output").AtMapKey("foo"), knownvalue.StringExact("bar")),
+					statecheck.ExpectKnownValue(dsaddr, tfjsonpath.New("output").AtMapKey("obj").AtMapKey("a"), knownvalue.NumberExact(big.NewFloat(1))),
+				},
 			},
 		},
 	})
@@ -75,10 +79,10 @@ func TestDataSource_JSONServer_NotExists(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: d.dsNotExist(),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(dsaddr, "id"),
-					resource.TestCheckNoResourceAttr(dsaddr, "output.%"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(dsaddr, tfjsonpath.New("id"), knownvalue.NotNull()),
+					statecheck.ExpectKnownValue(dsaddr, tfjsonpath.New("output"), knownvalue.Null()),
+				},
 			},
 		},
 	})

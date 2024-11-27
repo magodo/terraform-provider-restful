@@ -8,7 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
+	"github.com/hashicorp/terraform-plugin-testing/statecheck"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 	"github.com/magodo/terraform-provider-restful/internal/acceptance"
 	"github.com/stretchr/testify/require"
 )
@@ -55,15 +58,18 @@ func TestEphemeral_CodeServer_basic(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: d.basic(srv.URL),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("echo.test", tfjsonpath.New("data").AtMapKey("foo"), knownvalue.StringExact("bar")),
+				},
 			},
 		},
 	})
 
 	//t.Log(leaseCnt, updateLeaseCnt, unleaseCnt)
 
-	require.Equal(t, 8, leaseCnt, "open")
+	require.Equal(t, 6, leaseCnt, "open")
 	require.Equal(t, 4, updateLeaseCnt, "renew") // 2 (sleep time) / (1-0.5) = 4
-	require.Equal(t, 8, unleaseCnt, "close")
+	require.Equal(t, 6, unleaseCnt, "close")
 }
 
 func (d codeServerEphemeral) basic(url string) string {
@@ -103,5 +109,11 @@ resource "restful_operation" "test" {
   }
   provider = restful.sleep
 }
+
+provider "echo" {
+  data = ephemeral.restful_resource.test.output
+}
+
+resource "echo" "test" {}
 `, url, url)
 }
