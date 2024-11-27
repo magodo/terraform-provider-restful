@@ -7,7 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
+	"github.com/hashicorp/terraform-plugin-testing/statecheck"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 	"github.com/magodo/terraform-provider-restful/internal/acceptance"
 )
 
@@ -31,9 +34,9 @@ func TestOperation_CodeServer_Empty(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: d.empty(),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckNoResourceAttr(addr, "output"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.Null()),
+				},
 			},
 		},
 	})
@@ -62,7 +65,6 @@ func TestOperation_CodeServer_idBuilder(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: d.idBilder(),
-				Check:  resource.ComposeTestCheckFunc(),
 			},
 		},
 	})
@@ -94,14 +96,13 @@ func TestOperation_CodeServer_HeaderQuery(t *testing.T) {
 	srv.Start()
 	d := codeServerOperation{}
 	resource.Test(t, resource.TestCase{
-		//CheckDestroy:             d.CheckDestroy(srv.URL, addr),
 		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
 		Steps: []resource.TestStep{
 			{
 				Config: d.headerquery(srv.URL),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckNoResourceAttr(addr, "output.#"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.Null()),
+				},
 			},
 		},
 	})

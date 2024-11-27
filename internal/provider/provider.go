@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/ephemeral"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
@@ -164,6 +165,14 @@ func (*Provider) Resources(context.Context) []func() resource.Resource {
 		},
 		func() resource.Resource {
 			return &OperationResource{}
+		},
+	}
+}
+
+func (*Provider) EphemeralResources(context.Context) []func() ephemeral.EphemeralResource {
+	return []func() ephemeral.EphemeralResource{
+		func() ephemeral.EphemeralResource {
+			return &EphemeralResource{}
 		},
 	}
 }
@@ -659,6 +668,7 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 
 	resp.ResourceData = data
 	resp.DataSourceData = data
+	resp.EphemeralResourceData = data
 
 	return
 }

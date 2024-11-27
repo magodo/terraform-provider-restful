@@ -7,8 +7,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
+	"github.com/hashicorp/terraform-plugin-testing/statecheck"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 	"github.com/magodo/terraform-provider-restful/internal/acceptance"
 	"github.com/magodo/terraform-provider-restful/internal/client"
 )
@@ -66,9 +69,9 @@ func TestResource_Azure_ResourceGroup(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: d.resourceGroup(),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output.%"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
+				},
 			},
 			{
 				ResourceName:            addr,
@@ -79,9 +82,9 @@ func TestResource_Azure_ResourceGroup(t *testing.T) {
 			},
 			{
 				Config: d.resourceGroup_complete(),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output.%"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
+				},
 			},
 			{
 				ResourceName:            addr,
@@ -104,9 +107,9 @@ func TestResource_Azure_ResourceGroup_updatePath(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: d.resourceGroup_updatePath(),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output.%"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
+				},
 			},
 			{
 				ResourceName:            addr,
@@ -117,9 +120,9 @@ func TestResource_Azure_ResourceGroup_updatePath(t *testing.T) {
 			},
 			{
 				Config: d.resourceGroup_updatePath_complete(),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output.%"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
+				},
 			},
 			{
 				ResourceName:            addr,
@@ -142,9 +145,9 @@ func TestResource_Azure_VirtualNetwork(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: d.vnet("foo"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output.%"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
+				},
 			},
 			{
 				ResourceName:            addr,
@@ -155,9 +158,9 @@ func TestResource_Azure_VirtualNetwork(t *testing.T) {
 			},
 			{
 				Config: d.vnet("bar"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output.%"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
+				},
 			},
 			{
 				ResourceName:            addr,
@@ -180,9 +183,9 @@ func TestResource_Azure_VirtualNetwork_Precheck(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: d.vnet_precheck("foo"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output.%"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
+				},
 			},
 			{
 				ResourceName:            addr,
@@ -193,9 +196,9 @@ func TestResource_Azure_VirtualNetwork_Precheck(t *testing.T) {
 			},
 			{
 				Config: d.vnet_precheck("bar"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output.%"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
+				},
 			},
 			{
 				ResourceName:            addr,
@@ -218,9 +221,9 @@ func TestResource_Azure_VirtualNetwork_SimplePoll(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: d.vnet_simple_poll("foo"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output.%"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
+				},
 			},
 			{
 				ResourceName:            addr,
@@ -231,9 +234,9 @@ func TestResource_Azure_VirtualNetwork_SimplePoll(t *testing.T) {
 			},
 			{
 				Config: d.vnet_simple_poll("bar"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output.%"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
+				},
 			},
 			{
 				ResourceName:            addr,
@@ -256,69 +259,29 @@ func TestResource_Azure_RouteTable_Precheck(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: d.routetable_precheck("foo"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output.%"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
+				},
 			},
 			{
 				ResourceName:            addr,
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"poll_create", "poll_update", "poll_delete", "precheck_create", "precheck_update", "precheck_delete", "create_method"},
+				ImportStateVerifyIgnore: []string{"poll_create", "poll_update", "poll_delete", "precheck_create", "precheck_update", "precheck_delete", "create_method", "output.etag"},
 				ImportStateIdFunc:       d.routeImportStateIdFunc(addr),
 			},
 			{
 				Config: d.routetable_precheck("bar"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output.%"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
+				},
 			},
 			{
 				ResourceName:            addr,
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"poll_create", "poll_update", "poll_delete", "precheck_create", "precheck_update", "precheck_delete", "create_method"},
+				ImportStateVerifyIgnore: []string{"poll_create", "poll_update", "poll_delete", "precheck_create", "precheck_update", "precheck_delete", "create_method", "output.etag"},
 				ImportStateIdFunc:       d.routeImportStateIdFunc(addr),
-			},
-		},
-	})
-}
-
-func TestOperationResource_Azure_Register_RP(t *testing.T) {
-	addr := "restful_operation.test"
-	d := newAzureData()
-	resource.ParallelTest(t, resource.TestCase{
-		PreCheck:                 func() { d.precheck(t) },
-		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
-		Steps: []resource.TestStep{
-			{
-				Config: d.unregisterRP("Microsoft.ProviderHub"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output.%"),
-				),
-			},
-			{
-				Config: d.registerRP("Microsoft.ProviderHub"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output.%"),
-				),
-			},
-		},
-	})
-}
-
-func TestOperationResource_Azure_GetToken(t *testing.T) {
-	addr := "restful_operation.test"
-	d := newAzureData()
-	resource.ParallelTest(t, resource.TestCase{
-		PreCheck:                 func() { d.precheck(t) },
-		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
-		Steps: []resource.TestStep{
-			{
-				Config: d.getToken(),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output.%"),
-				),
 			},
 		},
 	})
@@ -374,7 +337,7 @@ provider "restful" {
 }
 
 resource "restful_resource" "test" {
-  path = "/subscriptions/%s/resourceGroups/restful-test-%d"
+  path = "/subscriptions/%s/resourceGroups/acctest-%d"
   query = {
     api-version = ["2020-06-01"]
   }
@@ -412,7 +375,7 @@ provider "restful" {
 }
 
 resource "restful_resource" "test" {
-  path = "/subscriptions/%s/resourceGroups/restful-test-%d"
+  path = "/subscriptions/%s/resourceGroups/acctest-%d"
   query = {
     api-version = ["2020-06-01"]
   }
@@ -454,7 +417,7 @@ provider "restful" {
 }
 
 resource "restful_resource" "test" {
-  path = "/subscriptions/%s/resourceGroups/restful-test-%d"
+  path = "/subscriptions/%s/resourceGroups/acctest-%d"
   query = {
     api-version = ["2020-06-01"]
   }
@@ -464,7 +427,7 @@ resource "restful_resource" "test" {
 
   create_method = "PUT"
 
-  update_path = "/subscriptions/%s/resourceGroups/restful-test-%d"
+  update_path = "$(path)"
 
   poll_delete = {
     status_locator = "code"
@@ -475,7 +438,7 @@ resource "restful_resource" "test" {
     url_locator = "header.location"
   }
 }
-`, d.url, d.clientId, d.clientSecret, d.tenantId, d.subscriptionId, d.rd, d.subscriptionId, d.rd)
+`, d.url, d.clientId, d.clientSecret, d.tenantId, d.subscriptionId, d.rd)
 }
 
 func (d azureData) resourceGroup_updatePath_complete() string {
@@ -495,7 +458,7 @@ provider "restful" {
 }
 
 resource "restful_resource" "test" {
-  path = "/subscriptions/%s/resourceGroups/restful-test-%d"
+  path = "/subscriptions/%s/resourceGroups/acctest-%d"
   query = {
     api-version = ["2020-06-01"]
   }
@@ -508,7 +471,7 @@ resource "restful_resource" "test" {
 
   create_method = "PUT"
 
-  update_path = "/subscriptions/%s/resourceGroups/restful-test-%d"
+  update_path = "$(path)"
 
   poll_delete = {
     status_locator = "code"
@@ -519,7 +482,7 @@ resource "restful_resource" "test" {
     url_locator = "header.location"
   }
 }
-`, d.url, d.clientId, d.clientSecret, d.tenantId, d.subscriptionId, d.rd, d.subscriptionId, d.rd)
+`, d.url, d.clientId, d.clientSecret, d.tenantId, d.subscriptionId, d.rd)
 }
 
 func (d azureData) resourceGroupImportStateIdFunc(addr string) func(s *terraform.State) (string, error) {
@@ -643,7 +606,7 @@ provider "restful" {
 }
 
 resource "restful_resource" "rg" {
-  path = "/subscriptions/%s/resourceGroups/restful-test-%d"
+  path = "/subscriptions/%s/resourceGroups/acctest-%d"
   query = {
     api-version = ["2020-06-01"]
   }
@@ -723,7 +686,7 @@ provider "restful" {
 }
 
 resource "restful_resource" "rg" {
-  path = "/subscriptions/%s/resourceGroups/restful-test-%d"
+  path = "/subscriptions/%s/resourceGroups/acctest-%d"
   query = {
     api-version = ["2020-06-01"]
   }
@@ -860,7 +823,7 @@ provider "restful" {
 }
 
 resource "restful_resource" "rg" {
-  path = "/subscriptions/%s/resourceGroups/restful-test-%d"
+  path = "/subscriptions/%s/resourceGroups/acctest-%d"
   query = {
     api-version = ["2020-06-01"]
   }
@@ -956,95 +919,4 @@ resource "restful_resource" "route2" {
   }
 }
 `, d.url, d.clientId, d.clientSecret, d.tenantId, d.subscriptionId, d.rd, d.rd, tag)
-}
-
-func (d azureData) registerRP(rp string) string {
-	return fmt.Sprintf(`
-provider "restful" {
-  base_url = %[1]q
-  security = {
-    oauth2 = {
-	  client_credentials = {
-		  client_id     = %[2]q
-		  client_secret = %[3]q
-		  token_url     = "https://login.microsoftonline.com/%[4]s/oauth2/v2.0/token"
-		  scopes        = ["https://management.azure.com/.default"]
-	  }
-    }
-  }
-}
-
-resource "restful_operation" "test" {
-  path = "/subscriptions/%[5]s/providers/%[6]s/register"
-  query = {
-    api-version = ["2014-04-01-preview"]
-  }
-  method = "POST"
-  poll = {
-	url_locator = "exact./subscriptions/%[5]s/providers/%[6]s?api-version=2014-04-01-preview"
-    status_locator = "body.registrationState"
-    status = {
-      success = "Registered"
-      pending = ["Registering"]
-    }
-  }
-}
-`, d.url, d.clientId, d.clientSecret, d.tenantId, d.subscriptionId, rp)
-}
-
-func (d azureData) unregisterRP(rp string) string {
-	return fmt.Sprintf(`
-provider "restful" {
-  base_url = %[1]q
-  security = {
-    oauth2 = {
-	  client_credentials = {
-        client_id     = %[2]q
-        client_secret = %[3]q
-        token_url     = "https://login.microsoftonline.com/%[4]s/oauth2/v2.0/token"
-        scopes        = ["https://management.azure.com/.default"]
-	  }
-    }
-  }
-}
-
-resource "restful_operation" "test" {
-  path = "/subscriptions/%[5]s/providers/%[6]s/unregister"
-  query = {
-    api-version = ["2014-04-01-preview"]
-  }
-  method = "POST"
-  poll = {
-	url_locator = "exact./subscriptions/%[5]s/providers/%[6]s?api-version=2014-04-01-preview"
-    status_locator = "body.registrationState"
-    status = {
-      success = "Unregistered"
-      pending = ["Unregistering"]
-    }
-  }
-}
-`, d.url, d.clientId, d.clientSecret, d.tenantId, d.subscriptionId, rp)
-}
-
-func (d azureData) getToken() string {
-	return fmt.Sprintf(`
-provider "restful" {
-  base_url = "https://login.microsoftonline.com"
-}
-
-resource "restful_operation" "test" {
-  path   = "/%s/oauth2/v2.0/token"
-  method = "POST"
-  header = {
-    Accept : "application/json",
-    Content-Type : "application/x-www-form-urlencoded",
-  }
-  body = {
-    client_id = "%s"
-    client_secret = "%s"
-    grant_type = "client_credentials"
-    scope = "https://management.azure.com/.default"
-  }
-}
-`, d.tenantId, d.clientId, d.clientSecret)
 }

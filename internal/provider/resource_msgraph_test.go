@@ -7,8 +7,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
+	"github.com/hashicorp/terraform-plugin-testing/statecheck"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 	"github.com/magodo/terraform-provider-restful/internal/acceptance"
 	"github.com/magodo/terraform-provider-restful/internal/client"
 )
@@ -66,9 +69,9 @@ func TestResource_MsGraph_User(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: d.user(false),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output.%"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
+				},
 			},
 			{
 				ResourceName:      addr,
@@ -78,9 +81,9 @@ func TestResource_MsGraph_User(t *testing.T) {
 			},
 			{
 				Config: d.userUpdate(false),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output.%"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
+				},
 			},
 			{
 				ResourceName:      addr,
@@ -90,9 +93,9 @@ func TestResource_MsGraph_User(t *testing.T) {
 			},
 			{
 				Config: d.user(true),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output.%"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
+				},
 			},
 			{
 				ResourceName:      addr,

@@ -12,8 +12,11 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
+	"github.com/hashicorp/terraform-plugin-testing/statecheck"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 	"github.com/magodo/terraform-provider-restful/internal/acceptance"
 	"github.com/magodo/terraform-provider-restful/internal/client"
 )
@@ -54,9 +57,9 @@ func TestResource_CodeServer_ObjectArray(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: d.object_array(srv.URL, "foo"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output.#"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.NotNull()),
+				},
 			},
 			{
 				ResourceName:            addr,
@@ -69,9 +72,9 @@ func TestResource_CodeServer_ObjectArray(t *testing.T) {
 			},
 			{
 				Config: d.object_array(srv.URL, "bar"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output.#"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.NotNull()),
+				},
 			},
 			{
 				ResourceName:            addr,
@@ -124,9 +127,9 @@ func TestResource_CodeServer_CreateRetString(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: d.create_ret_string(srv.URL),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckNoResourceAttr(addr, "output.#"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.NotNull()),
+				},
 			},
 			{
 				ResourceName:            addr,
@@ -182,9 +185,9 @@ func TestResource_CodeServer_RetFullURL(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: d.create_ret_url(srv.URL),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckNoResourceAttr(addr, "output.#"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.NotNull()),
+				},
 			},
 		},
 	})
@@ -240,9 +243,9 @@ func TestResource_CodeServer_HeaderQuery(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: d.headerquery(srv.URL),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckNoResourceAttr(addr, "output.#"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.NotNull()),
+				},
 			},
 		},
 	})

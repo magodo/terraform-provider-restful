@@ -5,7 +5,10 @@ import (
 	"os"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
+	"github.com/hashicorp/terraform-plugin-testing/statecheck"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 	"github.com/magodo/terraform-provider-restful/internal/acceptance"
 )
 
@@ -43,9 +46,9 @@ func TestOperation_JSONServer_Basic(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: d.basic(),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output.%"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
+				},
 			},
 		},
 	})
@@ -61,21 +64,19 @@ func TestOperation_JSONServer_withDelete(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: d.withDelete(true),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output.%"),
-					resource.TestCheckResourceAttr(addr, "output.enabled", `true`),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("enabled"), knownvalue.Bool(true)),
+				},
 			},
 			{
 				// We need to check the resource's state after another refresh, after the operation resource is deleted, hence exists this step.
 				Config: d.withDelete(false),
-				Check:  resource.ComposeTestCheckFunc(),
 			},
 			{
 				Config: d.withDelete(false),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr(resaddr, "output.enabled", `false`),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(resaddr, tfjsonpath.New("output").AtMapKey("enabled"), knownvalue.Bool(false)),
+				},
 			},
 		},
 	})
@@ -90,9 +91,9 @@ func TestOperation_JSONServer_statusLocatorParam(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: d.statusLocatorParam(),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrSet(addr, "output.%"),
-				),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
+				},
 			},
 		},
 	})
