@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/dynamicvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/mapvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/ephemeral"
@@ -159,8 +160,11 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 				Description:         "The payload to renew the ephemeral resource.",
 				MarkdownDescription: "The payload to renew the ephemeral resource.",
 				Optional:            true,
-				// TODO: Depends on https://github.com/hashicorp/terraform-plugin-framework-validators/pull/249
-				Validators: []validator.Dynamic{},
+				Validators: []validator.Dynamic{
+					dynamicvalidator.AlsoRequires(
+						path.MatchRoot("renew_method"),
+					),
+				},
 			},
 			"renew_query": schema.MapAttribute{
 				Description:         operationOverridableAttrDescription("query", "renew"),
@@ -254,8 +258,11 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 				Description:         "The payload to close the ephemeral resource.",
 				MarkdownDescription: "The payload to close the ephemeral resource.",
 				Optional:            true,
-				// TODO: Depends on https://github.com/hashicorp/terraform-plugin-framework-validators/pull/249
-				Validators: []validator.Dynamic{},
+				Validators: []validator.Dynamic{
+					dynamicvalidator.AlsoRequires(
+						path.MatchRoot("close_method"),
+					),
+				},
 			},
 			"close_query": schema.MapAttribute{
 				Description:         operationOverridableAttrDescription("query", "close"),
