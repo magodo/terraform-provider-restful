@@ -68,7 +68,7 @@ func TestEphemeral_CodeServer_basic(t *testing.T) {
 	//t.Log(leaseCnt, updateLeaseCnt, unleaseCnt)
 
 	require.Equal(t, 6, leaseCnt, "open")
-	require.Equal(t, 4, updateLeaseCnt, "renew") // 2 (sleep time) / (1-0.5) = 4
+	require.Equal(t, 3, updateLeaseCnt, "renew") // 2 (sleep time) / (1-0.4) = 3
 	require.Equal(t, 6, unleaseCnt, "close")
 }
 
@@ -85,7 +85,7 @@ ephemeral "restful_resource" "test" {
   renew_path = "/updateLease"
   renew_method = "POST"
 
-  expiry_ahead = "0.5s"
+  expiry_ahead = "0.4s"
   expiry_type = "duration"
   expiry_locator = "header.expiry"
 
