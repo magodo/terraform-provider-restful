@@ -226,16 +226,24 @@ type DeleteOption struct {
 	Header Header
 }
 
-func (c *Client) Delete(ctx context.Context, path string, opt DeleteOption) (*resty.Response, error) {
+func (c *Client) Delete(ctx context.Context, path string, body interface{}, opt DeleteOption) (*resty.Response, error) {
 	req := c.R().SetContext(ctx)
+	if body != nil {
+		req = req.SetHeader("Content-Type", "application/json")
+		req.SetBody(body)
+	}
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 	req.SetHeaders(opt.Header)
 
 	switch opt.Method {
-	case "DELETE":
-		return req.Delete(path)
 	case "POST":
 		return req.Post(path)
+	case "PATCH":
+		return req.Patch(path)
+	case "PUT":
+		return req.Put(path)
+	case "DELETE":
+		return req.Delete(path)
 	default:
 		return nil, fmt.Errorf("unknown delete method: %s", opt.Method)
 	}

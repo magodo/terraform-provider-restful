@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/hashicorp/terraform-plugin-framework-validators/objectvalidator"
@@ -57,7 +58,8 @@ type resourceData struct {
 	PrecheckUpdate types.List `tfsdk:"precheck_update"`
 	PrecheckDelete types.List `tfsdk:"precheck_delete"`
 
-	Body types.Dynamic `tfsdk:"body"`
+	Body       types.Dynamic `tfsdk:"body"`
+	DeleteBody types.Dynamic `tfsdk:"delete_body"`
 
 	UpdateBodyPatches types.List `tfsdk:"update_body_patches"`
 
@@ -354,6 +356,12 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				Required:            true,
 			},
 
+			"delete_body": schema.DynamicAttribute{
+				Description:         "The payload for the `Delete` call.",
+				MarkdownDescription: "The payload for the `Delete` call.",
+				Optional:            true,
+			},
+
 			"update_body_patches": schema.ListNestedAttribute{
 				Description:         "The body patches for update only. Any change here won't cause a update API call by its own, only changes from `body` does. Note that this is almost only useful for APIs that require *after-create* attribute for an update (e.g. the resource ID).",
 				MarkdownDescription: "The body patches for update only. Any change here won't cause a update API call by its own, only changes from `body` does. Note that this is almost only useful for APIs that require *after-create* attribute for an update (e.g. the resource ID).",
@@ -405,11 +413,11 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				},
 			},
 			"delete_method": schema.StringAttribute{
-				Description:         "The method used to delete the resource. Possible values are `DELETE` and `POST`. This overrides the `delete_method` set in the provider block (defaults to DELETE).",
-				MarkdownDescription: "The method used to delete the resource. Possible values are `DELETE` and `POST`. This overrides the `delete_method` set in the provider block (defaults to DELETE).",
+				Description:         "The method used to delete the resource. Possible values are `DELETE`, `POST`, `PUT` and `PATCH`. This overrides the `delete_method` set in the provider block (defaults to DELETE).",
+				MarkdownDescription: "The method used to delete the resource. Possible values are `DELETE`, `POST`, `PUT` and `PATCH`. This overrides the `delete_method` set in the provider block (defaults to DELETE).",
 				Optional:            true,
 				Validators: []validator.String{
-					stringvalidator.OneOf("DELETE", "POST"),
+					stringvalidator.OneOf("DELETE", "POST", "PUT", "PATCH"),
 				},
 			},
 			"write_only_attrs": schema.ListAttribute{
@@ -1243,7 +1251,19 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 		}
 	}
 
-	response, err := c.Delete(ctx, path, *opt)
+	var body interface{}
+	if db := state.DeleteBody; !db.IsNull() {
+		var err error
+		body, err = dynamic.ToJSON(db)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Failed to marshal `delete_body`",
+				err.Error(),
+			)
+		}
+	}
+
+	response, err := c.Delete(ctx, path, body, *opt)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error to call delete",
@@ -1251,8 +1271,11 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 		)
 		return
 	}
-	if response.StatusCode() == http.StatusNotFound {
-		return
+
+	if strings.EqualFold(opt.Method, "DELETE") {
+		if response.StatusCode() == http.StatusNotFound {
+			return
+		}
 	}
 
 	if !response.IsSuccess() {
