@@ -68,6 +68,7 @@ resource "restful_resource" "rg" {
 - `read_header` (Map of String) The header parameters that are applied to each read request. This overrides the `header` set in the resource block.
 - `read_path` (String) The API path used to read the resource, which is used as the `id`. The `path` is used as the `id` instead if `read_path` is absent. This can be a string literal, or combined by following params: path param: `$(path)` expanded to `path`, body param: `$(body.x.y.z)` expands to the `x.y.z` property of the API body. Especially for the body param, it can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`).
 - `read_query` (Map of List of String) The query parameters that are applied to each read request. This overrides the `query` set in the resource block.
+- `read_response_template` (String) The raw template for transforming the response of reading (after selector). It can contain `$(body.x.y.z)` parameter that reference property from the response. This is only used to transform the read response to the same struct as the `body`.
 - `read_selector` (String) A selector expression in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries), that is used when read returns a collection of resources, to select exactly one member resource of from it. By default, the whole response body is used as the body. The expression can contain parameters in the form of `$(body.x.y.z)`, which expands to the `x.y.z` property of the `output` of the resource state. Specially, the param can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`).
 - `update_body_patches` (Attributes List) The body patches for update only. Any change here won't cause a update API call by its own, only changes from `body` does. Note that this is almost only useful for APIs that require *after-create* attribute for an update (e.g. the resource ID). (see [below for nested schema](#nestedatt--update_body_patches))
 - `update_header` (Map of String) The header parameters that are applied to each update request. This overrides the `header` set in the resource block.
@@ -87,7 +88,7 @@ resource "restful_resource" "rg" {
 Required:
 
 - `status` (Attributes) The expected status sentinels for each polling state. (see [below for nested schema](#nestedatt--poll_create--status))
-- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md). The `path` can contain `$(body.x.y.z)` parameter that reference property from either the response body (for `Create`, after selector), and `state.output` (for `Read`/`Update`/`Delete`).
+- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md). The `path` can contain `$(body.x.y.z)` parameter that reference property from either the response body (for `Create`, after selector), or `state.output` (for `Read`/`Update`/`Delete`).
 
 Optional:
 
@@ -114,7 +115,7 @@ Optional:
 Required:
 
 - `status` (Attributes) The expected status sentinels for each polling state. (see [below for nested schema](#nestedatt--poll_delete--status))
-- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md). The `path` can contain `$(body.x.y.z)` parameter that reference property from either the response body (for `Create`, after selector), and `state.output` (for `Read`/`Update`/`Delete`).
+- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md). The `path` can contain `$(body.x.y.z)` parameter that reference property from either the response body (for `Create`, after selector), or `state.output` (for `Read`/`Update`/`Delete`).
 
 Optional:
 
@@ -141,7 +142,7 @@ Optional:
 Required:
 
 - `status` (Attributes) The expected status sentinels for each polling state. (see [below for nested schema](#nestedatt--poll_update--status))
-- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md). The `path` can contain `$(body.x.y.z)` parameter that reference property from either the response body (for `Create`, after selector), and `state.output` (for `Read`/`Update`/`Delete`).
+- `status_locator` (String) Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md). The `path` can contain `$(body.x.y.z)` parameter that reference property from either the response body (for `Create`, after selector), or `state.output` (for `Read`/`Update`/`Delete`).
 
 Optional:
 
@@ -288,15 +289,16 @@ Import is supported using the following syntax:
 ```shell
 # The import spec consists of following keys:
 #
-# - id (Required)               : The resource id.
-# - path (Required)             : The path used to create the resource (as this is force new)
-# - query (Optional)            : The query parameters.
-# - header (Optional)           : The header.
-# - body (Optional)             : The interested properties in the response body that you want to manage via this resource.
-#                                 If you omit this, then all the properties will be keeping track, which in most cases is 
-#                                 not what you want (e.g. the read only attributes shouldn't be managed).
-#                                 The value of each property is not important here, hence leave them as `null`.
-# - read_selector (Optional)    : The read_selector used to specify the resource from a collection of resources.
+# - id (Required)                        : The resource id.
+# - path (Required)                      : The path used to create the resource (as this is force new)
+# - query (Optional)                     : The query parameters.
+# - header (Optional)                    : The header.
+# - body (Optional)                      : The interested properties in the response body that you want to manage via this resource.
+#                                          If you omit this, then all the properties will be keeping track, which in most cases is 
+#                                          not what you want (e.g. the read only attributes shouldn't be managed).
+#                                          The value of each property is not important here, hence leave them as `null`.
+# - read_selector (Optional)             : The read_selector used to specify the resource from a collection of resources.
+# - read_response_template (Optional)    : The read_response_template used to transform the structure of the read response.
 terraform import restful_resource.example '{
   "id": "/subscriptions/0-0-0-0/resourceGroups/example",
   "path": "/subscriptions/0-0-0-0/resourceGroups/example",

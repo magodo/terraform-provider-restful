@@ -41,8 +41,9 @@ type resourceData struct {
 
 	Path types.String `tfsdk:"path"`
 
-	CreateSelector types.String `tfsdk:"create_selector"`
-	ReadSelector   types.String `tfsdk:"read_selector"`
+	CreateSelector       types.String `tfsdk:"create_selector"`
+	ReadSelector         types.String `tfsdk:"read_selector"`
+	ReadResponseTemplate types.String `tfsdk:"read_response_template"`
 
 	ReadPath   types.String `tfsdk:"read_path"`
 	UpdatePath types.String `tfsdk:"update_path"`
@@ -56,8 +57,9 @@ type resourceData struct {
 	PrecheckUpdate types.List `tfsdk:"precheck_update"`
 	PrecheckDelete types.List `tfsdk:"precheck_delete"`
 
-	Body              types.Dynamic `tfsdk:"body"`
-	UpdateBodyPatches types.List    `tfsdk:"update_body_patches"`
+	Body types.Dynamic `tfsdk:"body"`
+
+	UpdateBodyPatches types.List `tfsdk:"update_body_patches"`
 
 	PollCreate types.Object `tfsdk:"poll_create"`
 	PollUpdate types.Object `tfsdk:"poll_update"`
@@ -233,8 +235,8 @@ func pollAttribute(s string) schema.SingleNestedAttribute {
 		Optional:            true,
 		Attributes: map[string]schema.Attribute{
 			"status_locator": schema.StringAttribute{
-				Description:         "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the gjson syntax. The `path` can contain `$(body.x.y.z)` parameter that reference property from either the response body (for `Create`, after selector), and `state.output` (for `Read`/`Update`/`Delete`).",
-				MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md). The `path` can contain `$(body.x.y.z)` parameter that reference property from either the response body (for `Create`, after selector), and `state.output` (for `Read`/`Update`/`Delete`).",
+				Description:         "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the gjson syntax. The `path` can contain `$(body.x.y.z)` parameter that reference property from either the response body (for `Create`, after selector), or `state.output` (for `Read`/`Update`/`Delete`).",
+				MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md). The `path` can contain `$(body.x.y.z)` parameter that reference property from either the response body (for `Create`, after selector), or `state.output` (for `Read`/`Update`/`Delete`).",
 				Required:            true,
 				Validators: []validator.String{
 					myvalidator.StringIsParsable("status_locator", func(s string) error {
@@ -370,6 +372,12 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 						},
 					},
 				},
+			},
+
+			"read_response_template": schema.StringAttribute{
+				Description:         "The raw template for transforming the response of reading (after selector). It can contain `$(body.x.y.z)` parameter that reference property from the response. This is only used to transform the read response to the same struct as the `body`.",
+				MarkdownDescription: "The raw template for transforming the response of reading (after selector). It can contain `$(body.x.y.z)` parameter that reference property from the response. This is only used to transform the read response to the same struct as the `body`.",
+				Optional:            true,
 			},
 
 			"poll_create": pollAttribute("Create"),
@@ -863,11 +871,30 @@ func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *reso
 			return
 		}
 		sel, err = exparam.Expand(sel, stateOutput)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Read failure",
+				fmt.Sprintf("Failed to expand the read selector: %v", err),
+			)
+			return
+		}
 		bodyLocator := client.BodyLocator(sel)
 		sb, ok := bodyLocator.LocateValueInResp(*response)
 		// This means the tracked resource selected (filtered) from the response now disappears (deleted out of band).
 		if !ok {
 			resp.State.RemoveResource(ctx)
+			return
+		}
+		b = []byte(sb)
+	}
+
+	if tpl := state.ReadResponseTemplate.ValueString(); tpl != "" {
+		sb, err := exparam.Expand(tpl, b)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Read failure",
+				fmt.Sprintf("Failed to expand the read response template selector: %v", err),
+			)
 			return
 		}
 		b = []byte(sb)
@@ -1288,6 +1315,9 @@ type importSpec struct {
 	// ReadSelector is only required when reading the ID returns a list of resources, and you'd like to read only one of them.
 	// Note that in this case, the value of the `Body` is likely required if the selector reference the body.
 	ReadSelector *string `json:"read_selector"`
+
+	// ReadResponseTemplate is only required when the response from read is structually different than the `body`.
+	ReadResponseTemplate *string `json:"read_response_template"`
 }
 
 func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
@@ -1297,6 +1327,7 @@ func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest
 	headerPath := tfpath.Root("header")
 	bodyPath := tfpath.Root("body")
 	readSelector := tfpath.Root("read_selector")
+	readResponseTemplate := tfpath.Root("read_response_template")
 
 	var imp importSpec
 	if err := json.Unmarshal([]byte(req.ID), &imp); err != nil {
@@ -1345,5 +1376,8 @@ func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest
 	}
 	if imp.ReadSelector != nil {
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, readSelector, imp.ReadSelector)...)
+	}
+	if imp.ReadResponseTemplate != nil {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, readResponseTemplate, imp.ReadResponseTemplate)...)
 	}
 }
