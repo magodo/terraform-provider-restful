@@ -251,6 +251,52 @@ func TestResource_CodeServer_HeaderQuery(t *testing.T) {
 	})
 }
 
+func TestResource_CodeServer_ReadResponseTemplate(t *testing.T) {
+	addr := "restful_resource.test"
+
+	mux := http.NewServeMux()
+	srv := httptest.NewUnstartedServer(mux)
+	mux.HandleFunc("PUT /tests/1", func(w http.ResponseWriter, r *http.Request) {
+		return
+	})
+	mux.HandleFunc("GET /tests/1", func(w http.ResponseWriter, r *http.Request) {
+		// From https://github.com/magodo/terraform-provider-restful/issues/130
+		b, _ := json.Marshal(`[
+   {
+      "property_name": "system",
+      "value": "testing-system"
+   }
+]`)
+		w.Write(b)
+		return
+	})
+	mux.HandleFunc("DELETE /tests/1", func(w http.ResponseWriter, r *http.Request) {
+		return
+	})
+	srv.Start()
+	d := codeServerData{}
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+		Steps: []resource.TestStep{
+			{
+				Config: d.readResponseTemplate(srv.URL),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.NotNull()),
+				},
+			},
+			{
+				ResourceName:            addr,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"create_method"},
+				ImportStateIdFunc: func(s *terraform.State) (string, error) {
+					return `{"id": "/tests/1", "path": "/tests/1", "body": [{"properties": [{"property_name": null, "value": null}]}], "read_response_template": "{\"properties\": $(body)}"}`, nil
+				},
+			},
+		},
+	})
+}
+
 func (d codeServerData) CheckDestroy(url, addr string) func(*terraform.State) error {
 	return func(s *terraform.State) error {
 		ctx := context.TODO()
@@ -356,6 +402,28 @@ resource "restful_resource" "test" {
   	type = ["delete"]
   }
   body = {}
+}
+`, url)
+}
+
+func (d codeServerData) readResponseTemplate(url string) string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+resource "restful_resource" "test" {
+  path = "/tests/1"
+  create_method = "PUT"
+  body = {
+    properties = [
+      {
+        property_name = "system"
+        value         = "testing-system"
+      }
+    ]
+  }
+  read_response_template = "{\"properties\": $(body)}"
 }
 `, url)
 }
