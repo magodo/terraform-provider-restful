@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"testing"
 
+	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
@@ -297,6 +298,88 @@ func TestResource_CodeServer_ReadResponseTemplate(t *testing.T) {
 	})
 }
 
+func TestResource_CodeServer_DeleteMethodBody(t *testing.T) {
+	addr := "restful_resource.test"
+
+	mux := http.NewServeMux()
+	srv := httptest.NewUnstartedServer(mux)
+
+	var state []byte
+	mux.HandleFunc("PUT /tests/1", func(w http.ResponseWriter, r *http.Request) {
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		state = b
+	})
+	mux.HandleFunc("GET /tests/1", func(w http.ResponseWriter, r *http.Request) {
+		w.Write(state)
+		return
+	})
+	mux.HandleFunc("PATCH /tests/1", func(w http.ResponseWriter, r *http.Request) {
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		state, err = jsonpatch.MergePatch(state, b)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+	})
+	mux.HandleFunc("DELETE /tests/1", func(w http.ResponseWriter, r *http.Request) {
+		state = nil
+	})
+	srv.Start()
+	d := codeServerData{}
+	resource.Test(t, resource.TestCase{
+		CheckDestroy: func(s *terraform.State) error {
+			ctx := context.TODO()
+			c, err := client.New(context.TODO(), srv.URL, nil)
+			if err != nil {
+				return err
+			}
+			c.SetLoggerContext(ctx)
+			for key, resource := range s.RootModule().Resources {
+				if key != addr {
+					continue
+				}
+				resp, err := c.Read(ctx, resource.Primary.ID, client.ReadOption{})
+				if err != nil {
+					return fmt.Errorf("reading %s: %v", addr, err)
+				}
+				if resp.StatusCode() != http.StatusOK {
+					return fmt.Errorf("%s: failed to read", addr)
+				}
+				var m map[string]interface{}
+				if err := json.Unmarshal(resp.Body(), &m); err != nil {
+					return err
+				}
+				l, ok := m["properties"]
+				if !ok {
+					return fmt.Errorf("expected `properties`, got nil")
+				}
+				if ll := len(l.([]interface{})); ll != 0 {
+					return fmt.Errorf("expected zero length of `properties`, got %d", ll)
+				}
+				return nil
+			}
+			panic("unreachable")
+		},
+		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+		Steps: []resource.TestStep{
+			{
+				Config: d.deleteMethodBody(srv.URL),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.NotNull()),
+				},
+			},
+		},
+	})
+}
+
 func (d codeServerData) CheckDestroy(url, addr string) func(*terraform.State) error {
 	return func(s *terraform.State) error {
 		ctx := context.TODO()
@@ -424,6 +507,31 @@ resource "restful_resource" "test" {
     ]
   }
   read_response_template = "{\"properties\": $(body)}"
+}
+`, url)
+}
+
+func (d codeServerData) deleteMethodBody(url string) string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+resource "restful_resource" "test" {
+  path = "/tests/1"
+  create_method = "PUT"
+  delete_method = "PATCH"
+  body = {
+    properties = [
+      {
+        property_name = "system"
+        value         = "testing-system"
+      }
+    ]
+  }
+  delete_body = {
+    properties = []
+  }
 }
 `, url)
 }
