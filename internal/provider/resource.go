@@ -741,7 +741,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	// Construct the resource id, which is used as the path to read the resource later on. By default, it is the same as the "path", unless "read_path" is specified.
 	resourceId := plan.Path.ValueString()
 	if !plan.ReadPath.IsNull() {
-		resourceId, err = exparam.ExpandWithPath(plan.ReadPath.ValueString(), plan.Path.ValueString(), b)
+		resourceId, err = exparam.ExpandBodyOrPath(plan.ReadPath.ValueString(), plan.Path.ValueString(), b)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				fmt.Sprintf("Failed to build the path for reading the resource"),
@@ -878,7 +878,7 @@ func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *reso
 			)
 			return
 		}
-		sel, err = exparam.Expand(sel, stateOutput)
+		sel, err = exparam.ExpandBody(sel, stateOutput)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Read failure",
@@ -897,11 +897,11 @@ func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *reso
 	}
 
 	if tpl := state.ReadResponseTemplate.ValueString(); tpl != "" {
-		sb, err := exparam.Expand(tpl, b)
+		sb, err := exparam.ExpandBody(tpl, b)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Read failure",
-				fmt.Sprintf("Failed to expand the read response template selector: %v", err),
+				fmt.Sprintf("Failed to expand the read response template: %v", err),
 			)
 			return
 		}
@@ -1092,7 +1092,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 			}
 			planBodyStr := string(planBody)
 			for i, patch := range patches {
-				pv, err := exparam.Expand(patch.RawJSON.ValueString(), stateOutput)
+				pv, err := exparam.ExpandBody(patch.RawJSON.ValueString(), stateOutput)
 				if err != nil {
 					resp.Diagnostics.AddError(
 						fmt.Sprintf("Failed to expand the %d-th patch for expression params", i),
@@ -1123,7 +1123,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 				)
 				return
 			}
-			path, err = exparam.ExpandWithPath(plan.UpdatePath.ValueString(), plan.Path.ValueString(), output)
+			path, err = exparam.ExpandBodyOrPath(plan.UpdatePath.ValueString(), plan.Path.ValueString(), output)
 			if err != nil {
 				resp.Diagnostics.AddError(
 					"Failed to build the path for updating the resource",
@@ -1241,7 +1241,7 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 			)
 			return
 		}
-		path, err = exparam.ExpandWithPath(state.DeletePath.ValueString(), state.Path.ValueString(), output)
+		path, err = exparam.ExpandBodyOrPath(state.DeletePath.ValueString(), state.Path.ValueString(), output)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Failed to build the path for deleting the resource",

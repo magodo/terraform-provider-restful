@@ -355,7 +355,7 @@ func (e *EphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequest,
 
 	// Set Renew and Close, if any
 	if !config.RenewMethod.IsNull() {
-		path, err := exparam.ExpandWithPath(config.RenewPath.ValueString(), config.Path.ValueString(), response.Body())
+		path, err := exparam.ExpandBodyOrPath(config.RenewPath.ValueString(), config.Path.ValueString(), response.Body())
 		if err != nil {
 			resp.Diagnostics.AddError(
 				fmt.Sprintf("Failed to build the path for renew the resource"),
@@ -387,7 +387,7 @@ func (e *EphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequest,
 	}
 
 	if !config.CloseMethod.IsNull() {
-		path, err := exparam.ExpandWithPath(config.ClosePath.ValueString(), config.Path.ValueString(), response.Body())
+		path, err := exparam.ExpandBodyOrPath(config.ClosePath.ValueString(), config.Path.ValueString(), response.Body())
 		if err != nil {
 			resp.Diagnostics.AddError(
 				fmt.Sprintf("Failed to build the path for renew the resource"),

@@ -42,13 +42,13 @@ func expandValueLocatorWithParam(locator string, body []byte) (client.ValueLocat
 	case "exact":
 		return client.ExactLocator(r), nil
 	case "header":
-		rr, err := exparam.Expand(r, body)
+		rr, err := exparam.ExpandBody(r, body)
 		if err != nil {
 			return nil, fmt.Errorf("expand param of %q: %v", r, err)
 		}
 		return client.HeaderLocator(rr), nil
 	case "body":
-		rr, err := exparam.Expand(r, body)
+		rr, err := exparam.ExpandBody(r, body)
 		if err != nil {
 			return nil, fmt.Errorf("expand param of %q: %v", r, err)
 		}
