@@ -1,39 +1,36 @@
 package exparam
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/tidwall/gjson"
 )
 
-// Expand expands params of "$(body.x.y.z)" in the expression.
+// ExpandBody expands params of "$(body[.x.y.z])" in the expression.
 //
 // The param can be prefixed by a chain of functions.
 // The form is like: $f1.f2(body.x.y.z)
-func Expand(expr string, body []byte) (string, error) {
+func ExpandBody(expr string, body []byte) (string, error) {
 	out := expr
 	ff := FuncFactory{}.Build()
 
 	matches := Pattern.FindAllStringSubmatch(out, -1)
 
 	for _, match := range matches {
-		var ts string
+		var jp string
 		if match[2] == "body" {
-			if err := json.Unmarshal(body, &ts); err != nil {
-				return "", fmt.Errorf(`"body" expects type of string, but failed to unmarshal as a string: %v`, err)
-			}
+			jp = "@this"
 		} else if strings.HasPrefix(match[2], "body.") {
-			jsonPath := strings.TrimPrefix(match[2], "body.")
-			prop := gjson.GetBytes(body, jsonPath)
-			if !prop.Exists() {
-				return "", fmt.Errorf("no property found at path %q in the body", jsonPath)
-			}
-			ts = prop.String()
+			jp = strings.TrimPrefix(match[2], "body.")
 		} else {
 			return "", fmt.Errorf("invalid match: %s", match[0])
 		}
+		prop := gjson.GetBytes(body, jp)
+		if !prop.Exists() {
+			return "", fmt.Errorf("no property found at path %q in the body", jp)
+		}
+		ts := prop.String()
 
 		// Apply functions if any
 		fs := []Func{}

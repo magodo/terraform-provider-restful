@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBuildPath(t *testing.T) {
+func TestExpandBodyOrPath(t *testing.T) {
 	cases := []struct {
 		name    string
 		pattern string
@@ -100,7 +100,7 @@ func TestBuildPath(t *testing.T) {
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			actual, err := ExpandWithPath(tt.pattern, tt.path, []byte(tt.body))
+			actual, err := ExpandBodyOrPath(tt.pattern, tt.path, []byte(tt.body))
 			if tt.err != "" {
 				require.ErrorContains(t, err, tt.err)
 				return
