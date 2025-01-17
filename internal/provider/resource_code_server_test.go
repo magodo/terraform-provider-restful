@@ -262,7 +262,7 @@ func TestResource_CodeServer_ReadResponseTemplate(t *testing.T) {
 	})
 	mux.HandleFunc("GET /tests/1", func(w http.ResponseWriter, r *http.Request) {
 		// From https://github.com/magodo/terraform-provider-restful/issues/130
-		b, _ := json.Marshal(`[
+		b := []byte(`[
    {
       "property_name": "system",
       "value": "testing-system"

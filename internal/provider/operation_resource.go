@@ -265,7 +265,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 
 	resourceId := plan.Path.ValueString()
 	if !plan.IdBuilder.IsNull() {
-		resourceId, err = exparam.ExpandWithPath(plan.IdBuilder.ValueString(), plan.Path.ValueString(), response.Body())
+		resourceId, err = exparam.ExpandBodyOrPath(plan.IdBuilder.ValueString(), plan.Path.ValueString(), response.Body())
 		if err != nil {
 			diagnostics.AddError(
 				fmt.Sprintf("Failed to build the id for this resource"),
@@ -426,7 +426,7 @@ func (r *OperationResource) Delete(ctx context.Context, req resource.DeleteReque
 			)
 			return
 		}
-		path, err = exparam.ExpandWithPath(state.DeletePath.ValueString(), state.Path.ValueString(), body)
+		path, err = exparam.ExpandBodyOrPath(state.DeletePath.ValueString(), state.Path.ValueString(), body)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				fmt.Sprintf("Failed to build the path for deleting the operation resource"),
