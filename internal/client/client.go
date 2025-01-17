@@ -164,7 +164,7 @@ type CreateOption struct {
 	Header Header
 }
 
-func (c *Client) Create(ctx context.Context, path string, body interface{}, opt CreateOption) (*resty.Response, error) {
+func (c *Client) Create(ctx context.Context, path string, body string, opt CreateOption) (*resty.Response, error) {
 	req := c.R().SetContext(ctx).SetBody(body)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 	req.SetHeaders(opt.Header)
@@ -202,7 +202,7 @@ type UpdateOption struct {
 	Header             Header
 }
 
-func (c *Client) Update(ctx context.Context, path string, body interface{}, opt UpdateOption) (*resty.Response, error) {
+func (c *Client) Update(ctx context.Context, path string, body string, opt UpdateOption) (*resty.Response, error) {
 	req := c.R().SetContext(ctx).SetBody(body)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 	req.SetHeaders(opt.Header)
@@ -226,9 +226,9 @@ type DeleteOption struct {
 	Header Header
 }
 
-func (c *Client) Delete(ctx context.Context, path string, body interface{}, opt DeleteOption) (*resty.Response, error) {
+func (c *Client) Delete(ctx context.Context, path string, body string, opt DeleteOption) (*resty.Response, error) {
 	req := c.R().SetContext(ctx)
-	if body != nil {
+	if body != "" {
 		req = req.SetHeader("Content-Type", "application/json")
 		req.SetBody(body)
 	}
@@ -272,7 +272,7 @@ func (c *Client) Operation(ctx context.Context, path string, body basetypes.Dyna
 				return nil, fmt.Errorf("convert body from dynamic to json: %v", err)
 			}
 
-			req.SetBody(b)
+			req.SetBody(string(b))
 		case "application/x-www-form-urlencoded":
 			ov, ok := body.UnderlyingValue().(types.Object)
 			if !ok {

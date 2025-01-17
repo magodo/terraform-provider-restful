@@ -1133,7 +1133,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 			}
 		}
 
-		response, err := c.Update(ctx, path, planBody, *opt)
+		response, err := c.Update(ctx, path, string(planBody), *opt)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error to call update",
@@ -1251,16 +1251,16 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 		}
 	}
 
-	var body interface{}
+	var body string
 	if db := state.DeleteBody; !db.IsNull() {
-		var err error
-		body, err = dynamic.ToJSON(db)
+		b, err := dynamic.ToJSON(db)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Failed to marshal `delete_body`",
 				err.Error(),
 			)
 		}
+		body = string(b)
 	}
 
 	response, err := c.Delete(ctx, path, body, *opt)
