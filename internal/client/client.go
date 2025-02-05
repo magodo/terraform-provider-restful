@@ -266,13 +266,6 @@ func (c *Client) Operation(ctx context.Context, path string, body basetypes.Dyna
 
 	if !body.IsNull() {
 		switch req.Header.Get("Content-Type") {
-		case "application/json":
-			b, err := dynamic.ToJSON(body)
-			if err != nil {
-				return nil, fmt.Errorf("convert body from dynamic to json: %v", err)
-			}
-
-			req.SetBody(string(b))
 		case "application/x-www-form-urlencoded":
 			ov, ok := body.UnderlyingValue().(types.Object)
 			if !ok {
@@ -287,6 +280,12 @@ func (c *Client) Operation(ctx context.Context, path string, body basetypes.Dyna
 				m[k] = vs.ValueString()
 			}
 			req.SetFormData(m)
+		default:
+			b, err := dynamic.ToJSON(body)
+			if err != nil {
+				return nil, fmt.Errorf("convert body from dynamic to json: %v", err)
+			}
+			req.SetBody(string(b))
 		}
 	}
 
