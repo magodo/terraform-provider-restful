@@ -25,6 +25,7 @@ import (
 	"github.com/magodo/terraform-provider-restful/internal/client"
 	"github.com/magodo/terraform-provider-restful/internal/dynamic"
 	"github.com/magodo/terraform-provider-restful/internal/exparam"
+	"github.com/magodo/terraform-provider-restful/internal/jsonset"
 	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
@@ -58,10 +59,11 @@ type resourceData struct {
 	PrecheckUpdate types.List `tfsdk:"precheck_update"`
 	PrecheckDelete types.List `tfsdk:"precheck_delete"`
 
-	Body       types.Dynamic `tfsdk:"body"`
-	DeleteBody types.Dynamic `tfsdk:"delete_body"`
+	Body          types.Dynamic `tfsdk:"body"`
+	EphemeralBody types.Dynamic `tfsdk:"ephemeral_body"`
 
-	UpdateBodyPatches types.List `tfsdk:"update_body_patches"`
+	DeleteBody        types.Dynamic `tfsdk:"delete_body"`
+	UpdateBodyPatches types.List    `tfsdk:"update_body_patches"`
 
 	PollCreate types.Object `tfsdk:"poll_create"`
 	PollUpdate types.Object `tfsdk:"poll_update"`
@@ -356,6 +358,13 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				Required:            true,
 			},
 
+			"ephemeral_body": schema.DynamicAttribute{
+				Description:         "The ephemeral (write-only) properties of the resource.",
+				MarkdownDescription: "The ephemeral (write-only) properties of the resource.",
+				Optional:            true,
+				WriteOnly:           true,
+			},
+
 			"delete_body": schema.DynamicAttribute{
 				Description:         "The payload for the `Delete` call.",
 				MarkdownDescription: "The payload for the `Delete` call.",
@@ -421,8 +430,8 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				},
 			},
 			"write_only_attrs": schema.ListAttribute{
-				Description:         "A list of paths (in gjson syntax) to the attributes that are only settable, but won't be read in GET response.",
-				MarkdownDescription: "A list of paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attributes that are only settable, but won't be read in GET response.",
+				Description:         "Suggest to use `ephemeral_body` instead. A list of paths (in gjson syntax) to the attributes that are only settable, but won't be read in GET response.",
+				MarkdownDescription: "Suggest to use `ephemeral_body` instead. A list of paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attributes that are only settable, but won't be read in GET response.",
 				Optional:            true,
 				ElementType:         types.StringType,
 			},
@@ -524,6 +533,7 @@ func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConf
 	if diags.HasError() {
 		return
 	}
+
 	if !config.Body.IsUnknown() {
 		b, err := dynamic.ToJSON(config.Body)
 		if err != nil {
@@ -533,6 +543,7 @@ func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConf
 			)
 			return
 		}
+
 		if !config.WriteOnlyAttributes.IsUnknown() && !config.WriteOnlyAttributes.IsNull() {
 			for _, ie := range config.WriteOnlyAttributes.Elements() {
 				ie := ie.(types.String)
@@ -544,6 +555,32 @@ func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConf
 						)
 					}
 				}
+			}
+		}
+
+		if !config.EphemeralBody.IsUnknown() && !config.EphemeralBody.IsNull() {
+			eb, err := dynamic.ToJSON(config.EphemeralBody)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Invalid configuration",
+					fmt.Sprintf(`marshal "ephemeral_body": %v`, err),
+				)
+				return
+			}
+			disjointed, err := jsonset.Disjointed(b, eb)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Invalid configuration",
+					fmt.Sprintf(`checking disjoint of "body" and "ephemeral_body": %v`, err),
+				)
+				return
+			}
+			if !disjointed {
+				resp.Diagnostics.AddError(
+					"Invalid configuration",
+					`"body" and "ephemeral_body" are not disjointed`,
+				)
+				return
 			}
 		}
 	}
@@ -657,6 +694,13 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 		return
 	}
 
+	var config resourceData
+	diags = req.Config.Get(ctx, &config)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
+
 	tflog.Info(ctx, "Create a resource", map[string]interface{}{"path": plan.Path.ValueString()})
 
 	opt, diags := r.p.apiOpt.ForResourceCreate(ctx, plan)
@@ -702,11 +746,48 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	b, err := dynamic.ToJSON(plan.Body)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error to marshal body",
+			`Error to marshal "body"`,
 			err.Error(),
 		)
 		return
 	}
+
+	if !config.EphemeralBody.IsNull() {
+		eb, err := dynamic.ToJSON(config.EphemeralBody)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				`Error to marshal "ephemeral_body"`,
+				err.Error(),
+			)
+			return
+		}
+		disjointed, err := jsonset.Disjointed(b, eb)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Invalid configuration",
+				fmt.Sprintf(`checking disjoint of "body" and "ephemeral_body": %v`, err),
+			)
+			return
+		}
+		if !disjointed {
+			resp.Diagnostics.AddError(
+				"Invalid configuration",
+				`"body" and "ephemeral_body" are not disjointed`,
+			)
+			return
+		}
+
+		// Merge patch the ephemeral body to the body
+		b, err = jsonpatch.MergePatch(b, eb)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Merge patching `body` with `ephemeral_body`",
+				err.Error(),
+			)
+			return
+		}
+	}
+
 	response, err := c.Create(ctx, plan.Path.ValueString(), string(b), *opt)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -1007,7 +1088,12 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 		return
 	}
 
-	tflog.Info(ctx, "Update a resource", map[string]interface{}{"id": state.ID.ValueString()})
+	var config resourceData
+	diags = req.Config.Get(ctx, &config)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
 
 	var plan resourceData
 	diags = req.Plan.Get(ctx, &plan)
@@ -1015,6 +1101,8 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 	if diags.HasError() {
 		return
 	}
+
+	tflog.Info(ctx, "Update a resource", map[string]interface{}{"id": state.ID.ValueString()})
 
 	// Temporarily set the output here, so that the Read at the end can
 	// expand the `$(body)` parameters.
@@ -1075,7 +1163,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 			planBody = b
 		}
 
-		// Optionally patch the body.
+		// Optionally patch the body with the update_body_patches.
 		var patches []bodyPatchData
 		if diags := plan.UpdateBodyPatches.ElementsAs(ctx, &patches, false); diags.HasError() {
 			resp.Diagnostics.Append(diags...)
@@ -1111,6 +1199,43 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 				}
 			}
 			planBody = []byte(planBodyStr)
+		}
+
+		// Optionally patch the body with emphemeral_body
+		if !config.EphemeralBody.IsNull() {
+			eb, err := dynamic.ToJSON(config.EphemeralBody)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					`Error to marshal "ephemeral_body"`,
+					err.Error(),
+				)
+				return
+			}
+			disjointed, err := jsonset.Disjointed(planBody, eb)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Invalid configuration",
+					fmt.Sprintf(`checking disjoint of the planned body and "ephemeral_body": %v`, err),
+				)
+				return
+			}
+			if !disjointed {
+				resp.Diagnostics.AddError(
+					"Invalid configuration",
+					`the planned body and "ephemeral_body" are not disjointed`,
+				)
+				return
+			}
+
+			// Merge patch the ephemeral body to the body
+			planBody, err = jsonpatch.MergePatch(planBody, eb)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Merge patching planned body with `ephemeral_body`",
+					err.Error(),
+				)
+				return
+			}
 		}
 
 		path := plan.ID.ValueString()
