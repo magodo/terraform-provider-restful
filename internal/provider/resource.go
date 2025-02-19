@@ -1131,6 +1131,81 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 		return
 	}
 
+	// Optionally patch the body with the update_body_patches.
+	var patches []bodyPatchData
+	if diags := plan.UpdateBodyPatches.ElementsAs(ctx, &patches, false); diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+	if len(patches) != 0 {
+		stateOutput, err := dynamic.ToJSON(state.Output)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Read failure",
+				fmt.Sprintf("marshal state output: %v", err),
+			)
+			return
+		}
+		planBodyStr := string(planBody)
+		for i, patch := range patches {
+			pv, err := exparam.ExpandBody(patch.RawJSON.ValueString(), stateOutput)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					fmt.Sprintf("Failed to expand the %d-th patch for expression params", i),
+					err.Error(),
+				)
+				return
+			}
+
+			planBodyStr, err = sjson.SetRaw(planBodyStr, patch.Path.ValueString(), pv)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					fmt.Sprintf("Failed to set json for the %d-th patch for expression params", i),
+					err.Error(),
+				)
+				return
+			}
+		}
+		planBody = []byte(planBodyStr)
+	}
+
+	// Optionally patch the body with emphemeral_body
+	if !config.EphemeralBody.IsNull() {
+		eb, err := dynamic.ToJSON(config.EphemeralBody)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				`Error to marshal "ephemeral_body"`,
+				err.Error(),
+			)
+			return
+		}
+		disjointed, err := jsonset.Disjointed(planBody, eb)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Invalid configuration",
+				fmt.Sprintf(`checking disjoint of the planned body and "ephemeral_body": %v`, err),
+			)
+			return
+		}
+		if !disjointed {
+			resp.Diagnostics.AddError(
+				"Invalid configuration",
+				`the planned body and "ephemeral_body" are not disjointed`,
+			)
+			return
+		}
+
+		// Merge patch the ephemeral body to the body
+		planBody, err = jsonpatch.MergePatch(planBody, eb)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Merge patching planned body with `ephemeral_body`",
+				err.Error(),
+			)
+			return
+		}
+	}
+
 	// Invoke API to Update the resource only when there are changes in the body (regardless of the TF type diff).
 	if string(stateBody) != string(planBody) {
 		// Precheck
@@ -1161,81 +1236,6 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 				return
 			}
 			planBody = b
-		}
-
-		// Optionally patch the body with the update_body_patches.
-		var patches []bodyPatchData
-		if diags := plan.UpdateBodyPatches.ElementsAs(ctx, &patches, false); diags.HasError() {
-			resp.Diagnostics.Append(diags...)
-			return
-		}
-		if len(patches) != 0 {
-			stateOutput, err := dynamic.ToJSON(state.Output)
-			if err != nil {
-				resp.Diagnostics.AddError(
-					"Read failure",
-					fmt.Sprintf("marshal state output: %v", err),
-				)
-				return
-			}
-			planBodyStr := string(planBody)
-			for i, patch := range patches {
-				pv, err := exparam.ExpandBody(patch.RawJSON.ValueString(), stateOutput)
-				if err != nil {
-					resp.Diagnostics.AddError(
-						fmt.Sprintf("Failed to expand the %d-th patch for expression params", i),
-						err.Error(),
-					)
-					return
-				}
-
-				planBodyStr, err = sjson.SetRaw(planBodyStr, patch.Path.ValueString(), pv)
-				if err != nil {
-					resp.Diagnostics.AddError(
-						fmt.Sprintf("Failed to set json for the %d-th patch for expression params", i),
-						err.Error(),
-					)
-					return
-				}
-			}
-			planBody = []byte(planBodyStr)
-		}
-
-		// Optionally patch the body with emphemeral_body
-		if !config.EphemeralBody.IsNull() {
-			eb, err := dynamic.ToJSON(config.EphemeralBody)
-			if err != nil {
-				resp.Diagnostics.AddError(
-					`Error to marshal "ephemeral_body"`,
-					err.Error(),
-				)
-				return
-			}
-			disjointed, err := jsonset.Disjointed(planBody, eb)
-			if err != nil {
-				resp.Diagnostics.AddError(
-					"Invalid configuration",
-					fmt.Sprintf(`checking disjoint of the planned body and "ephemeral_body": %v`, err),
-				)
-				return
-			}
-			if !disjointed {
-				resp.Diagnostics.AddError(
-					"Invalid configuration",
-					`the planned body and "ephemeral_body" are not disjointed`,
-				)
-				return
-			}
-
-			// Merge patch the ephemeral body to the body
-			planBody, err = jsonpatch.MergePatch(planBody, eb)
-			if err != nil {
-				resp.Diagnostics.AddError(
-					"Merge patching planned body with `ephemeral_body`",
-					err.Error(),
-				)
-				return
-			}
 		}
 
 		path := plan.ID.ValueString()
