@@ -11,7 +11,7 @@ import (
 )
 
 // Generate the provider document.
-//go:generate tfplugindocs generate
+//go:generate go tool tfplugindocs generate
 
 func main() {
 	var debug bool
