@@ -46,6 +46,7 @@ resource "restful_operation" "register_rp" {
 - `delete_method` (String) The method for the `Delete` call. Possible values are `POST`, `PUT`, `PATCH` and `DELETE`. If this is not specified, no `Delete` call will occur.
 - `delete_path` (String) The path for the `Delete` call, relative to the `base_url` of the provider. The `path` is used instead if `delete_path` is absent.
 - `delete_query` (Map of List of String) The query parameters that are applied to each delete request. This overrides the `query` set in the resource block.
+- `ephemeral_body` (Dynamic) The ephemeral (write-only) properties of the resource. This will be merge-patched to the `body` to construct the actual request body.
 - `header` (Map of String) The header parameters that are applied to each request. This overrides the `header` set in the provider block.
 - `id_builder` (String) The pattern used to build the `id`. The `path` is used as the `id` instead if absent.This can be a string literal, or combined by following params: path param: `$(path)` expanded to `path`, body param: `$(body.x.y.z)` expands to the `x.y.z` property of the API body. Especially for the body param, it can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`).
 - `operation_header` (Map of String) The header parameters that are applied to each operation request. This overrides the `header` set in the resource block.
@@ -60,7 +61,7 @@ resource "restful_operation" "register_rp" {
 ### Read-Only
 
 - `id` (String) The ID of the operation.
-- `output` (Dynamic) The response body.
+- `output` (Dynamic) The response body. If `ephemeral_body` get returned by API, it won't be removed from `output`.
 
 <a id="nestedatt--poll"></a>
 ### Nested Schema for `poll`
