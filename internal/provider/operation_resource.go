@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/objectvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -32,11 +33,13 @@ var _ resource.Resource = &OperationResource{}
 var _ resource.ResourceWithUpgradeState = &OperationResource{}
 
 type operationResourceData struct {
-	ID        types.String  `tfsdk:"id"`
-	Path      types.String  `tfsdk:"path"`
-	IdBuilder types.String  `tfsdk:"id_builder"`
-	Method    types.String  `tfsdk:"method"`
-	Body      types.Dynamic `tfsdk:"body"`
+	ID        types.String `tfsdk:"id"`
+	Path      types.String `tfsdk:"path"`
+	IdBuilder types.String `tfsdk:"id_builder"`
+	Method    types.String `tfsdk:"method"`
+
+	Body          types.Dynamic `tfsdk:"body"`
+	EphemeralBody types.Dynamic `tfsdk:"ephemeral_body"`
 
 	Query          types.Map `tfsdk:"query"`
 	OperationQuery types.Map `tfsdk:"operation_query"`
@@ -110,6 +113,12 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 				Description:         "The payload for the `Create`/`Update` call.",
 				MarkdownDescription: "The payload for the `Create`/`Update` call.",
 				Optional:            true,
+			},
+			"ephemeral_body": schema.DynamicAttribute{
+				Description:         "The ephemeral (write-only) properties of the resource. This will be merge-patched to the `body` to construct the actual request body.",
+				MarkdownDescription: "The ephemeral (write-only) properties of the resource. This will be merge-patched to the `body` to construct the actual request body.",
+				Optional:            true,
+				WriteOnly:           true,
 			},
 			"query": schema.MapAttribute{
 				Description:         "The query parameters that are applied to each request. This overrides the `query` set in the provider block.",
@@ -187,11 +196,73 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 			},
 
 			"output": schema.DynamicAttribute{
-				Description:         "The response body.",
-				MarkdownDescription: "The response body.",
+				Description:         "The response body. If `ephemeral_body` get returned by API, it won't be removed from `output`.",
+				MarkdownDescription: "The response body. If `ephemeral_body` get returned by API, it won't be removed from `output`.",
 				Computed:            true,
 			},
 		},
+	}
+}
+
+func (r *OperationResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var config operationResourceData
+	diags := req.Config.Get(ctx, &config)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
+
+	if !config.Body.IsUnknown() {
+		b, err := dynamic.ToJSON(config.Body)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Invalid configuration",
+				fmt.Sprintf("marshal body: %v", err),
+			)
+			return
+		}
+
+		_, diags := validateEphemeralBody(b, config.EphemeralBody)
+		resp.Diagnostics = append(resp.Diagnostics, diags...)
+		if diags.HasError() {
+			return
+		}
+	}
+}
+
+func (r *OperationResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.Plan.Raw.IsNull() {
+		// If the entire plan is null, the resource is planned for destruction.
+		return
+	}
+	if req.State.Raw.IsNull() {
+		// If the entire state is null, the resource is planned for creation.
+		return
+	}
+
+	var plan operationResourceData
+	if diags := req.Plan.Get(ctx, &plan); diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+	var config operationResourceData
+	if diags := req.Config.Get(ctx, &config); diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+
+	defer func() {
+		resp.Plan.Set(ctx, plan)
+	}()
+
+	// Set output as unknown to trigger a plan diff, if ephemral body has changed
+	diff, diags := ephemeralBodyChangeInPlan(ctx, req.Private, config.EphemeralBody)
+	resp.Diagnostics = append(resp.Diagnostics, diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if diff {
+		plan.Output = types.DynamicUnknown()
 	}
 }
 
@@ -214,14 +285,21 @@ func (r *OperationResource) Configure(ctx context.Context, req resource.Configur
 	r.p = providerData.provider
 }
 
-func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Plan, tfstate *tfsdk.State, diagnostics *diag.Diagnostics, forCreate bool) {
+func (r *OperationResource) createOrUpdate(ctx context.Context, reqConfig tfsdk.Config, reqPlan tfsdk.Plan, reqState tfsdk.State, respPrivate PrivateData, respState *tfsdk.State, respDiags *diag.Diagnostics, forCreate bool) {
 	c := r.p.client
 	c.SetLoggerContext(ctx)
 
 	var plan operationResourceData
-	diags := tfplan.Get(ctx, &plan)
-	diagnostics.Append(diags...)
-	if diags.HasError() {
+	diags := reqPlan.Get(ctx, &plan)
+	respDiags.Append(diags...)
+	if respDiags.HasError() {
+		return
+	}
+
+	var config operationResourceData
+	diags = reqConfig.Get(ctx, &config)
+	respDiags.Append(diags...)
+	if respDiags.HasError() {
 		return
 	}
 
@@ -232,31 +310,73 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 	}
 
 	opt, diags := r.p.apiOpt.ForOperation(ctx, plan.Method, plan.Query, plan.Header, plan.OperationQuery, plan.OperationHeader)
-	diagnostics.Append(diags...)
-	if diags.HasError() {
+	respDiags.Append(diags...)
+	if respDiags.HasError() {
 		return
 	}
 
 	// Precheck
 	if !plan.Precheck.IsNull() {
 		unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, plan.Path.ValueString(), opt.Header, opt.Query, plan.Precheck, basetypes.NewDynamicNull())
-		diagnostics.Append(diags...)
-		if diags.HasError() {
+		respDiags.Append(diags...)
+		if respDiags.HasError() {
 			return
 		}
 		defer unlockFunc()
 	}
 
-	response, err := c.Operation(ctx, plan.Path.ValueString(), plan.Body, *opt)
+	// Build the body
+	body := plan.Body
+	var eb []byte
+	if !plan.Body.IsNull() {
+		b, err := dynamic.ToJSON(plan.Body)
+		if err != nil {
+			respDiags.AddError(
+				`Error to marshal "body"`,
+				err.Error(),
+			)
+			return
+		}
+
+		if !config.EphemeralBody.IsNull() {
+			eb, diags = validateEphemeralBody(b, config.EphemeralBody)
+			respDiags.Append(diags...)
+			if respDiags.HasError() {
+				return
+			}
+
+			// Merge patch the ephemeral body to the body
+			b, err = jsonpatch.MergePatch(b, eb)
+			if err != nil {
+				respDiags.AddError(
+					"Merge patching `body` with `ephemeral_body`",
+					err.Error(),
+				)
+				return
+			}
+		}
+
+		// This is not ideal, but just to conform to the c.Operation() signature.
+		body, err = dynamic.FromJSONImplied(b)
+		if err != nil {
+			respDiags.AddError(
+				"Converting body back to dynamic type failed",
+				err.Error(),
+			)
+			return
+		}
+	}
+
+	response, err := c.Operation(ctx, plan.Path.ValueString(), body, *opt)
 	if err != nil {
-		diagnostics.AddError(
+		respDiags.AddError(
 			"Error to call operation",
 			err.Error(),
 		)
 		return
 	}
 	if !response.IsSuccess() {
-		diagnostics.AddError(
+		respDiags.AddError(
 			fmt.Sprintf("Operation API returns %d", response.StatusCode()),
 			string(response.Body()),
 		)
@@ -267,7 +387,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 	if !plan.IdBuilder.IsNull() {
 		resourceId, err = exparam.ExpandBodyOrPath(plan.IdBuilder.ValueString(), plan.Path.ValueString(), response.Body())
 		if err != nil {
-			diagnostics.AddError(
+			respDiags.AddError(
 				fmt.Sprintf("Failed to build the id for this resource"),
 				fmt.Sprintf("Can't build resource id with `id_builder`: %q, `path`: %q: %v", plan.IdBuilder.ValueString(), plan.Path.ValueString(), err),
 			)
@@ -279,7 +399,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 	if !plan.Poll.IsNull() {
 		var d pollData
 		if diags := plan.Poll.As(ctx, &d, basetypes.ObjectAsOptions{}); diags.HasError() {
-			diagnostics.Append(diags...)
+			respDiags.Append(diags...)
 			return
 		}
 
@@ -287,7 +407,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 		if forCreate {
 			body, err = dynamic.FromJSONImplied(response.Body())
 			if err != nil {
-				diagnostics.AddError(
+				respDiags.AddError(
 					"Operation: Failed to get dynamic from JSON for the operation response",
 					err.Error(),
 				)
@@ -295,8 +415,8 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 			}
 		} else {
 			var state operationResourceData
-			diags = tfstate.Get(ctx, &state)
-			diagnostics.Append(diags...)
+			diags = reqState.Get(ctx, &state)
+			respDiags.Append(diags...)
 			if diags.HasError() {
 				return
 			}
@@ -305,7 +425,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 		opt, diags := r.p.apiOpt.ForPoll(ctx, opt.Header, opt.Query, d, body)
 
 		if diags.HasError() {
-			diagnostics.Append(diags...)
+			respDiags.Append(diags...)
 			return
 		}
 		if opt.UrlLocator == nil {
@@ -313,14 +433,14 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 		}
 		p, err := client.NewPollableForPoll(*response, *opt)
 		if err != nil {
-			diagnostics.AddError(
+			respDiags.AddError(
 				"Operation: Failed to build poller from the response of the initiated request",
 				err.Error(),
 			)
 			return
 		}
 		if err := p.PollUntilDone(ctx, c); err != nil {
-			diagnostics.AddError(
+			respDiags.AddError(
 				"Operation: Polling failure",
 				err.Error(),
 			)
@@ -337,13 +457,13 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 		// Update the output to only contain the specified attributes.
 		var outputAttrs []string
 		diags = plan.OutputAttrs.ElementsAs(ctx, &outputAttrs, false)
-		diagnostics.Append(diags...)
+		respDiags.Append(diags...)
 		if diags.HasError() {
 			return
 		}
 		fb, err := FilterAttrsInJSON(string(rb), outputAttrs)
 		if err != nil {
-			diagnostics.AddError(
+			respDiags.AddError(
 				"Filter `output` during operation",
 				err.Error(),
 			)
@@ -354,7 +474,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 
 	output, err := dynamic.FromJSONImplied(rb)
 	if err != nil {
-		diagnostics.AddError(
+		respDiags.AddError(
 			"Converting `output` from JSON to dynamic",
 			err.Error(),
 		)
@@ -362,20 +482,26 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, tfplan tfsdk.Pla
 	}
 	plan.Output = output
 
-	diags = tfstate.Set(ctx, plan)
-	diagnostics.Append(diags...)
-	if diags.HasError() {
+	diags = respState.Set(ctx, plan)
+	respDiags.Append(diags...)
+	if respDiags.HasError() {
+		return
+	}
+
+	diags = ephemeralBodyPrivateMgr.Set(ctx, respPrivate, eb)
+	respDiags.Append(diags...)
+	if respDiags.HasError() {
 		return
 	}
 }
 
 func (r *OperationResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	r.createOrUpdate(ctx, req.Plan, &resp.State, &resp.Diagnostics, true)
+	r.createOrUpdate(ctx, req.Config, req.Plan, tfsdk.State{}, resp.Private, &resp.State, &resp.Diagnostics, true)
 	return
 }
 
 func (r *OperationResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	r.createOrUpdate(ctx, req.Plan, &resp.State, &resp.Diagnostics, false)
+	r.createOrUpdate(ctx, req.Config, req.Plan, req.State, resp.Private, &resp.State, &resp.Diagnostics, false)
 	return
 }
 

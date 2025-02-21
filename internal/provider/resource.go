@@ -25,7 +25,6 @@ import (
 	"github.com/magodo/terraform-provider-restful/internal/client"
 	"github.com/magodo/terraform-provider-restful/internal/dynamic"
 	"github.com/magodo/terraform-provider-restful/internal/exparam"
-	"github.com/magodo/terraform-provider-restful/internal/jsonset"
 	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
@@ -518,8 +517,8 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				ElementType:         types.StringType,
 			},
 			"output": schema.DynamicAttribute{
-				Description:         "The response body after reading the resource. If `ephemeral_body` get returned by API, it won't be removed from `output`.",
-				MarkdownDescription: "The response body after reading the resource. If `ephemeral_body` get returned by API, it won't be removed from `output`.",
+				Description:         "The response body. If `ephemeral_body` get returned by API, it won't be removed from `output`.",
+				MarkdownDescription: "The response body. If `ephemeral_body` get returned by API, it won't be removed from `output`.",
 				Computed:            true,
 			},
 		},
@@ -553,35 +552,16 @@ func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConf
 							"Invalid configuration",
 							fmt.Sprintf(`Invalid path in "write_only_attrs": %s`, ie.String()),
 						)
+						return
 					}
 				}
 			}
 		}
 
-		if !config.EphemeralBody.IsUnknown() && !config.EphemeralBody.IsNull() {
-			eb, err := dynamic.ToJSON(config.EphemeralBody)
-			if err != nil {
-				resp.Diagnostics.AddError(
-					"Invalid configuration",
-					fmt.Sprintf(`marshal "ephemeral_body": %v`, err),
-				)
-				return
-			}
-			disjointed, err := jsonset.Disjointed(b, eb)
-			if err != nil {
-				resp.Diagnostics.AddError(
-					"Invalid configuration",
-					fmt.Sprintf(`checking disjoint of "body" and "ephemeral_body": %v`, err),
-				)
-				return
-			}
-			if !disjointed {
-				resp.Diagnostics.AddError(
-					"Invalid configuration",
-					`"body" and "ephemeral_body" are not disjointed`,
-				)
-				return
-			}
+		_, diags := validateEphemeralBody(b, config.EphemeralBody)
+		resp.Diagnostics = append(resp.Diagnostics, diags...)
+		if diags.HasError() {
+			return
 		}
 	}
 }
@@ -670,34 +650,13 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 	}
 
 	// Set output as unknown to trigger a plan diff, if ephemral body has changed
-	if !config.EphemeralBody.IsNull() {
-		// There are two cases here will trigger a plan diff:
-		// 1. ephemeral_body is unknown (e.g. referencing an knonw-after-apply value)
-		// 2. ephemeral_body is fully known in the config, but has different hash than the private data
-		if config.EphemeralBody.IsUnknown() {
-			// case 1
-			plan.Output = types.DynamicUnknown()
-		} else {
-			// case 2
-			if dynamic.IsFullyKnown(config.EphemeralBody) {
-				eb, err := dynamic.ToJSON(config.EphemeralBody)
-				if err != nil {
-					resp.Diagnostics.AddError(
-						`Error to marshal "ephemeral_body"`,
-						err.Error(),
-					)
-					return
-				}
-				diff, diags := ephemeralBodyPrivateMgr.Diff(ctx, req.Private, eb)
-				resp.Diagnostics = append(resp.Diagnostics, diags...)
-				if resp.Diagnostics.HasError() {
-					return
-				}
-				if diff {
-					plan.Output = types.DynamicUnknown()
-				}
-			}
-		}
+	diff, diags := ephemeralBodyChangeInPlan(ctx, req.Private, config.EphemeralBody)
+	resp.Diagnostics = append(resp.Diagnostics, diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if diff {
+		plan.Output = types.DynamicUnknown()
 	}
 }
 
@@ -779,7 +738,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 		defer unlockFunc()
 	}
 
-	// Create the resource
+	// Build the body
 	b, err := dynamic.ToJSON(plan.Body)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -791,27 +750,9 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 
 	var eb []byte
 	if !config.EphemeralBody.IsNull() {
-		eb, err = dynamic.ToJSON(config.EphemeralBody)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				`Error to marshal "ephemeral_body"`,
-				err.Error(),
-			)
-			return
-		}
-		disjointed, err := jsonset.Disjointed(b, eb)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Invalid configuration",
-				fmt.Sprintf(`checking disjoint of "body" and "ephemeral_body": %v`, err),
-			)
-			return
-		}
-		if !disjointed {
-			resp.Diagnostics.AddError(
-				"Invalid configuration",
-				`"body" and "ephemeral_body" are not disjointed`,
-			)
+		eb, diags = validateEphemeralBody(b, config.EphemeralBody)
+		resp.Diagnostics = append(resp.Diagnostics, diags...)
+		if resp.Diagnostics.HasError() {
 			return
 		}
 
@@ -826,6 +767,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 		}
 	}
 
+	// Create the resource
 	response, err := c.Create(ctx, plan.Path.ValueString(), string(b), *opt)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -1218,27 +1160,9 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 	// Optionally patch the body with emphemeral_body
 	var eb []byte
 	if !config.EphemeralBody.IsNull() {
-		eb, err = dynamic.ToJSON(config.EphemeralBody)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				`Error to marshal "ephemeral_body"`,
-				err.Error(),
-			)
-			return
-		}
-		disjointed, err := jsonset.Disjointed(planBody, eb)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Invalid configuration",
-				fmt.Sprintf(`checking disjoint of the planned body and "ephemeral_body": %v`, err),
-			)
-			return
-		}
-		if !disjointed {
-			resp.Diagnostics.AddError(
-				"Invalid configuration",
-				`the planned body and "ephemeral_body" are not disjointed`,
-			)
+		eb, diags = validateEphemeralBody(planBody, config.EphemeralBody)
+		resp.Diagnostics = append(resp.Diagnostics, diags...)
+		if resp.Diagnostics.HasError() {
 			return
 		}
 
@@ -1246,15 +1170,33 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 		planBody, err = jsonpatch.MergePatch(planBody, eb)
 		if err != nil {
 			resp.Diagnostics.AddError(
-				"Merge patching planned body with `ephemeral_body`",
+				"Merge patching `body` with `ephemeral_body`",
 				err.Error(),
 			)
 			return
 		}
 	}
 
-	// Invoke API to Update the resource only when there are changes in the body (regardless of the TF type diff).
+	// We need to invoke the API in only two cases:
+	var callAPI bool
 	if string(stateBody) != string(planBody) {
+		// 1. The body changes between state and plan (after patching with ephemeral_body)
+		callAPI = true
+	} else {
+		// 2. The ephemeral body is removed from the config. In this case, the body is the same between state and plan.
+		// 	  We need to do a tricky check about private data.
+		if config.EphemeralBody.IsNull() {
+			ok, diags := ephemeralBodyPrivateMgr.Exists(ctx, req.Private)
+			resp.Diagnostics.Append(diags...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+			callAPI = ok
+		}
+	}
+
+	// Invoke API to Update the resource only when there are changes in the body (regardless of the TF type diff).
+	if callAPI {
 		// Precheck
 		if !plan.PrecheckUpdate.IsNull() {
 			unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, state.ID.ValueString(), opt.Header, opt.Query, plan.PrecheckUpdate, state.Output)

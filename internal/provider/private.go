@@ -22,6 +22,14 @@ func (m EphemeralBodyPrivateMgr) key() string {
 	return "ephemeral_body"
 }
 
+func (m EphemeralBodyPrivateMgr) Exists(ctx context.Context, d PrivateData) (bool, diag.Diagnostics) {
+	b, diags := d.GetKey(ctx, m.key())
+	if diags.HasError() {
+		return false, diags
+	}
+	return b != nil, diags
+}
+
 // Set sets the hash of the ephemeral_body to the private state.
 // If `ebody` is nil, it removes the hash from the private state.
 func (m EphemeralBodyPrivateMgr) Set(ctx context.Context, d PrivateData, ebody []byte) (diags diag.Diagnostics) {
@@ -51,8 +59,9 @@ func (m EphemeralBodyPrivateMgr) Set(ctx context.Context, d PrivateData, ebody [
 	return d.SetKey(ctx, m.key(), b)
 }
 
-// Diff tells whether the ephemeral_body is different than the hash stored in the private state,
-// including the private state doesn't have it recorded.
+// Diff tells whether the ephemeral_body is different than the hash stored in the private state.
+// In case private state doesn't have the record, regard the record as "nil" (i.e. will return true if ebody is non-nil).
+// In case private state has the record (guaranteed to be non-nil), while ebody is nil, it also returns true.
 func (m EphemeralBodyPrivateMgr) Diff(ctx context.Context, d PrivateData, ebody []byte) (bool, diag.Diagnostics) {
 	b, diags := d.GetKey(ctx, m.key())
 	if diags.HasError() {

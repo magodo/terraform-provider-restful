@@ -3,6 +3,7 @@ package provider_test
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -93,6 +94,55 @@ func TestOperation_JSONServer_statusLocatorParam(t *testing.T) {
 				Config: d.statusLocatorParam(),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
+				},
+			},
+		},
+	})
+}
+
+func TestOperation_JSONServer_EphemeralBodyOverlap(t *testing.T) {
+	d := newJsonServerOperation()
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+		Steps: []resource.TestStep{
+			{
+				Config:      d.ephemeralBodyOverlap(),
+				ExpectError: regexp.MustCompile(`"body" and "ephemeral_body" are not disjointed`),
+			},
+		},
+	})
+}
+
+func TestOperation_JSONServer_EphemeralBody(t *testing.T) {
+	addr := "restful_operation.test"
+	d := newJsonServerOperation()
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { d.precheck(t) },
+		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+		Steps: []resource.TestStep{
+			{
+				Config: d.ephemeralBody(`foo`),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("v"), knownvalue.StringExact("foo")),
+				},
+			},
+			{
+				Config: d.ephemeralBody(`bar`),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("v"), knownvalue.StringExact("bar")),
+				},
+			},
+			{
+				Config: d.ephemeralBodyNull(),
+				ConfigStateChecks: []statecheck.StateCheck{
+					// Should only contain foo and id.
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.MapSizeExact(2)),
+				},
+			},
+			{
+				Config: d.ephemeralBody(`foo`),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("v"), knownvalue.StringExact("foo")),
 				},
 			},
 		},
@@ -234,6 +284,67 @@ resource "restful_operation" "test" {
   body = {
   	foo = "bar"
   }
+}
+`, d.url)
+}
+
+func (d jsonServerOperation) ephemeralBodyOverlap() string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+resource "restful_operation" "test" {
+  path = "posts"
+  method = "POST"
+  body = {
+  	foo = "foo"
+  }
+  ephemeral_body = {
+    foo = "bar"
+  }
+}
+`, d.url)
+}
+
+func (d jsonServerOperation) ephemeralBody(v string) string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+variable "v" {
+  type = string
+  ephemeral = true
+  default = %q
+}
+
+resource "restful_operation" "test" {
+  path = "posts"
+  method = "POST"
+  body = {
+  	foo = "foo"
+  }
+  ephemeral_body = {
+    v = var.v
+  }
+}
+`, d.url, v)
+}
+
+func (d jsonServerOperation) ephemeralBodyNull() string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+resource "restful_operation" "test" {
+  path = "posts"
+  method = "POST"
+  body = {
+  	foo = "foo"
+  }
+  ephemeral_body = null
 }
 `, d.url)
 }

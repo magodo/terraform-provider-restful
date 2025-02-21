@@ -82,7 +82,7 @@ resource "restful_resource" "rg" {
 ### Read-Only
 
 - `id` (String) The ID of the Resource.
-- `output` (Dynamic) The response body after reading the resource. If `ephemeral_body` get returned by API, it won't be removed from `output`.
+- `output` (Dynamic) The response body. If `ephemeral_body` get returned by API, it won't be removed from `output`.
 
 <a id="nestedatt--poll_create"></a>
 ### Nested Schema for `poll_create`

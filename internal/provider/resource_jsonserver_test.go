@@ -294,7 +294,7 @@ func TestResource_JSONServer_EphemeralBody(t *testing.T) {
 		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
 		Steps: []resource.TestStep{
 			{
-				Config: d.ephemeralBody("foo"),
+				Config: d.ephemeralBody(`foo`),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("v"), knownvalue.StringExact("foo")),
 				},
@@ -310,9 +310,42 @@ func TestResource_JSONServer_EphemeralBody(t *testing.T) {
 				},
 			},
 			{
-				Config: d.ephemeralBody("bar"),
+				Config: d.ephemeralBody(`bar`),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("v"), knownvalue.StringExact("bar")),
+				},
+			},
+			{
+				ResourceName:            addr,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"read_path"},
+				ImportStateIdFunc: func(s *terraform.State) (string, error) {
+					attrs := s.RootModule().Resources[addr].Primary.Attributes
+					return fmt.Sprintf(`{"id": "%s", "path": "posts", "body": {"foo": null}}`, attrs["id"]), nil
+				},
+			},
+			{
+				Config: d.ephemeralBodyNull(),
+				ConfigStateChecks: []statecheck.StateCheck{
+					// Should only contain foo and id.
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.MapSizeExact(2)),
+				},
+			},
+			{
+				ResourceName:            addr,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"read_path"},
+				ImportStateIdFunc: func(s *terraform.State) (string, error) {
+					attrs := s.RootModule().Resources[addr].Primary.Attributes
+					return fmt.Sprintf(`{"id": "%s", "path": "posts", "body": {"foo": null}}`, attrs["id"]), nil
+				},
+			},
+			{
+				Config: d.ephemeralBody(`foo`),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("v"), knownvalue.StringExact("foo")),
 				},
 			},
 			{
@@ -646,4 +679,21 @@ resource "restful_resource" "test" {
   }
 }
 `, d.url, v)
+}
+
+func (d jsonServerData) ephemeralBodyNull() string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+resource "restful_resource" "test" {
+  path = "posts"
+  read_path = "$(path)/$(body.id)"
+  body = {
+  	foo = "foo"
+  }
+  ephemeral_body = null
+}
+`, d.url)
 }
