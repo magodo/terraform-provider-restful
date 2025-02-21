@@ -359,8 +359,8 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 			},
 
 			"ephemeral_body": schema.DynamicAttribute{
-				Description:         "The ephemeral (write-only) properties of the resource.",
-				MarkdownDescription: "The ephemeral (write-only) properties of the resource.",
+				Description:         "The ephemeral (write-only) properties of the resource. This will be merge-patched to the `body` to construct the actual request body.",
+				MarkdownDescription: "The ephemeral (write-only) properties of the resource. This will be merge-patched to the `body` to construct the actual request body.",
 				Optional:            true,
 				WriteOnly:           true,
 			},
@@ -518,8 +518,8 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				ElementType:         types.StringType,
 			},
 			"output": schema.DynamicAttribute{
-				Description:         "The response body after reading the resource.",
-				MarkdownDescription: "The response body after reading the resource.",
+				Description:         "The response body after reading the resource. If `ephemeral_body` get returned by API, it won't be removed from `output`.",
+				MarkdownDescription: "The response body after reading the resource. If `ephemeral_body` get returned by API, it won't be removed from `output`.",
 				Computed:            true,
 			},
 		},
@@ -606,11 +606,17 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 		resp.Diagnostics.Append(diags...)
 		return
 	}
+	var config resourceData
+	if diags := req.Config.Get(ctx, &config); diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
 
 	defer func() {
 		resp.Plan.Set(ctx, plan)
 	}()
 
+	// Set require replace if force new attributes have changed
 	if !plan.ForceNewAttrs.IsUnknown() && dynamic.IsFullyKnown(plan.Body) {
 		var forceNewAttrs []types.String
 		if diags := plan.ForceNewAttrs.ElementsAs(ctx, &forceNewAttrs, false); diags != nil {
@@ -658,6 +664,37 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 				if result.Exists() {
 					resp.RequiresReplace = []tfpath.Path{tfpath.Root("body")}
 					break
+				}
+			}
+		}
+	}
+
+	// Set output as unknown to trigger a plan diff, if ephemral body has changed
+	if !config.EphemeralBody.IsNull() {
+		// There are two cases here will trigger a plan diff:
+		// 1. ephemeral_body is unknown (e.g. referencing an knonw-after-apply value)
+		// 2. ephemeral_body is fully known in the config, but has different hash than the private data
+		if config.EphemeralBody.IsUnknown() {
+			// case 1
+			plan.Output = types.DynamicUnknown()
+		} else {
+			// case 2
+			if dynamic.IsFullyKnown(config.EphemeralBody) {
+				eb, err := dynamic.ToJSON(config.EphemeralBody)
+				if err != nil {
+					resp.Diagnostics.AddError(
+						`Error to marshal "ephemeral_body"`,
+						err.Error(),
+					)
+					return
+				}
+				diff, diags := ephemeralBodyPrivateMgr.Diff(ctx, req.Private, eb)
+				resp.Diagnostics = append(resp.Diagnostics, diags...)
+				if resp.Diagnostics.HasError() {
+					return
+				}
+				if diff {
+					plan.Output = types.DynamicUnknown()
 				}
 			}
 		}
@@ -752,8 +789,9 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 		return
 	}
 
+	var eb []byte
 	if !config.EphemeralBody.IsNull() {
-		eb, err := dynamic.ToJSON(config.EphemeralBody)
+		eb, err = dynamic.ToJSON(config.EphemeralBody)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				`Error to marshal "ephemeral_body"`,
@@ -853,6 +891,12 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 		return
 	}
 
+	diags = ephemeralBodyPrivateMgr.Set(ctx, resp.Private, eb)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
+
 	// For LRO, wait for completion
 	if !plan.PollCreate.IsNull() {
 		var d pollData
@@ -900,6 +944,8 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	*resp = resource.CreateResponse{
 		State:       rresp.State,
 		Diagnostics: rresp.Diagnostics,
+
+		Private: resp.Private,
 	}
 }
 
@@ -1170,8 +1216,9 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 	}
 
 	// Optionally patch the body with emphemeral_body
+	var eb []byte
 	if !config.EphemeralBody.IsNull() {
-		eb, err := dynamic.ToJSON(config.EphemeralBody)
+		eb, err = dynamic.ToJSON(config.EphemeralBody)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				`Error to marshal "ephemeral_body"`,
@@ -1311,6 +1358,12 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 		return
 	}
 
+	diags = ephemeralBodyPrivateMgr.Set(ctx, resp.Private, eb)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
+
 	rreq := resource.ReadRequest{
 		State:        resp.State,
 		ProviderMeta: req.ProviderMeta,
@@ -1324,6 +1377,8 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 	*resp = resource.UpdateResponse{
 		State:       rresp.State,
 		Diagnostics: rresp.Diagnostics,
+
+		Private: resp.Private,
 	}
 }
 

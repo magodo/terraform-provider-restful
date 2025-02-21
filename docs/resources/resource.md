@@ -55,6 +55,7 @@ resource "restful_resource" "rg" {
 - `delete_method` (String) The method used to delete the resource. Possible values are `DELETE`, `POST`, `PUT` and `PATCH`. This overrides the `delete_method` set in the provider block (defaults to DELETE).
 - `delete_path` (String) The API path used to delete the resource. The `id` is used instead if `delete_path` is absent. This can be a string literal, or combined by following params: path param: `$(path)` expanded to `path`, body param: `$(body.x.y.z)` expands to the `x.y.z` property of the API body. Especially for the body param, it can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`).
 - `delete_query` (Map of List of String) The query parameters that are applied to each delete request. This overrides the `query` set in the resource block.
+- `ephemeral_body` (Dynamic) The ephemeral (write-only) properties of the resource. This will be merge-patched to the `body` to construct the actual request body.
 - `force_new_attrs` (Set of String) A set of `body` attribute paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) whose value once changed, will trigger a replace of this resource. Note this only take effects when the `body` is a unknown before apply. Technically, we do a JSON merge patch and check whether the attribute path appear in the merge patch.
 - `header` (Map of String) The header parameters that are applied to each request. This overrides the `header` set in the provider block.
 - `merge_patch_disabled` (Boolean) Whether to use a JSON Merge Patch as the request body in the PATCH update? This is only effective when `update_method` is set to `PATCH`. This overrides the `merge_patch_disabled` set in the provider block (defaults to `false`).
@@ -76,12 +77,12 @@ resource "restful_resource" "rg" {
 - `update_method` (String) The method used to update the resource. Possible values are `PUT`, `POST`, and `PATCH`. This overrides the `update_method` set in the provider block (defaults to PUT).
 - `update_path` (String) The API path used to update the resource. The `id` is used instead if `update_path` is absent. This can be a string literal, or combined by following params: path param: `$(path)` expanded to `path`, body param: `$(body.x.y.z)` expands to the `x.y.z` property of the API body. Especially for the body param, it can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`).
 - `update_query` (Map of List of String) The query parameters that are applied to each update request. This overrides the `query` set in the resource block.
-- `write_only_attrs` (List of String) A list of paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attributes that are only settable, but won't be read in GET response.
+- `write_only_attrs` (List of String) Suggest to use `ephemeral_body` instead. A list of paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attributes that are only settable, but won't be read in GET response.
 
 ### Read-Only
 
 - `id` (String) The ID of the Resource.
-- `output` (Dynamic) The response body after reading the resource.
+- `output` (Dynamic) The response body after reading the resource. If `ephemeral_body` get returned by API, it won't be removed from `output`.
 
 <a id="nestedatt--poll_create"></a>
 ### Nested Schema for `poll_create`
