@@ -597,7 +597,7 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 	}()
 
 	// Set require replace if force new attributes have changed
-	if !plan.ForceNewAttrs.IsUnknown() && dynamic.IsFullyKnown(plan.Body) {
+	if !plan.ForceNewAttrs.IsUnknown() && !plan.Body.IsUnknown() {
 		var forceNewAttrs []types.String
 		if diags := plan.ForceNewAttrs.ElementsAs(ctx, &forceNewAttrs, false); diags != nil {
 			resp.Diagnostics.Append(diags...)
