@@ -10,81 +10,93 @@ import (
 func TestDisjointed(t *testing.T) {
 	cases := []struct {
 		name       string
-		lhs        string
-		rhs        string
+		lhs        []byte
+		rhs        []byte
 		disjointed bool
 	}{
 		{
+			name:       "Primary vs nil are disjointed",
+			lhs:        []byte("1"),
+			rhs:        nil,
+			disjointed: true,
+		},
+		{
+			name:       "Primary vs nil are disjointed (swap)",
+			lhs:        nil,
+			rhs:        []byte("1"),
+			disjointed: true,
+		},
+		{
 			name:       "Primary vs null are disjointed",
-			lhs:        "1",
-			rhs:        "null",
+			lhs:        []byte("1"),
+			rhs:        []byte("null"),
 			disjointed: true,
 		},
 		{
 			name:       "Primary vs null are disjointed (swap)",
-			lhs:        "null",
-			rhs:        "1",
+			lhs:        []byte("null"),
+			rhs:        []byte("1"),
 			disjointed: true,
 		},
 		{
 			name:       "Same typed primaries are jointed",
-			lhs:        "1",
-			rhs:        "2",
+			lhs:        []byte("1"),
+			rhs:        []byte("2"),
 			disjointed: false,
 		},
 		{
 			name:       "Different typed primaries are jointed",
-			lhs:        "1",
-			rhs:        "true",
+			lhs:        []byte("1"),
+			rhs:        []byte("true"),
 			disjointed: false,
 		},
 		{
 			name:       "Object of common keys whose values are jointed, are jointed",
-			lhs:        `{"a": 1, "b": 2}`,
-			rhs:        `{"c": 1, "b": 2}`,
+			lhs:        []byte(`{"a": 1, "b": 2}`),
+			rhs:        []byte(`{"c": 1, "b": 2}`),
 			disjointed: false,
 		},
 		{
 			name:       "Object of common keys whose values are disjointed, are disjointed",
-			lhs:        `{"a": 1, "b": {"x": 1}}`,
-			rhs:        `{"c": 1, "b": {"y": 2}}`,
+			lhs:        []byte(`{"a": 1, "b": {"x": 1}}`),
+			rhs:        []byte(`{"c": 1, "b": {"y": 2}}`),
 			disjointed: true,
 		},
 		{
 			name:       "Object of no common keys are disjointed",
-			lhs:        `{"a": 1, "b": 2}`,
-			rhs:        `{"c": 1, "d": 2}`,
+			lhs:        []byte(`{"a": 1, "b": 2}`),
+			rhs:        []byte(`{"c": 1, "d": 2}`),
 			disjointed: true,
 		},
 		{
 			name:       "Arrays of jointed elements at the same index, are jointed",
-			lhs:        "[1]",
-			rhs:        "[2]",
+			lhs:        []byte("[1]"),
+			rhs:        []byte("[2]"),
 			disjointed: false,
 		},
 		{
 			name:       "Arrays of disjointed elements at the same index, are disjointed",
-			lhs:        `[{"a": 1}, 2]`,
-			rhs:        `[{"b": 1}]`,
+			lhs:        []byte(`[{"a": 1}, 2]`),
+			rhs:        []byte(`[{"b": 1}]`),
 			disjointed: true,
 		},
 		{
 			name:       "Arrays of no same indexed elements are disjointed",
-			lhs:        "[]",
-			rhs:        "[1]",
+			lhs:        []byte("[]"),
+			rhs:        []byte("[1]"),
 			disjointed: true,
 		},
 		{
 			name:       "Mixed object and array that are disjointed",
-			lhs:        `{"array": [{"x": 1}]}`,
-			rhs:        `{"array": [{"y": 1}]}`,
+			lhs:        []byte(`{"array": [{"x": 1}]}`),
+			rhs:        []byte(`{"array": [{"y": 1}]}`),
 			disjointed: true,
 		},
 	}
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			disjointed, err := jsonset.Disjointed([]byte(tt.lhs), []byte(tt.rhs))
+			disjointed, err := jsonset.Disjointed(tt.lhs, tt.rhs)
 			require.NoError(t, err)
 			require.Equal(t, tt.disjointed, disjointed)
 		})

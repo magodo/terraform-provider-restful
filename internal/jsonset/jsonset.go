@@ -13,6 +13,9 @@ import (
 // different values.
 func Disjointed(lhs, rhs []byte) (bool, error) {
 	var lv, rv interface{}
+	if lhs == nil || rhs == nil {
+		return true, nil
+	}
 	if err := json.Unmarshal(lhs, &lv); err != nil {
 		return false, fmt.Errorf("JSON unmarshal lhs: %v", err)
 	}
