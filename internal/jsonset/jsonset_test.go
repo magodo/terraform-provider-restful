@@ -23,18 +23,6 @@ func TestDisjointed(t *testing.T) {
 			err:        true,
 		},
 		{
-			name:       "Primary vs null are disjointed",
-			lhs:        []byte("1"),
-			rhs:        []byte("null"),
-			disjointed: true,
-		},
-		{
-			name:       "Primary vs null are disjointed (swap)",
-			lhs:        []byte("null"),
-			rhs:        []byte("1"),
-			disjointed: true,
-		},
-		{
 			name:       "Same typed primaries are jointed",
 			lhs:        []byte("1"),
 			rhs:        []byte("2"),
@@ -44,6 +32,12 @@ func TestDisjointed(t *testing.T) {
 			name:       "Different typed primaries are jointed",
 			lhs:        []byte("1"),
 			rhs:        []byte("true"),
+			disjointed: false,
+		},
+		{
+			name:       "Primary and null are jointed",
+			lhs:        []byte("1"),
+			rhs:        []byte("null"),
 			disjointed: false,
 		},
 		{
@@ -71,22 +65,16 @@ func TestDisjointed(t *testing.T) {
 			disjointed: false,
 		},
 		{
-			name:       "Arrays of disjointed elements at the same index, are disjointed",
+			name:       "Arrays of disjointed elements at the same index, are jointed",
 			lhs:        []byte(`[{"a": 1}, 2]`),
 			rhs:        []byte(`[{"b": 1}]`),
-			disjointed: true,
+			disjointed: false,
 		},
 		{
-			name:       "Arrays of no same indexed elements are disjointed",
+			name:       "Arrays of no same indexed elements are jointed",
 			lhs:        []byte("[]"),
 			rhs:        []byte("[1]"),
-			disjointed: true,
-		},
-		{
-			name:       "Mixed object and array that are disjointed",
-			lhs:        []byte(`{"array": [{"x": 1}]}`),
-			rhs:        []byte(`{"array": [{"y": 1}]}`),
-			disjointed: true,
+			disjointed: false,
 		},
 	}
 
@@ -99,6 +87,101 @@ func TestDisjointed(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Equal(t, tt.disjointed, disjointed)
+		})
+	}
+}
+
+func TestDifference(t *testing.T) {
+	cases := []struct {
+		name   string
+		lhs    []byte
+		rhs    []byte
+		result string
+		err    bool
+	}{
+		{
+			name: "Invalid json",
+			lhs:  []byte("1"),
+			rhs:  nil,
+			err:  true,
+		},
+		{
+			name:   "Not both maps: primary vs null",
+			lhs:    []byte("1"),
+			rhs:    []byte("null"),
+			result: "1",
+		},
+		{
+			name:   "Not both maps: null vs primary",
+			lhs:    []byte("null"),
+			rhs:    []byte("1"),
+			result: "null",
+		},
+		{
+			name:   "Not both maps: primary vs map",
+			lhs:    []byte(`1`),
+			rhs:    []byte(`{"a": 1}`),
+			result: "1",
+		},
+		{
+			name:   "Not both maps: map vs primary",
+			lhs:    []byte(`{"a": 1}`),
+			rhs:    []byte(`1`),
+			result: `{"a": 1}`,
+		},
+		{
+			name:   "Simple map",
+			lhs:    []byte(`{"a": 1, "b": 2, "c": 3}`),
+			rhs:    []byte(`{"a": 2, "b": 3}`),
+			result: `{"c": 3}`,
+		},
+		{
+			name:   "Simple map (swap)",
+			lhs:    []byte(`{"a": 2, "b": 3}`),
+			rhs:    []byte(`{"a": 1, "b": 2, "c": 3}`),
+			result: `{}`,
+		},
+		{
+			name:   "Nested map",
+			lhs:    []byte(`{"m": {"a": 1, "b": 2, "c": 3}, "x": 1, "y": 2, "z": 3}`),
+			rhs:    []byte(`{"m": {"a": 2, "b": 3}, "x": 2, "y": 3}`),
+			result: `{"m": { "c": 3}, "z": 3}`,
+		},
+		{
+			name:   "Nested map swap",
+			lhs:    []byte(`{"m": {"a": 2, "b": 3}, "x": 2, "y": 3}`),
+			rhs:    []byte(`{"m": {"a": 1, "b": 2, "c": 3}, "x": 1, "y": 2, "z": 3}`),
+			result: `{}`,
+		},
+		{
+			name:   "Nested map with empty map",
+			lhs:    []byte(`{"m": {}, "x": 1, "y": 2}`),
+			rhs:    []byte(`{"m": {"a": 1, "b": 2, "c": 3}, "x": 2, "y": 3}`),
+			result: `{"m": {}}`,
+		},
+		{
+			name:   "More nested map 1",
+			lhs:    []byte(`{"m": {"a": 2, "b": 3}, "x": 1, "y": 2, "z": 3}`),
+			rhs:    []byte(`{"m": {"a": 1, "b": 2, "c": 3}, "x": 2, "y": 3}`),
+			result: `{"z": 3}`,
+		},
+		{
+			name:   "More nested map 2",
+			lhs:    []byte(`{"m": {"a": 2, "b": 3, "c": {"x": 1, "y": 2, "z": 3}}}`),
+			rhs:    []byte(`{"m": {"a": 1, "b": 2, "c": {"x": 2, "y": 3}}}`),
+			result: `{"m": {"c": {"z": 3}}}`,
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := jsonset.Difference(tt.lhs, tt.rhs)
+			if tt.err {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.JSONEq(t, tt.result, string(result))
 		})
 	}
 }

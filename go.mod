@@ -1,6 +1,6 @@
 module github.com/magodo/terraform-provider-restful
 
-go 1.22.7
+go 1.24
 
 toolchain go1.24.0
 
