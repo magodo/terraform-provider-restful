@@ -13,18 +13,14 @@ func TestDisjointed(t *testing.T) {
 		lhs        []byte
 		rhs        []byte
 		disjointed bool
+		err        bool
 	}{
 		{
-			name:       "Primary vs nil are disjointed",
+			name:       "Invalid json",
 			lhs:        []byte("1"),
 			rhs:        nil,
-			disjointed: true,
-		},
-		{
-			name:       "Primary vs nil are disjointed (swap)",
-			lhs:        nil,
-			rhs:        []byte("1"),
-			disjointed: true,
+			disjointed: false,
+			err:        true,
 		},
 		{
 			name:       "Primary vs null are disjointed",
@@ -97,6 +93,10 @@ func TestDisjointed(t *testing.T) {
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			disjointed, err := jsonset.Disjointed(tt.lhs, tt.rhs)
+			if tt.err {
+				require.Error(t, err)
+				return
+			}
 			require.NoError(t, err)
 			require.Equal(t, tt.disjointed, disjointed)
 		})

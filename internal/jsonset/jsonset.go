@@ -5,17 +5,14 @@ import (
 	"fmt"
 )
 
-// Disjointed tells whether two json values are disjointed.
+// Disjointed tells whether two valid json values are disjointed.
 // They are disjointed in one of the following cases:
 // - Both are objects: Having different sets of keys, or the values of the common key are disjointed.
 // - Both are arrays: The same indexed elements are disjointed.
 // Otherwise, the two json values are regarded jointed, including both values have different types, or
-// different values.
+// different values. Except any of them is nil or "null".
 func Disjointed(lhs, rhs []byte) (bool, error) {
 	var lv, rv interface{}
-	if lhs == nil || rhs == nil {
-		return true, nil
-	}
 	if err := json.Unmarshal(lhs, &lv); err != nil {
 		return false, fmt.Errorf("JSON unmarshal lhs: %v", err)
 	}
