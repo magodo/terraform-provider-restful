@@ -15,6 +15,18 @@ func TestDisjointed(t *testing.T) {
 		disjointed bool
 	}{
 		{
+			name:       "Primary vs null are disjointed",
+			lhs:        "1",
+			rhs:        "null",
+			disjointed: true,
+		},
+		{
+			name:       "Primary vs null are disjointed (swap)",
+			lhs:        "null",
+			rhs:        "1",
+			disjointed: true,
+		},
+		{
 			name:       "Same typed primaries are jointed",
 			lhs:        "1",
 			rhs:        "2",

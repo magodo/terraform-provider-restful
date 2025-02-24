@@ -10,9 +10,10 @@ import (
 	"github.com/magodo/terraform-provider-restful/internal/jsonset"
 )
 
-// validateEphemeralBody validates a fully known ephemeral_body doesn't joint with the body.
+// validateEphemeralBody validates a known ephemeral_body doesn't joint with the body.
+// It returns the json representation of the ephemeral body as well (if known).
 func validateEphemeralBody(body []byte, ephemeralBody types.Dynamic) ([]byte, diag.Diagnostics) {
-	if ephemeralBody.IsUnknown() || ephemeralBody.IsNull() {
+	if ephemeralBody.IsUnknown() {
 		return nil, nil
 	}
 

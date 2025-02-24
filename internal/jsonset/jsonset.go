@@ -23,6 +23,9 @@ func Disjointed(lhs, rhs []byte) (bool, error) {
 }
 
 func disjointValue(lv, rv interface{}) bool {
+	if lv == nil || rv == nil {
+		return true
+	}
 	switch lv := lv.(type) {
 	case map[string]interface{}:
 		rv, ok := rv.(map[string]interface{})
