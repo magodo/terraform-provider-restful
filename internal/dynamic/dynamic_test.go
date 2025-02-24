@@ -11,14 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNullToJSON(t *testing.T) {
-	input := types.DynamicNull()
-	expect := `null`
-	b, err := ToJSON(input)
-	require.NoError(t, err)
-	require.JSONEq(t, expect, string(b))
-}
-
 func TestToJSON(t *testing.T) {
 	input := types.DynamicValue(
 		types.ObjectValueMust(

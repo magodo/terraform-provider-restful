@@ -12,7 +12,7 @@ import (
 
 func ToJSON(d types.Dynamic) ([]byte, error) {
 	if d.IsNull() || d.IsUnknown() {
-		return json.Marshal(nil)
+		return nil, nil
 	}
 	return attrValueToJSON(d.UnderlyingValue())
 }
