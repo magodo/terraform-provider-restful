@@ -52,17 +52,14 @@ resource "restful_resource" "user" {
   path      = "/users"
   read_path = "$(path)/$(body.id)"
   body = {
-    accountEnabled    = true
-    mailNickname      = "AdeleV"
     displayName       = "J.Doe"
     userPrincipalName = "jdoe@wztwcygmail.onmicrosoft.com"
+  }
+  ephemeral_body = {
+    mailNickname      = "AdeleV"
+    accountEnabled    = true
     passwordProfile = {
       password = "SecretP@sswd99!"
     }
   }
-  write_only_attrs = [
-    "mailNickname",
-    "accountEnabled",
-    "passwordProfile",
-  ]
 }
