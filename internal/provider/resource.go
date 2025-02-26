@@ -430,8 +430,8 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				},
 			},
 			"write_only_attrs": schema.ListAttribute{
-				Description:         "Suggest to use `ephemeral_body` instead. A list of paths (in gjson syntax) to the attributes that are only settable, but won't be read in GET response.",
-				MarkdownDescription: "Suggest to use `ephemeral_body` instead. A list of paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attributes that are only settable, but won't be read in GET response.",
+				Description:         "Suggest to use `ephemeral_body` instead. A list of paths (in gjson syntax) to the attributes that are only settable, but won't be read in GET response. Prefer to use `ephemeral_body`.",
+				MarkdownDescription: "Suggest to use `ephemeral_body` instead. A list of paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attributes that are only settable, but won't be read in GET response. Prefer to use `ephemeral_body`.",
 				Optional:            true,
 				ElementType:         types.StringType,
 			},
