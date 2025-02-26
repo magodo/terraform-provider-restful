@@ -123,13 +123,15 @@ func TestOperation_JSONServer_EphemeralBody(t *testing.T) {
 			{
 				Config: d.ephemeralBody(`foo`),
 				ConfigStateChecks: []statecheck.StateCheck{
-					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("v"), knownvalue.StringExact("foo")),
+					// Should only contain foo and id.
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.MapSizeExact(2)),
 				},
 			},
 			{
 				Config: d.ephemeralBody(`bar`),
 				ConfigStateChecks: []statecheck.StateCheck{
-					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("v"), knownvalue.StringExact("bar")),
+					// Should only contain foo and id.
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.MapSizeExact(2)),
 				},
 			},
 			{
@@ -142,7 +144,8 @@ func TestOperation_JSONServer_EphemeralBody(t *testing.T) {
 			{
 				Config: d.ephemeralBody(`foo`),
 				ConfigStateChecks: []statecheck.StateCheck{
-					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("v"), knownvalue.StringExact("foo")),
+					// Should only contain foo and id.
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.MapSizeExact(2)),
 				},
 			},
 		},
@@ -326,7 +329,7 @@ resource "restful_operation" "test" {
   	foo = "foo"
   }
   ephemeral_body = {
-    v = var.v
+    secret = var.v
   }
 }
 `, d.url, v)

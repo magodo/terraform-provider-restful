@@ -25,6 +25,7 @@ import (
 	"github.com/magodo/terraform-provider-restful/internal/client"
 	"github.com/magodo/terraform-provider-restful/internal/dynamic"
 	"github.com/magodo/terraform-provider-restful/internal/exparam"
+	"github.com/magodo/terraform-provider-restful/internal/jsonset"
 	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
@@ -517,8 +518,8 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				ElementType:         types.StringType,
 			},
 			"output": schema.DynamicAttribute{
-				Description:         "The response body. If `ephemeral_body` get returned by API, it won't be removed from `output`.",
-				MarkdownDescription: "The response body. If `ephemeral_body` get returned by API, it won't be removed from `output`.",
+				Description:         "The response body. If `ephemeral_body` get returned by API, it will be removed from `output`.",
+				MarkdownDescription: "The response body. If `ephemeral_body` get returned by API, it will be removed from `output`.",
 				Computed:            true,
 			},
 		},
@@ -656,6 +657,7 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 		return
 	}
 	if diff {
+		tflog.Info(ctx, `"ephemeral_body" has changed`)
 		plan.Output = types.DynamicUnknown()
 	}
 }
@@ -876,6 +878,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	rreq := resource.ReadRequest{
 		State:        resp.State,
 		ProviderMeta: req.ProviderMeta,
+		Private:      resp.Private,
 	}
 	rresp := resource.ReadResponse{
 		State:       resp.State,
@@ -886,8 +889,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	*resp = resource.CreateResponse{
 		State:       rresp.State,
 		Diagnostics: rresp.Diagnostics,
-
-		Private: resp.Private,
+		Private:     resp.Private,
 	}
 }
 
@@ -1048,6 +1050,21 @@ func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *reso
 		b = []byte(fb)
 	}
 
+	eb, diags := ephemeralBodyPrivateMgr.GetNullBody(ctx, req.Private)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if eb != nil {
+		b, err = jsonset.Difference(b, eb)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Removing `ephemeral_body` from `output`",
+				err.Error(),
+			)
+			return
+		}
+	}
 	output, err := dynamic.FromJSONImplied(b)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -1309,6 +1326,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 	rreq := resource.ReadRequest{
 		State:        resp.State,
 		ProviderMeta: req.ProviderMeta,
+		Private:      resp.Private,
 	}
 	rresp := resource.ReadResponse{
 		State:       resp.State,
@@ -1319,8 +1337,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 	*resp = resource.UpdateResponse{
 		State:       rresp.State,
 		Diagnostics: rresp.Diagnostics,
-
-		Private: resp.Private,
+		Private:     resp.Private,
 	}
 }
 

@@ -22,6 +22,7 @@ import (
 	"github.com/magodo/terraform-provider-restful/internal/client"
 	"github.com/magodo/terraform-provider-restful/internal/dynamic"
 	"github.com/magodo/terraform-provider-restful/internal/exparam"
+	"github.com/magodo/terraform-provider-restful/internal/jsonset"
 	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
 )
 
@@ -196,8 +197,8 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 			},
 
 			"output": schema.DynamicAttribute{
-				Description:         "The response body. If `ephemeral_body` get returned by API, it won't be removed from `output`.",
-				MarkdownDescription: "The response body. If `ephemeral_body` get returned by API, it won't be removed from `output`.",
+				Description:         "The response body. If `ephemeral_body` get returned by API, it will be removed from `output`.",
+				MarkdownDescription: "The response body. If `ephemeral_body` get returned by API, it will be removed from `output`.",
 				Computed:            true,
 			},
 		},
@@ -262,6 +263,7 @@ func (r *OperationResource) ModifyPlan(ctx context.Context, req resource.ModifyP
 		return
 	}
 	if diff {
+		tflog.Info(ctx, `"ephemeral_body" has changed`)
 		plan.Output = types.DynamicUnknown()
 	}
 }
@@ -452,7 +454,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, reqConfig tfsdk.
 	plan.ID = types.StringValue(resourceId)
 
 	// Set Output to state
-	rb := response.Body()
+	b := response.Body()
 	if !plan.OutputAttrs.IsNull() {
 		// Update the output to only contain the specified attributes.
 		var outputAttrs []string
@@ -461,7 +463,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, reqConfig tfsdk.
 		if diags.HasError() {
 			return
 		}
-		fb, err := FilterAttrsInJSON(string(rb), outputAttrs)
+		fb, err := FilterAttrsInJSON(string(b), outputAttrs)
 		if err != nil {
 			respDiags.AddError(
 				"Filter `output` during operation",
@@ -469,10 +471,21 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, reqConfig tfsdk.
 			)
 			return
 		}
-		rb = []byte(fb)
+		b = []byte(fb)
 	}
 
-	output, err := dynamic.FromJSONImplied(rb)
+	if eb != nil {
+		b, err = jsonset.Difference(b, eb)
+		if err != nil {
+			respDiags.AddError(
+				"Removing `ephemeral_body` from `output`",
+				err.Error(),
+			)
+			return
+		}
+	}
+
+	output, err := dynamic.FromJSONImplied(b)
 	if err != nil {
 		respDiags.AddError(
 			"Converting `output` from JSON to dynamic",

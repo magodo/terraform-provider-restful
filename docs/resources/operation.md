@@ -61,7 +61,7 @@ resource "restful_operation" "register_rp" {
 ### Read-Only
 
 - `id` (String) The ID of the operation.
-- `output` (Dynamic) The response body. If `ephemeral_body` get returned by API, it won't be removed from `output`.
+- `output` (Dynamic) The response body. If `ephemeral_body` get returned by API, it will be removed from `output`.
 
 <a id="nestedatt--poll"></a>
 ### Nested Schema for `poll`

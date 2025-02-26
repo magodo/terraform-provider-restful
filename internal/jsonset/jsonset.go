@@ -96,3 +96,31 @@ func diffMap(lm, rm map[string]interface{}) (map[string]interface{}, bool) {
 	}
 	return lm, diff
 }
+
+// NullifyObject returns the json object, with value nullified, recursively.
+// If the input is not a json object, nil is returned.
+func NullifyObject(b []byte) ([]byte, error) {
+	var v interface{}
+	if err := json.Unmarshal(b, &v); err != nil {
+		return nil, err
+	}
+
+	return json.Marshal(nullifyVal(v))
+}
+
+func nullifyVal(v interface{}) interface{} {
+	switch v := v.(type) {
+	case map[string]interface{}:
+		return nullifyMap(v)
+	default:
+		return nil
+	}
+}
+
+func nullifyMap(m map[string]interface{}) map[string]interface{} {
+	mm := map[string]interface{}{}
+	for k, v := range m {
+		mm[k] = nullifyVal(v)
+	}
+	return mm
+}

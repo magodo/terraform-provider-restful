@@ -130,6 +130,18 @@ func TestDifference(t *testing.T) {
 			result: `{"a": 1}`,
 		},
 		{
+			name:   "Empty map",
+			lhs:    []byte(`{"a": 1, "b": 2, "c": 3}`),
+			rhs:    []byte(`{}`),
+			result: `{"a": 1, "b": 2, "c": 3}`,
+		},
+		{
+			name:   "Empty map (swap)",
+			lhs:    []byte(`{}`),
+			rhs:    []byte(`{"a": 1, "b": 2, "c": 3}`),
+			result: `{}`,
+		},
+		{
 			name:   "Simple map",
 			lhs:    []byte(`{"a": 1, "b": 2, "c": 3}`),
 			rhs:    []byte(`{"a": 2, "b": 3}`),
@@ -176,6 +188,58 @@ func TestDifference(t *testing.T) {
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := jsonset.Difference(tt.lhs, tt.rhs)
+			if tt.err {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.JSONEq(t, tt.result, string(result))
+		})
+	}
+}
+
+func TestNullifyObject(t *testing.T) {
+	cases := []struct {
+		name   string
+		input  []byte
+		result string
+		err    bool
+	}{
+		{
+			name:  "null",
+			input: nil,
+			err:   true,
+		},
+		{
+			name:   "JSON null",
+			input:  []byte("null"),
+			result: "null",
+		},
+		{
+			name:   "Primary",
+			input:  []byte("123"),
+			result: "null",
+		},
+		{
+			name:   "Array",
+			input:  []byte("[1,2,3]"),
+			result: "null",
+		},
+		{
+			name:   "Simple map",
+			input:  []byte(`{"a": 1, "b": 2, "c": 3}`),
+			result: `{"a": null, "b": null, "c": null}`,
+		},
+		{
+			name:   "Complex map",
+			input:  []byte(`{"m": {"a": 1, "b": 2}, "array": [1,2,3], "p": 1}`),
+			result: `{"m": {"a": null, "b": null}, "array": null, "p": null}`,
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := jsonset.NullifyObject(tt.input)
 			if tt.err {
 				require.Error(t, err)
 				return

@@ -296,14 +296,16 @@ func TestResource_JSONServer_EphemeralBody(t *testing.T) {
 			{
 				Config: d.ephemeralBody(`foo`),
 				ConfigStateChecks: []statecheck.StateCheck{
-					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("v"), knownvalue.StringExact("foo")),
+					// Should only contain foo and id.
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.MapSizeExact(2)),
 				},
 			},
 			{
-				ResourceName:            addr,
-				ImportState:             true,
-				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"read_path"},
+				ResourceName:      addr,
+				ImportState:       true,
+				ImportStateVerify: true,
+				// output is ignored since there is no way to remove "ephemeral_body" from "output" (since "ephemral_body" is always null in the state, import spec won't work here)
+				ImportStateVerifyIgnore: []string{"read_path", "output"},
 				ImportStateIdFunc: func(s *terraform.State) (string, error) {
 					attrs := s.RootModule().Resources[addr].Primary.Attributes
 					return fmt.Sprintf(`{"id": "%s", "path": "posts", "body": {"foo": null}}`, attrs["id"]), nil
@@ -312,14 +314,15 @@ func TestResource_JSONServer_EphemeralBody(t *testing.T) {
 			{
 				Config: d.ephemeralBody(`bar`),
 				ConfigStateChecks: []statecheck.StateCheck{
-					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("v"), knownvalue.StringExact("bar")),
+					// Should only contain foo and id.
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.MapSizeExact(2)),
 				},
 			},
 			{
 				ResourceName:            addr,
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"read_path"},
+				ImportStateVerifyIgnore: []string{"read_path", "output"},
 				ImportStateIdFunc: func(s *terraform.State) (string, error) {
 					attrs := s.RootModule().Resources[addr].Primary.Attributes
 					return fmt.Sprintf(`{"id": "%s", "path": "posts", "body": {"foo": null}}`, attrs["id"]), nil
@@ -336,7 +339,7 @@ func TestResource_JSONServer_EphemeralBody(t *testing.T) {
 				ResourceName:            addr,
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"read_path"},
+				ImportStateVerifyIgnore: []string{"read_path", "output"},
 				ImportStateIdFunc: func(s *terraform.State) (string, error) {
 					attrs := s.RootModule().Resources[addr].Primary.Attributes
 					return fmt.Sprintf(`{"id": "%s", "path": "posts", "body": {"foo": null}}`, attrs["id"]), nil
@@ -345,14 +348,15 @@ func TestResource_JSONServer_EphemeralBody(t *testing.T) {
 			{
 				Config: d.ephemeralBody(`foo`),
 				ConfigStateChecks: []statecheck.StateCheck{
-					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("v"), knownvalue.StringExact("foo")),
+					// Should only contain foo and id.
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.MapSizeExact(2)),
 				},
 			},
 			{
 				ResourceName:            addr,
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"read_path"},
+				ImportStateVerifyIgnore: []string{"read_path", "output"},
 				ImportStateIdFunc: func(s *terraform.State) (string, error) {
 					attrs := s.RootModule().Resources[addr].Primary.Attributes
 					return fmt.Sprintf(`{"id": "%s", "path": "posts", "body": {"foo": null}}`, attrs["id"]), nil
@@ -675,7 +679,7 @@ resource "restful_resource" "test" {
   	foo = "foo"
   }
   ephemeral_body = {
-    v = var.v
+    secret = var.v
   }
 }
 `, d.url, v)
