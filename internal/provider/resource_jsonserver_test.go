@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -265,6 +266,100 @@ func TestResource_JSONServer_UpdateBodyPatch(t *testing.T) {
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("addon").AtMapKey("a"), knownvalue.StringExact("hmm")),
 					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("addon").AtMapKey("b"), knownvalue.NotNull()),
+				},
+			},
+		},
+	})
+}
+
+func TestResource_JSONServer_EphemeralBodyOverlap(t *testing.T) {
+	d := newJsonServerData()
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+		Steps: []resource.TestStep{
+			{
+				Config:      d.ephemeralBodyOverlap(),
+				ExpectError: regexp.MustCompile(`"body" and "ephemeral_body" are not disjointed`),
+			},
+		},
+	})
+}
+
+func TestResource_JSONServer_EphemeralBody(t *testing.T) {
+	addr := "restful_resource.test"
+	d := newJsonServerData()
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { d.precheck(t) },
+		CheckDestroy:             d.CheckDestroy(addr),
+		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+		Steps: []resource.TestStep{
+			{
+				Config: d.ephemeralBody(`foo`),
+				ConfigStateChecks: []statecheck.StateCheck{
+					// Should only contain foo and id.
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.MapSizeExact(2)),
+				},
+			},
+			{
+				ResourceName:      addr,
+				ImportState:       true,
+				ImportStateVerify: true,
+				// output is ignored since there is no way to remove "ephemeral_body" from "output" (since "ephemral_body" is always null in the state, import spec won't work here)
+				ImportStateVerifyIgnore: []string{"read_path", "output"},
+				ImportStateIdFunc: func(s *terraform.State) (string, error) {
+					attrs := s.RootModule().Resources[addr].Primary.Attributes
+					return fmt.Sprintf(`{"id": "%s", "path": "posts", "body": {"foo": null}}`, attrs["id"]), nil
+				},
+			},
+			{
+				Config: d.ephemeralBody(`bar`),
+				ConfigStateChecks: []statecheck.StateCheck{
+					// Should only contain foo and id.
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.MapSizeExact(2)),
+				},
+			},
+			{
+				ResourceName:            addr,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"read_path", "output"},
+				ImportStateIdFunc: func(s *terraform.State) (string, error) {
+					attrs := s.RootModule().Resources[addr].Primary.Attributes
+					return fmt.Sprintf(`{"id": "%s", "path": "posts", "body": {"foo": null}}`, attrs["id"]), nil
+				},
+			},
+			{
+				Config: d.ephemeralBodyNull(),
+				ConfigStateChecks: []statecheck.StateCheck{
+					// Should only contain foo and id.
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.MapSizeExact(2)),
+				},
+			},
+			{
+				ResourceName:            addr,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"read_path", "output"},
+				ImportStateIdFunc: func(s *terraform.State) (string, error) {
+					attrs := s.RootModule().Resources[addr].Primary.Attributes
+					return fmt.Sprintf(`{"id": "%s", "path": "posts", "body": {"foo": null}}`, attrs["id"]), nil
+				},
+			},
+			{
+				Config: d.ephemeralBody(`foo`),
+				ConfigStateChecks: []statecheck.StateCheck{
+					// Should only contain foo and id.
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.MapSizeExact(2)),
+				},
+			},
+			{
+				ResourceName:            addr,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"read_path", "output"},
+				ImportStateIdFunc: func(s *terraform.State) (string, error) {
+					attrs := s.RootModule().Resources[addr].Primary.Attributes
+					return fmt.Sprintf(`{"id": "%s", "path": "posts", "body": {"foo": null}}`, attrs["id"]), nil
 				},
 			},
 		},
@@ -545,4 +640,64 @@ resource "restful_resource" "test" {
   read_path = "$(path)/$(body.id)"
 }
 `, d.url, v)
+}
+
+func (d jsonServerData) ephemeralBodyOverlap() string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+resource "restful_resource" "test" {
+  path = "posts"
+  body = {
+  	foo = "foo"
+  }
+  ephemeral_body = {
+    foo = "bar"
+  }
+}
+`, d.url)
+}
+
+func (d jsonServerData) ephemeralBody(v string) string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+variable "v" {
+  type = string
+  ephemeral = true
+  default = %q
+}
+
+resource "restful_resource" "test" {
+  path = "posts"
+  read_path = "$(path)/$(body.id)"
+  body = {
+  	foo = "foo"
+  }
+  ephemeral_body = {
+    secret = var.v
+  }
+}
+`, d.url, v)
+}
+
+func (d jsonServerData) ephemeralBodyNull() string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+resource "restful_resource" "test" {
+  path = "posts"
+  read_path = "$(path)/$(body.id)"
+  body = {
+  	foo = "foo"
+  }
+  ephemeral_body = null
+}
+`, d.url)
 }

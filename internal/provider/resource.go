@@ -25,6 +25,7 @@ import (
 	"github.com/magodo/terraform-provider-restful/internal/client"
 	"github.com/magodo/terraform-provider-restful/internal/dynamic"
 	"github.com/magodo/terraform-provider-restful/internal/exparam"
+	"github.com/magodo/terraform-provider-restful/internal/jsonset"
 	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
@@ -58,10 +59,11 @@ type resourceData struct {
 	PrecheckUpdate types.List `tfsdk:"precheck_update"`
 	PrecheckDelete types.List `tfsdk:"precheck_delete"`
 
-	Body       types.Dynamic `tfsdk:"body"`
-	DeleteBody types.Dynamic `tfsdk:"delete_body"`
+	Body          types.Dynamic `tfsdk:"body"`
+	EphemeralBody types.Dynamic `tfsdk:"ephemeral_body"`
 
-	UpdateBodyPatches types.List `tfsdk:"update_body_patches"`
+	DeleteBody        types.Dynamic `tfsdk:"delete_body"`
+	UpdateBodyPatches types.List    `tfsdk:"update_body_patches"`
 
 	PollCreate types.Object `tfsdk:"poll_create"`
 	PollUpdate types.Object `tfsdk:"poll_update"`
@@ -356,6 +358,13 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				Required:            true,
 			},
 
+			"ephemeral_body": schema.DynamicAttribute{
+				Description:         "The ephemeral (write-only) properties of the resource. This will be merge-patched to the `body` to construct the actual request body.",
+				MarkdownDescription: "The ephemeral (write-only) properties of the resource. This will be merge-patched to the `body` to construct the actual request body.",
+				Optional:            true,
+				WriteOnly:           true,
+			},
+
 			"delete_body": schema.DynamicAttribute{
 				Description:         "The payload for the `Delete` call.",
 				MarkdownDescription: "The payload for the `Delete` call.",
@@ -421,8 +430,8 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				},
 			},
 			"write_only_attrs": schema.ListAttribute{
-				Description:         "A list of paths (in gjson syntax) to the attributes that are only settable, but won't be read in GET response.",
-				MarkdownDescription: "A list of paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attributes that are only settable, but won't be read in GET response.",
+				Description:         "A list of paths (in gjson syntax) to the attributes that are only settable, but won't be read in GET response. Prefer to use `ephemeral_body`.",
+				MarkdownDescription: "A list of paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attributes that are only settable, but won't be read in GET response. Prefer to use `ephemeral_body`.",
 				Optional:            true,
 				ElementType:         types.StringType,
 			},
@@ -509,8 +518,8 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				ElementType:         types.StringType,
 			},
 			"output": schema.DynamicAttribute{
-				Description:         "The response body after reading the resource.",
-				MarkdownDescription: "The response body after reading the resource.",
+				Description:         "The response body. If `ephemeral_body` get returned by API, it will be removed from `output`.",
+				MarkdownDescription: "The response body. If `ephemeral_body` get returned by API, it will be removed from `output`.",
 				Computed:            true,
 			},
 		},
@@ -524,6 +533,7 @@ func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConf
 	if diags.HasError() {
 		return
 	}
+
 	if !config.Body.IsUnknown() {
 		b, err := dynamic.ToJSON(config.Body)
 		if err != nil {
@@ -533,6 +543,7 @@ func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConf
 			)
 			return
 		}
+
 		if !config.WriteOnlyAttributes.IsUnknown() && !config.WriteOnlyAttributes.IsNull() {
 			for _, ie := range config.WriteOnlyAttributes.Elements() {
 				ie := ie.(types.String)
@@ -542,9 +553,16 @@ func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConf
 							"Invalid configuration",
 							fmt.Sprintf(`Invalid path in "write_only_attrs": %s`, ie.String()),
 						)
+						return
 					}
 				}
 			}
+		}
+
+		_, diags := validateEphemeralBody(b, config.EphemeralBody)
+		resp.Diagnostics = append(resp.Diagnostics, diags...)
+		if diags.HasError() {
+			return
 		}
 	}
 }
@@ -569,12 +587,18 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 		resp.Diagnostics.Append(diags...)
 		return
 	}
+	var config resourceData
+	if diags := req.Config.Get(ctx, &config); diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
 
 	defer func() {
 		resp.Plan.Set(ctx, plan)
 	}()
 
-	if !plan.ForceNewAttrs.IsUnknown() && dynamic.IsFullyKnown(plan.Body) {
+	// Set require replace if force new attributes have changed
+	if !plan.ForceNewAttrs.IsUnknown() && !plan.Body.IsUnknown() {
 		var forceNewAttrs []types.String
 		if diags := plan.ForceNewAttrs.ElementsAs(ctx, &forceNewAttrs, false); diags != nil {
 			resp.Diagnostics.Append(diags...)
@@ -625,6 +649,17 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 			}
 		}
 	}
+
+	// Set output as unknown to trigger a plan diff, if ephemral body has changed
+	diff, diags := ephemeralBodyChangeInPlan(ctx, req.Private, config.EphemeralBody)
+	resp.Diagnostics = append(resp.Diagnostics, diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if diff {
+		tflog.Info(ctx, `"ephemeral_body" has changed`)
+		plan.Output = types.DynamicUnknown()
+	}
 }
 
 func (r *Resource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -652,6 +687,13 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 
 	var plan resourceData
 	diags := req.Plan.Get(ctx, &plan)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
+
+	var config resourceData
+	diags = req.Config.Get(ctx, &config)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
@@ -698,15 +740,36 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 		defer unlockFunc()
 	}
 
-	// Create the resource
+	// Build the body
 	b, err := dynamic.ToJSON(plan.Body)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error to marshal body",
+			`Error to marshal "body"`,
 			err.Error(),
 		)
 		return
 	}
+
+	var eb []byte
+	if !config.EphemeralBody.IsNull() {
+		eb, diags = validateEphemeralBody(b, config.EphemeralBody)
+		resp.Diagnostics = append(resp.Diagnostics, diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		// Merge patch the ephemeral body to the body
+		b, err = jsonpatch.MergePatch(b, eb)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Merge patching `body` with `ephemeral_body`",
+				err.Error(),
+			)
+			return
+		}
+	}
+
+	// Create the resource
 	response, err := c.Create(ctx, plan.Path.ValueString(), string(b), *opt)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -772,6 +835,12 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 		return
 	}
 
+	diags = ephemeralBodyPrivateMgr.Set(ctx, resp.Private, eb)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
+
 	// For LRO, wait for completion
 	if !plan.PollCreate.IsNull() {
 		var d pollData
@@ -809,6 +878,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	rreq := resource.ReadRequest{
 		State:        resp.State,
 		ProviderMeta: req.ProviderMeta,
+		Private:      resp.Private,
 	}
 	rresp := resource.ReadResponse{
 		State:       resp.State,
@@ -819,6 +889,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	*resp = resource.CreateResponse{
 		State:       rresp.State,
 		Diagnostics: rresp.Diagnostics,
+		Private:     resp.Private,
 	}
 }
 
@@ -979,6 +1050,21 @@ func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *reso
 		b = []byte(fb)
 	}
 
+	eb, diags := ephemeralBodyPrivateMgr.GetNullBody(ctx, req.Private)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if eb != nil {
+		b, err = jsonset.Difference(b, eb)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Removing `ephemeral_body` from `output`",
+				err.Error(),
+			)
+			return
+		}
+	}
 	output, err := dynamic.FromJSONImplied(b)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -1007,7 +1093,12 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 		return
 	}
 
-	tflog.Info(ctx, "Update a resource", map[string]interface{}{"id": state.ID.ValueString()})
+	var config resourceData
+	diags = req.Config.Get(ctx, &config)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
 
 	var plan resourceData
 	diags = req.Plan.Get(ctx, &plan)
@@ -1015,6 +1106,8 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 	if diags.HasError() {
 		return
 	}
+
+	tflog.Info(ctx, "Update a resource", map[string]interface{}{"id": state.ID.ValueString()})
 
 	// Temporarily set the output here, so that the Read at the end can
 	// expand the `$(body)` parameters.
@@ -1043,8 +1136,84 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 		return
 	}
 
-	// Invoke API to Update the resource only when there are changes in the body (regardless of the TF type diff).
+	// Optionally patch the body with the update_body_patches.
+	var patches []bodyPatchData
+	if diags := plan.UpdateBodyPatches.ElementsAs(ctx, &patches, false); diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+	if len(patches) != 0 {
+		stateOutput, err := dynamic.ToJSON(state.Output)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Read failure",
+				fmt.Sprintf("marshal state output: %v", err),
+			)
+			return
+		}
+		planBodyStr := string(planBody)
+		for i, patch := range patches {
+			pv, err := exparam.ExpandBody(patch.RawJSON.ValueString(), stateOutput)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					fmt.Sprintf("Failed to expand the %d-th patch for expression params", i),
+					err.Error(),
+				)
+				return
+			}
+
+			planBodyStr, err = sjson.SetRaw(planBodyStr, patch.Path.ValueString(), pv)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					fmt.Sprintf("Failed to set json for the %d-th patch for expression params", i),
+					err.Error(),
+				)
+				return
+			}
+		}
+		planBody = []byte(planBodyStr)
+	}
+
+	// Optionally patch the body with emphemeral_body
+	var eb []byte
+	if !config.EphemeralBody.IsNull() {
+		eb, diags = validateEphemeralBody(planBody, config.EphemeralBody)
+		resp.Diagnostics = append(resp.Diagnostics, diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		// Merge patch the ephemeral body to the body
+		planBody, err = jsonpatch.MergePatch(planBody, eb)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Merge patching `body` with `ephemeral_body`",
+				err.Error(),
+			)
+			return
+		}
+	}
+
+	// We need to invoke the API in only two cases:
+	var callAPI bool
 	if string(stateBody) != string(planBody) {
+		// 1. The body changes between state and plan (after patching with ephemeral_body)
+		callAPI = true
+	} else {
+		// 2. The ephemeral body is removed from the config. In this case, the body is the same between state and plan.
+		// 	  We need to do a tricky check about private data.
+		if config.EphemeralBody.IsNull() {
+			ok, diags := ephemeralBodyPrivateMgr.Exists(ctx, req.Private)
+			resp.Diagnostics.Append(diags...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+			callAPI = ok
+		}
+	}
+
+	// Invoke API to Update the resource only when there are changes in the body (regardless of the TF type diff).
+	if callAPI {
 		// Precheck
 		if !plan.PrecheckUpdate.IsNull() {
 			unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, state.ID.ValueString(), opt.Header, opt.Query, plan.PrecheckUpdate, state.Output)
@@ -1073,44 +1242,6 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 				return
 			}
 			planBody = b
-		}
-
-		// Optionally patch the body.
-		var patches []bodyPatchData
-		if diags := plan.UpdateBodyPatches.ElementsAs(ctx, &patches, false); diags.HasError() {
-			resp.Diagnostics.Append(diags...)
-			return
-		}
-		if len(patches) != 0 {
-			stateOutput, err := dynamic.ToJSON(state.Output)
-			if err != nil {
-				resp.Diagnostics.AddError(
-					"Read failure",
-					fmt.Sprintf("marshal state output: %v", err),
-				)
-				return
-			}
-			planBodyStr := string(planBody)
-			for i, patch := range patches {
-				pv, err := exparam.ExpandBody(patch.RawJSON.ValueString(), stateOutput)
-				if err != nil {
-					resp.Diagnostics.AddError(
-						fmt.Sprintf("Failed to expand the %d-th patch for expression params", i),
-						err.Error(),
-					)
-					return
-				}
-
-				planBodyStr, err = sjson.SetRaw(planBodyStr, patch.Path.ValueString(), pv)
-				if err != nil {
-					resp.Diagnostics.AddError(
-						fmt.Sprintf("Failed to set json for the %d-th patch for expression params", i),
-						err.Error(),
-					)
-					return
-				}
-			}
-			planBody = []byte(planBodyStr)
 		}
 
 		path := plan.ID.ValueString()
@@ -1186,9 +1317,16 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 		return
 	}
 
+	diags = ephemeralBodyPrivateMgr.Set(ctx, resp.Private, eb)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
+
 	rreq := resource.ReadRequest{
 		State:        resp.State,
 		ProviderMeta: req.ProviderMeta,
+		Private:      resp.Private,
 	}
 	rresp := resource.ReadResponse{
 		State:       resp.State,
@@ -1199,6 +1337,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 	*resp = resource.UpdateResponse{
 		State:       rresp.State,
 		Diagnostics: rresp.Diagnostics,
+		Private:     resp.Private,
 	}
 }
 
