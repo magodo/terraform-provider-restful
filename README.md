@@ -13,6 +13,7 @@ The document of this provider is available on [Terraform Provider Registry](http
 - Partial `body` tracking: only the specified properties of the resource in the `body` attribute is tracked for diffs
 - `restful_operation` resource that supports arbitrary Restful API call (e.g. `POST`) on create/update
 - Ephemeral resource `restful_resource`
+- [Write-only attributes](https://developer.hashicorp.com/terraform/plugin/framework/resources/write-only-arguments) supported
 
 ## Why
 
