@@ -70,9 +70,9 @@ To be specific, the following data structure is stored in the private state, key
 
 `ephemeral_body.hash` is used to compare with the `ephemeral_body` specified in the config in every plan.
 
-In case there is a change in the `ephemeral_body`, the provider will mark the `output` as *unknown*, triggering a plan diff. The plan output in this case might not be confusing, as it only implies the `output` is known after apply, but doesn't indicate which attribute causes this change. The provider will log a message: `"ephemeral_body" has changed` in this case, to make things a bit clearer. 
+In case there is a change in the `ephemeral_body`, the provider will mark the `output` as *unknown*, triggering a plan diff. The plan output in this case might be confusing, as it only implies the `output` is known after apply, but doesn't indicate which attribute causes this change. The provider will log a message: `"ephemeral_body" has changed` in this case, to make things a bit clearer. 
 
-## Remov `ephemeral_body` from `output`
+## Remove `ephemeral_body` from `output`
 
 The `output` by defaults contain everything returned by the API response. In case the API returns the attributes specified in `ephemeral_body`, it is effectively a leak of these *sensitive* attributes to the state file.
 
