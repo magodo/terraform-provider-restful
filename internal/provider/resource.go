@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	jsonpatch "github.com/evanphx/json-patch"
+	"github.com/hashicorp/terraform-plugin-framework-validators/dynamicvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/objectvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -63,6 +64,7 @@ type resourceData struct {
 	EphemeralBody types.Dynamic `tfsdk:"ephemeral_body"`
 
 	DeleteBody        types.Dynamic `tfsdk:"delete_body"`
+	DeleteBodyRaw     types.String  `tfsdk:"delete_body_raw"`
 	UpdateBodyPatches types.List    `tfsdk:"update_body_patches"`
 
 	PollCreate types.Object `tfsdk:"poll_create"`
@@ -366,9 +368,24 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 			},
 
 			"delete_body": schema.DynamicAttribute{
-				Description:         "The payload for the `Delete` call.",
-				MarkdownDescription: "The payload for the `Delete` call.",
+				Description:         "The payload for the `Delete` call. Conflicts with `delete_body_raw`.",
+				MarkdownDescription: "The payload for the `Delete` call. Conflicts with `delete_body_raw`.",
 				Optional:            true,
+				Validators: []validator.Dynamic{
+					dynamicvalidator.ConflictsWith(
+						path.MatchRoot("delete_body_raw"),
+					),
+				},
+			},
+			"delete_body_raw": schema.StringAttribute{
+				Description:         "The raw json payload for the `Delete` call. It can contain `$(body.x.y.z)` parameter that reference property from the `state.output`. Conflicts with `delete_body`.",
+				MarkdownDescription: "The raw json payload for the `Delete` call. It can contain `$(body.x.y.z)` parameter that reference property from the `state.output`. Conflicts with `delete_body`.",
+				Optional:            true,
+				Validators: []validator.String{
+					stringvalidator.ConflictsWith(
+						path.MatchRoot("delete_body"),
+					),
+				},
 			},
 
 			"update_body_patches": schema.ListNestedAttribute{
@@ -1370,21 +1387,23 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 		defer unlockFunc()
 	}
 
+	stateOutput, err := dynamic.ToJSON(state.Output)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Failed to marshal json for `output`",
+			err.Error(),
+		)
+		return
+	}
+
 	path := state.ID.ValueString()
+	// Overwrite the path with delete_path, if set.
 	if !state.DeletePath.IsNull() {
-		output, err := dynamic.ToJSON(state.Output)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Failed to marshal json for `output`",
-				err.Error(),
-			)
-			return
-		}
-		path, err = exparam.ExpandBodyOrPath(state.DeletePath.ValueString(), state.Path.ValueString(), output)
+		path, err = exparam.ExpandBodyOrPath(state.DeletePath.ValueString(), state.Path.ValueString(), stateOutput)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Failed to build the path for deleting the resource",
-				fmt.Sprintf("Can't build path with `delete_path`: %q, `path`: %q, `body`: %q", state.DeletePath.ValueString(), state.Path.ValueString(), output),
+				fmt.Sprintf("Can't build path with `delete_path`: %q, `path`: %q, `body`: %q", state.DeletePath.ValueString(), state.Path.ValueString(), stateOutput),
 			)
 			return
 		}
@@ -1400,6 +1419,16 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 			)
 		}
 		body = string(b)
+	}
+	if db := state.DeleteBodyRaw; !db.IsNull() {
+		b, err := exparam.ExpandBody(db.ValueString(), stateOutput)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Failed to expand the expressions in the `delete_body_raw`",
+				err.Error(),
+			)
+		}
+		body = b
 	}
 
 	response, err := c.Delete(ctx, path, body, *opt)

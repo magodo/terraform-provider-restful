@@ -1,6 +1,7 @@
 package provider_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -380,6 +381,109 @@ func TestResource_CodeServer_DeleteMethodBody(t *testing.T) {
 	})
 }
 
+func TestResource_CodeServer_DeleteMethodBodyRaw(t *testing.T) {
+	addr := "restful_resource.test"
+
+	mux := http.NewServeMux()
+	srv := httptest.NewUnstartedServer(mux)
+
+	const myid = 123
+	var state []byte
+	mux.HandleFunc("PUT /tests/1", func(w http.ResponseWriter, r *http.Request) {
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(err.Error()))
+			return
+		}
+		var m map[string]interface{}
+		if err := json.Unmarshal(b, &m); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
+			return
+		}
+		m["id"] = myid
+		state, _ = json.Marshal(m)
+	})
+	mux.HandleFunc("GET /tests/1", func(w http.ResponseWriter, r *http.Request) {
+		w.Write(state)
+		return
+	})
+	mux.HandleFunc("PATCH /tests/1", func(w http.ResponseWriter, r *http.Request) {
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(err.Error()))
+			return
+		}
+		state, err = jsonpatch.MergePatch(state, b)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(fmt.Sprintf("%s: %s", string(b), []byte(err.Error()))))
+			return
+		}
+	})
+	mux.HandleFunc("DELETE /tests/1", func(w http.ResponseWriter, r *http.Request) {
+		state = nil
+	})
+	srv.Start()
+	d := codeServerData{}
+	resource.Test(t, resource.TestCase{
+		CheckDestroy: func(s *terraform.State) error {
+			ctx := context.TODO()
+			c, err := client.New(context.TODO(), srv.URL, nil)
+			if err != nil {
+				return err
+			}
+			c.SetLoggerContext(ctx)
+			for key, resource := range s.RootModule().Resources {
+				if key != addr {
+					continue
+				}
+				resp, err := c.Read(ctx, resource.Primary.ID, client.ReadOption{})
+				if err != nil {
+					return fmt.Errorf("reading %s: %v", addr, err)
+				}
+				if resp.StatusCode() != http.StatusOK {
+					return fmt.Errorf("%s: failed to read", addr)
+				}
+
+				dec := json.NewDecoder(bytes.NewBuffer(resp.Body()))
+				dec.UseNumber()
+				var m map[string]interface{}
+				if err := dec.Decode(&m); err != nil {
+					return err
+				}
+				l, ok := m["properties"]
+				if !ok {
+					return fmt.Errorf("expected `properties`, got nil")
+				}
+				if ll := len(l.([]interface{})); ll != 0 {
+					return fmt.Errorf("expected zero length of `properties`, got %d", ll)
+				}
+				id, ok := m["id"]
+				if !ok {
+					return fmt.Errorf("expected `id`, got nil")
+				}
+				if id.(json.Number).String() != strconv.Itoa(myid) {
+					return fmt.Errorf("expect id=%d, got=%s", myid, id)
+				}
+				return nil
+			}
+			panic("unreachable")
+		},
+		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+		Steps: []resource.TestStep{
+			{
+				Config: d.deleteMethodBodyRaw(srv.URL),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.NotNull()),
+				},
+			},
+		},
+	})
+}
+
 func (d codeServerData) CheckDestroy(url, addr string) func(*terraform.State) error {
 	return func(s *terraform.State) error {
 		ctx := context.TODO()
@@ -532,6 +636,34 @@ resource "restful_resource" "test" {
   delete_body = {
     properties = []
   }
+}
+`, url)
+}
+
+func (d codeServerData) deleteMethodBodyRaw(url string) string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+resource "restful_resource" "test" {
+  path = "/tests/1"
+  create_method = "PUT"
+  delete_method = "PATCH"
+  body = {
+    properties = [
+      {
+        property_name = "system"
+        value         = "testing-system"
+      }
+    ]
+  }
+  delete_body_raw = <<EOF
+{
+	"id":  $(body.id),
+	"properties": []
+}
+EOF
 }
 `, url)
 }
