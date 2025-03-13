@@ -1,5 +1,6 @@
 ---
 page_title: "Write Only Attribute"
+subcategory: ""
 description: |-
   The usage of `ephemeral_body` in `restful_resource` and `restful_operation`.
 ---
