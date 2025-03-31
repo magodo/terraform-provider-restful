@@ -517,6 +517,10 @@ func (e *EphemeralResource) Close(ctx context.Context, req ephemeral.CloseReques
 		return
 	}
 
+	if b == nil {
+		return
+	}
+
 	var pd ephemeralResourcePrivateData
 	if err := json.Unmarshal(b, &pd); err != nil {
 		resp.Diagnostics.AddError(
