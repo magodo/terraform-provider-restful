@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/magodo/terraform-provider-restful/internal/dynamic"
+	"github.com/magodo/terraform-provider-restful/internal/exparam"
 	"golang.org/x/net/publicsuffix"
 )
 
@@ -42,6 +43,30 @@ func (q Query) TakeOrSelf(ctx context.Context, v types.Map) Query {
 	return nq
 }
 
+func (q Query) TakeWithExparamOrSelf(ctx context.Context, v types.Map, body []byte) Query {
+	if len(v.Elements()) == 0 {
+		return q
+	}
+	nq := Query{}
+	for k, v := range v.Elements() {
+		vs := []string{}
+		diags := v.(types.List).ElementsAs(ctx, &vs, false)
+		if diags.HasError() {
+			panic(diags)
+		}
+		vvs := []string{}
+		for _, v := range vs {
+			vv, err := exparam.ExpandBody(v, body)
+			if err != nil {
+				vv = v
+			}
+			vvs = append(vvs, vv)
+		}
+		nq[k] = vvs
+	}
+	return nq
+}
+
 func (q Query) ToTFValue() types.Map {
 	var result types.Map
 	tfsdk.ValueFrom(context.Background(), q, types.MapType{ElemType: types.ListType{ElemType: types.StringType}}, &result)
@@ -65,6 +90,22 @@ func (h Header) TakeOrSelf(ctx context.Context, v types.Map) Header {
 	nh := Header{}
 	for k, v := range v.Elements() {
 		nh[k] = v.(types.String).ValueString()
+	}
+	return nh
+}
+
+func (h Header) TakeWithExparamOrSelf(ctx context.Context, v types.Map, body []byte) Header {
+	if len(v.Elements()) == 0 {
+		return h
+	}
+	nh := Header{}
+	for k, v := range v.Elements() {
+		v := v.(types.String).ValueString()
+		vv, err := exparam.ExpandBody(v, body)
+		if err != nil {
+			vv = v
+		}
+		nh[k] = vv
 	}
 	return nh
 }

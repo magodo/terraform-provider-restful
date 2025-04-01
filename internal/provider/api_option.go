@@ -35,21 +35,21 @@ func (opt apiOption) ForResourceCreate(ctx context.Context, d resourceData) (*cl
 	return &out, nil
 }
 
-func (opt apiOption) ForResourceRead(ctx context.Context, d resourceData) (*client.ReadOption, diag.Diagnostics) {
+func (opt apiOption) ForResourceRead(ctx context.Context, d resourceData, body []byte) (*client.ReadOption, diag.Diagnostics) {
 	out := client.ReadOption{
-		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query).TakeOrSelf(ctx, d.ReadQuery),
-		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header).TakeOrSelf(ctx, d.ReadHeader),
+		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query).TakeWithExparamOrSelf(ctx, d.ReadQuery, body),
+		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header).TakeWithExparamOrSelf(ctx, d.ReadHeader, body),
 	}
 
 	return &out, nil
 }
 
-func (opt apiOption) ForResourceUpdate(ctx context.Context, d resourceData) (*client.UpdateOption, diag.Diagnostics) {
+func (opt apiOption) ForResourceUpdate(ctx context.Context, d resourceData, body []byte) (*client.UpdateOption, diag.Diagnostics) {
 	out := client.UpdateOption{
 		Method:             opt.UpdateMethod,
 		MergePatchDisabled: opt.MergePatchDisabled,
-		Query:              opt.Query.Clone().TakeOrSelf(ctx, d.Query).TakeOrSelf(ctx, d.UpdateQuery),
-		Header:             opt.Header.Clone().TakeOrSelf(ctx, d.Header).TakeOrSelf(ctx, d.UpdateHeader),
+		Query:              opt.Query.Clone().TakeOrSelf(ctx, d.Query).TakeWithExparamOrSelf(ctx, d.UpdateQuery, body),
+		Header:             opt.Header.Clone().TakeOrSelf(ctx, d.Header).TakeWithExparamOrSelf(ctx, d.UpdateHeader, body),
 	}
 	if !d.UpdateMethod.IsUnknown() && !d.UpdateMethod.IsNull() {
 		out.Method = d.UpdateMethod.ValueString()
@@ -61,11 +61,11 @@ func (opt apiOption) ForResourceUpdate(ctx context.Context, d resourceData) (*cl
 	return &out, nil
 }
 
-func (opt apiOption) ForResourceDelete(ctx context.Context, d resourceData) (*client.DeleteOption, diag.Diagnostics) {
+func (opt apiOption) ForResourceDelete(ctx context.Context, d resourceData, body []byte) (*client.DeleteOption, diag.Diagnostics) {
 	out := client.DeleteOption{
 		Method: opt.DeleteMethod,
-		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query).TakeOrSelf(ctx, d.DeleteQuery),
-		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header).TakeOrSelf(ctx, d.DeleteHeader),
+		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query).TakeWithExparamOrSelf(ctx, d.DeleteQuery, body),
+		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header).TakeWithExparamOrSelf(ctx, d.DeleteHeader, body),
 	}
 
 	if !d.DeleteMethod.IsUnknown() && !d.DeleteMethod.IsNull() {

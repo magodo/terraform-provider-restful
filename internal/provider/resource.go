@@ -725,7 +725,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	}
 
 	if plan.CheckExistance.ValueBool() {
-		opt, diags := r.p.apiOpt.ForResourceRead(ctx, plan)
+		opt, diags := r.p.apiOpt.ForResourceRead(ctx, plan, nil)
 		resp.Diagnostics.Append(diags...)
 		if diags.HasError() {
 			return
@@ -929,7 +929,16 @@ func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *reso
 		tflog.Info(ctx, "Read a resource", map[string]interface{}{"id": state.ID.ValueString()})
 	}
 
-	opt, diags := r.p.apiOpt.ForResourceRead(ctx, state)
+	stateOutput, err := dynamic.ToJSON(state.Output)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Read failure",
+			fmt.Sprintf("marshal state output: %v", err),
+		)
+		return
+	}
+
+	opt, diags := r.p.apiOpt.ForResourceRead(ctx, state, stateOutput)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
@@ -958,14 +967,6 @@ func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *reso
 	b := response.Body()
 
 	if sel := state.ReadSelector.ValueString(); sel != "" {
-		stateOutput, err := dynamic.ToJSON(state.Output)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Read failure",
-				fmt.Sprintf("marshal state output: %v", err),
-			)
-			return
-		}
 		sel, err = exparam.ExpandBody(sel, stateOutput)
 		if err != nil {
 			resp.Diagnostics.AddError(
@@ -1126,11 +1127,20 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 
 	tflog.Info(ctx, "Update a resource", map[string]interface{}{"id": state.ID.ValueString()})
 
+	stateOutput, err := dynamic.ToJSON(state.Output)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Read failure",
+			fmt.Sprintf("marshal state output: %v", err),
+		)
+		return
+	}
+
 	// Temporarily set the output here, so that the Read at the end can
 	// expand the `$(body)` parameters.
 	plan.Output = state.Output
 
-	opt, diags := r.p.apiOpt.ForResourceUpdate(ctx, plan)
+	opt, diags := r.p.apiOpt.ForResourceUpdate(ctx, plan, stateOutput)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
@@ -1160,14 +1170,6 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 		return
 	}
 	if len(patches) != 0 {
-		stateOutput, err := dynamic.ToJSON(state.Output)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Read failure",
-				fmt.Sprintf("marshal state output: %v", err),
-			)
-			return
-		}
 		planBodyStr := string(planBody)
 		for i, patch := range patches {
 			pv, err := exparam.ExpandBody(patch.RawJSON.ValueString(), stateOutput)
@@ -1371,7 +1373,16 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 
 	tflog.Info(ctx, "Delete a resource", map[string]interface{}{"id": state.ID.ValueString()})
 
-	opt, diags := r.p.apiOpt.ForResourceDelete(ctx, state)
+	stateOutput, err := dynamic.ToJSON(state.Output)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Failed to marshal json for `output`",
+			err.Error(),
+		)
+		return
+	}
+
+	opt, diags := r.p.apiOpt.ForResourceDelete(ctx, state, stateOutput)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
@@ -1385,15 +1396,6 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 			return
 		}
 		defer unlockFunc()
-	}
-
-	stateOutput, err := dynamic.ToJSON(state.Output)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Failed to marshal json for `output`",
-			err.Error(),
-		)
-		return
 	}
 
 	path := state.ID.ValueString()
