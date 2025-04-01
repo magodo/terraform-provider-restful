@@ -37,20 +37,32 @@ func TestExpandBodyOrPath(t *testing.T) {
 		{
 			name:    "Body value contains special chars",
 			pattern: "$(body.name)",
-			body:    `{"name": "a/b/c"}`,
-			expect:  `a%2Fb%2Fc`,
+			body:    `{"name": "a+b/c"}`,
+			expect:  `a+b%2Fc`,
 		},
 		{
 			name:    "Body value contains special chars with explicit escpae",
 			pattern: "$escape(body.name)",
-			body:    `{"name": "a/b/c"}`,
-			expect:  `a%2Fb%2Fc`,
+			body:    `{"name": "a+b/c"}`,
+			expect:  `a+b%2Fc`,
 		},
 		{
 			name:    "Body value contains escaped path, and want to unescape",
 			pattern: "$unescape(body.path)",
-			body:    `{"path": "a%2Fb%2Fc"}`,
-			expect:  `a/b/c`,
+			body:    `{"path": "a+b%2Fc"}`,
+			expect:  `a+b/c`,
+		},
+		{
+			name:    "Body value contains special chars with query_escpae",
+			pattern: "$query_escape(body.name)",
+			body:    `{"name": "a+b/c"}`,
+			expect:  `a%2Bb%2Fc`,
+		},
+		{
+			name:    "Body value contains escaped query, and want to unescape",
+			pattern: "$query_unescape(body.path)",
+			body:    `{"path": "a%2Bb%2Fc"}`,
+			expect:  `a+b/c`,
 		},
 		{
 			name:    "Body value has a full path, and want to trim the current call path",
