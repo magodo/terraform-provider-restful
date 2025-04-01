@@ -34,7 +34,6 @@ ephemeral "restful_resource" "test" {
 
 ### Required
 
-- `expiry_locator` (String) Specifies how to discover the expiry time. The format is `scope.path`, where `scope` can be one of `exact`, `header` and `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).
 - `method` (String) The HTTP method to open the ephemeral resource. Possible values are `GET`, `PUT`, `POST`, `PATCH`.
 - `path` (String) The path used to open the ephemeral resource, relative to the `base_url` of the provider.
 
@@ -47,7 +46,9 @@ ephemeral "restful_resource" "test" {
 - `close_path` (String) The path used to close the ephemeral resource, relative to the `base_url` of the provider. This can be a string literal, or combined by following params: path param: `$(path)` expanded to `path`, body param: `$(body.x.y.z)` expands to the `x.y.z` property of the API body. Especially for the body param, it can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`).
 - `close_query` (Map of List of String) The query parameters that are applied to each close request. This overrides the `query` set in the resource block.
 - `expiry_ahead` (String) Advance the ephemeral resource expiry time by this duration. The format is same as Go's [ParseDuration](https://pkg.go.dev/time#ParseDuration).
+- `expiry_locator` (String) Specifies how to discover the expiry time. The format is `scope.path`, where `scope` can be one of `exact`, `header` and `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).
 - `expiry_type` (String) The type of the ephemeral resource expiry time. Possible values are: "duration", "time" and "time.[layout]". "duration" means the expiry time is a [duration](https://pkg.go.dev/time#ParseDuration); "time" means the expiry time is a time, which defaults to RF3339 layout, unless the "layout" is explicitly specified (following Go's [convention](https://pkg.go.dev/time)).
+- `expiry_unit` (String) Specifies the unit of the expiry when the `expiry_type` is `duration`. Valid units are `ns`, `us` (or `µs`), `ms`, `s`, `m`, `h`.
 - `header` (Map of String) The header parameters that are applied to each request. This overrides the `header` set in the provider block.
 - `open_header` (Map of String) The header parameters that are applied to each open request. This overrides the `header` set in the resource block.
 - `open_query` (Map of List of String) The query parameters that are applied to each open request. This overrides the `query` set in the resource block.

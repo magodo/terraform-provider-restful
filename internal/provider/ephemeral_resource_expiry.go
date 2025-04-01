@@ -15,7 +15,7 @@ const (
 	ExpiryTypeDuration
 )
 
-func GetExpiryTime(typ string, loc string, ahead string, resp resty.Response) (time.Time, error) {
+func GetExpiryTime(typ, loc, unit, ahead string, resp resty.Response) (time.Time, error) {
 	locator, err := expandValueLocator(loc)
 	if err != nil {
 		return time.Time{}, err
@@ -49,6 +49,9 @@ func GetExpiryTime(typ string, loc string, ahead string, resp resty.Response) (t
 	case "duration":
 		if ok {
 			return time.Time{}, fmt.Errorf("invalid format of expiry type")
+		}
+		if unit != "" {
+			v += unit
 		}
 		dur, err := time.ParseDuration(v)
 		if err != nil {

@@ -53,6 +53,7 @@ type ephemeralResourceData struct {
 	ExpiryAhead   types.String `tfsdk:"expiry_ahead"`
 	ExpiryType    types.String `tfsdk:"expiry_type"`
 	ExpiryLocator types.String `tfsdk:"expiry_locator"`
+	ExpiryUnit    types.String `tfsdk:"expiry_unit"`
 
 	CloseMethod types.String  `tfsdk:"close_method"`
 	CloseBody   types.Dynamic `tfsdk:"close_body"`
@@ -207,7 +208,7 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 			"expiry_locator": schema.StringAttribute{
 				Description:         "Specifies how to discover the expiry time. The format is `scope.path`, where `scope` can be one of `exact`, `header` and `body`, and the `path` is using the gjson syntax.",
 				MarkdownDescription: "Specifies how to discover the expiry time. The format is `scope.path`, where `scope` can be one of `exact`, `header` and `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md).",
-				Required:            true,
+				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.AlsoRequires(
 						path.MatchRoot("renew_method"),
@@ -218,6 +219,19 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 					}),
 				},
 			},
+
+			"expiry_unit": schema.StringAttribute{
+				Description:         "Specifies the unit of the expiry when the `expiry_type` is `duration`. Valid units are `ns`, `us` (or `µs`), `ms`, `s`, `m`, `h`.",
+				MarkdownDescription: "Specifies the unit of the expiry when the `expiry_type` is `duration`. Valid units are `ns`, `us` (or `µs`), `ms`, `s`, `m`, `h`.",
+				Optional:            true,
+				Validators: []validator.String{
+					stringvalidator.AlsoRequires(
+						path.MatchRoot("renew_method"),
+						path.MatchRoot("expiry_type"),
+					),
+				},
+			},
+
 			"expiry_ahead": schema.StringAttribute{
 				Description:         "Advance the ephemeral resource expiry time by this duration. The format is same as Go's ParseDuration.",
 				MarkdownDescription: "Advance the ephemeral resource expiry time by this duration. The format is same as Go's [ParseDuration](https://pkg.go.dev/time#ParseDuration).",
@@ -341,7 +355,7 @@ func (e *EphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequest,
 
 	// Set RenewAt, if specified
 	if !config.ExpiryType.IsNull() && !config.ExpiryType.IsUnknown() {
-		t, err := GetExpiryTime(config.ExpiryType.ValueString(), config.ExpiryLocator.ValueString(), config.ExpiryAhead.ValueString(), *response)
+		t, err := GetExpiryTime(config.ExpiryType.ValueString(), config.ExpiryLocator.ValueString(), config.ExpiryUnit.ValueString(), config.ExpiryAhead.ValueString(), *response)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Failed to parse expiry time",
@@ -371,6 +385,7 @@ func (e *EphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequest,
 			ExpiryType:    config.ExpiryType,
 			ExpiryLocator: config.ExpiryLocator,
 			ExpiryAhead:   config.ExpiryAhead,
+			ExpiryUnit:    config.ExpiryUnit,
 		}
 		b, err := json.Marshal(ed)
 		if err != nil {
@@ -463,10 +478,14 @@ func (e *EphemeralResource) Renew(ctx context.Context, req ephemeral.RenewReques
 		return
 	}
 
+	if b == nil {
+		return
+	}
+
 	var pd ephemeralResourcePrivateData
 	if err := json.Unmarshal(b, &pd); err != nil {
 		resp.Diagnostics.AddError(
-			"Unmarshal private data",
+			"Unmarshal private data (renew)",
 			err.Error(),
 		)
 		return
@@ -496,7 +515,7 @@ func (e *EphemeralResource) Renew(ctx context.Context, req ephemeral.RenewReques
 		return
 	}
 
-	t, err := GetExpiryTime(pd.ExpiryType.ValueString(), pd.ExpiryLocator.ValueString(), pd.ExpiryAhead.ValueString(), *response)
+	t, err := GetExpiryTime(pd.ExpiryType.ValueString(), pd.ExpiryLocator.ValueString(), pd.ExpiryUnit.ValueString(), pd.ExpiryAhead.ValueString(), *response)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Failed to parse expiry time",
@@ -517,10 +536,14 @@ func (e *EphemeralResource) Close(ctx context.Context, req ephemeral.CloseReques
 		return
 	}
 
+	if b == nil {
+		return
+	}
+
 	var pd ephemeralResourcePrivateData
 	if err := json.Unmarshal(b, &pd); err != nil {
 		resp.Diagnostics.AddError(
-			"Unmarshal private data",
+			"Unmarshal private data (close)",
 			err.Error(),
 		)
 		return

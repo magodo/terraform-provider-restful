@@ -23,6 +23,7 @@ type ephemeralResourcePrivateData struct {
 	ExpiryAhead   types.String
 	ExpiryType    types.String
 	ExpiryLocator types.String
+	ExpiryUnit    types.String
 }
 
 type ephemeralResourcePrivateDataGo struct {
@@ -37,6 +38,7 @@ type ephemeralResourcePrivateDataGo struct {
 	ExpiryAhead   string `json:"expiry_ahead,omitempty"`
 	ExpiryType    string `json:"expiry_type,omitempty"`
 	ExpiryLocator string `json:"expiry_locator,omitempty"`
+	ExpiryUnit    string `json:"expiry_unit,omitempty"`
 }
 
 func (d ephemeralResourcePrivateData) MarshalJSON() ([]byte, error) {
@@ -46,6 +48,7 @@ func (d ephemeralResourcePrivateData) MarshalJSON() ([]byte, error) {
 		ExpiryAhead:   d.ExpiryAhead.ValueString(),
 		ExpiryType:    d.ExpiryType.ValueString(),
 		ExpiryLocator: d.ExpiryLocator.ValueString(),
+		ExpiryUnit:    d.ExpiryUnit.ValueString(),
 	}
 
 	var err error
@@ -121,6 +124,12 @@ func (d *ephemeralResourcePrivateData) UnmarshalJSON(b []byte) error {
 		expiryLocator = types.StringValue(dg.ExpiryLocator)
 	}
 	d.ExpiryLocator = expiryLocator
+
+	expiryUnit := types.StringNull()
+	if dg.ExpiryUnit != "" {
+		expiryUnit = types.StringValue(dg.ExpiryUnit)
+	}
+	d.ExpiryUnit = expiryUnit
 
 	return nil
 }
