@@ -13,11 +13,13 @@ var (
 type FuncName string
 
 const (
-	FuncEscape   FuncName = "escape"
-	FuncUnEscape FuncName = "unescape"
-	FuncBase     FuncName = "base"
-	FuncURLPath  FuncName = "url_path"
-	FuncTrimPath FuncName = "trim_path"
+	FuncPathEscape    FuncName = "escape"
+	FuncPathUnEscape  FuncName = "unescape"
+	FuncQueryEscape   FuncName = "query_escape"
+	FuncQueryUnEscape FuncName = "query_unescape"
+	FuncBase          FuncName = "base"
+	FuncURLPath       FuncName = "url_path"
+	FuncTrimPath      FuncName = "trim_path"
 )
 
 type Func func(string) (string, error)
@@ -28,10 +30,14 @@ type FuncFactory struct {
 
 func (f FuncFactory) Build() map[FuncName]Func {
 	m := map[FuncName]Func{
-		FuncEscape: func(s string) (string, error) {
+		FuncPathEscape: func(s string) (string, error) {
 			return url.PathEscape(s), nil
 		},
-		FuncUnEscape: url.PathUnescape,
+		FuncPathUnEscape: url.PathUnescape,
+		FuncQueryEscape: func(s string) (string, error) {
+			return url.QueryEscape(s), nil
+		},
+		FuncQueryUnEscape: url.QueryUnescape,
 		FuncBase: func(s string) (string, error) {
 			return filepath.Base(s), nil
 		},
