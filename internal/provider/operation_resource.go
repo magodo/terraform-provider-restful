@@ -95,8 +95,8 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 			},
 			// This is actually the same as the `read_path` of restful_resource, besides the name
 			"id_builder": schema.StringAttribute{
-				Description:         "The pattern used to build the `id`. The `path` is used as the `id` instead if absent." + pathDescription,
-				MarkdownDescription: "The pattern used to build the `id`. The `path` is used as the `id` instead if absent." + pathDescription,
+				Description:         "The pattern used to build the `id`. The `path` is used as the `id` instead if absent." + bodyOrPathParamDescription,
+				MarkdownDescription: "The pattern used to build the `id`. The `path` is used as the `id` instead if absent." + bodyOrPathParamDescription,
 				Optional:            true,
 				Validators: []validator.String{
 					myvalidator.StringIsPathBuilder(),
