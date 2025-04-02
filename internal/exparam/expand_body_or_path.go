@@ -39,7 +39,7 @@ func ExpandBodyOrPath(expr string, path string, body []byte) (string, error) {
 		ts := prop.String()
 
 		// Apply functions if any
-		fs := []Func{ff[FuncEscape]}
+		fs := []Func{ff[FuncPathEscape]}
 		if fnames := match[1]; fnames != "" {
 			// If specified any function, remove the default escape function
 			fs = []Func{}

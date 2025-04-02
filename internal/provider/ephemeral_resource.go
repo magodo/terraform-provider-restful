@@ -148,8 +148,8 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 				},
 			},
 			"renew_path": schema.StringAttribute{
-				Description:         "The path used to renew the ephemeral resource, relative to the `base_url` of the provider. " + pathDescription,
-				MarkdownDescription: "The path used to renew the ephemeral resource, relative to the `base_url` of the provider. " + pathDescription,
+				Description:         "The path used to renew the ephemeral resource, relative to the `base_url` of the provider. " + bodyOrPathParamDescription,
+				MarkdownDescription: "The path used to renew the ephemeral resource, relative to the `base_url` of the provider. " + bodyOrPathParamDescription,
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.AlsoRequires(
@@ -259,8 +259,8 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 				},
 			},
 			"close_path": schema.StringAttribute{
-				Description:         "The path used to close the ephemeral resource, relative to the `base_url` of the provider. " + pathDescription,
-				MarkdownDescription: "The path used to close the ephemeral resource, relative to the `base_url` of the provider. " + pathDescription,
+				Description:         "The path used to close the ephemeral resource, relative to the `base_url` of the provider. " + bodyOrPathParamDescription,
+				MarkdownDescription: "The path used to close the ephemeral resource, relative to the `base_url` of the provider. " + bodyOrPathParamDescription,
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.AlsoRequires(

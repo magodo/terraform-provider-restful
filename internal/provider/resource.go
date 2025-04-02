@@ -129,9 +129,11 @@ func (r *Resource) Metadata(ctx context.Context, req resource.MetadataRequest, r
 	resp.TypeName = req.ProviderTypeName + "_resource"
 }
 
-const paramFuncDescription = "Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`)."
+const paramFuncDescription = "Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `query_escape` (URL query escape), `query_unescape` (URL query unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`)."
 
-const pathDescription = "This can be a string literal, or combined by following params: path param: `$(path)` expanded to `path`, body param: `$(body.x.y.z)` expands to the `x.y.z` property of the API body. Especially for the body param, it can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. " + paramFuncDescription
+const bodyParamDescription = " can be a string literal, or combined by the body param: `$(body.x.y.z)` that expands to the `x.y.z` property of the API body. It can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. " + paramFuncDescription
+
+const bodyOrPathParamDescription = "This can be a string literal, or combined by following params: path param: `$(path)` expanded to `path`, body param: `$(body.x.y.z)` expands to the `x.y.z` property of the API body. Especially for the body param, it can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. " + paramFuncDescription
 
 func operationOverridableAttrDescription(attr string, opkind string) string {
 	return fmt.Sprintf("The %[1]s parameters that are applied to each %[2]s request. This overrides the `%[1]s` set in the resource block.", attr, opkind)
@@ -324,30 +326,30 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				Optional:            true,
 			},
 			"read_selector": schema.StringAttribute{
-				Description:         "A selector expression in gjson query syntax, that is used when read returns a collection of resources, to select exactly one member resource of from it. By default, the whole response body is used as the body. The expression can contain parameters in the form of `$(body.x.y.z)`, which expands to the `x.y.z` property of the `output` of the resource state. Specially, the param can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. " + paramFuncDescription,
-				MarkdownDescription: "A selector expression in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries), that is used when read returns a collection of resources, to select exactly one member resource of from it. By default, the whole response body is used as the body. The expression can contain parameters in the form of `$(body.x.y.z)`, which expands to the `x.y.z` property of the `output` of the resource state. Specially, the param can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. " + paramFuncDescription,
+				Description:         "A selector expression in gjson query syntax, that is used when read returns a collection of resources, to select exactly one member resource of from it. This" + bodyParamDescription + " By default, the whole response body is used as the body.",
+				MarkdownDescription: "A selector expression in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries), that is used when read returns a collection of resources, to select exactly one member resource of from it. This" + bodyParamDescription + " By default, the whole response body is used as the body.",
 				Optional:            true,
 			},
 
 			"read_path": schema.StringAttribute{
-				Description:         "The API path used to read the resource, which is used as the `id`. The `path` is used as the `id` instead if `read_path` is absent. " + pathDescription,
-				MarkdownDescription: "The API path used to read the resource, which is used as the `id`. The `path` is used as the `id` instead if `read_path` is absent. " + pathDescription,
+				Description:         "The API path used to read the resource, which is used as the `id`. The `path` is used as the `id` instead if `read_path` is absent. " + bodyOrPathParamDescription,
+				MarkdownDescription: "The API path used to read the resource, which is used as the `id`. The `path` is used as the `id` instead if `read_path` is absent. " + bodyOrPathParamDescription,
 				Optional:            true,
 				Validators: []validator.String{
 					myvalidator.StringIsPathBuilder(),
 				},
 			},
 			"update_path": schema.StringAttribute{
-				Description:         "The API path used to update the resource. The `id` is used instead if `update_path` is absent. " + pathDescription,
-				MarkdownDescription: "The API path used to update the resource. The `id` is used instead if `update_path` is absent. " + pathDescription,
+				Description:         "The API path used to update the resource. The `id` is used instead if `update_path` is absent. " + bodyOrPathParamDescription,
+				MarkdownDescription: "The API path used to update the resource. The `id` is used instead if `update_path` is absent. " + bodyOrPathParamDescription,
 				Optional:            true,
 				Validators: []validator.String{
 					myvalidator.StringIsPathBuilder(),
 				},
 			},
 			"delete_path": schema.StringAttribute{
-				Description:         "The API path used to delete the resource. The `id` is used instead if `delete_path` is absent. " + pathDescription,
-				MarkdownDescription: "The API path used to delete the resource. The `id` is used instead if `delete_path` is absent. " + pathDescription,
+				Description:         "The API path used to delete the resource. The `id` is used instead if `delete_path` is absent. " + bodyOrPathParamDescription,
+				MarkdownDescription: "The API path used to delete the resource. The `id` is used instead if `delete_path` is absent. " + bodyOrPathParamDescription,
 				Optional:            true,
 				Validators: []validator.String{
 					myvalidator.StringIsPathBuilder(),
@@ -470,20 +472,20 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				Optional:            true,
 			},
 			"update_query": schema.MapAttribute{
-				Description:         operationOverridableAttrDescription("query", "update"),
-				MarkdownDescription: operationOverridableAttrDescription("query", "update"),
+				Description:         operationOverridableAttrDescription("query", "update") + " The query value" + bodyParamDescription,
+				MarkdownDescription: operationOverridableAttrDescription("query", "update") + " The query value" + bodyParamDescription,
 				ElementType:         types.ListType{ElemType: types.StringType},
 				Optional:            true,
 			},
 			"read_query": schema.MapAttribute{
-				Description:         operationOverridableAttrDescription("query", "read"),
-				MarkdownDescription: operationOverridableAttrDescription("query", "read"),
+				Description:         operationOverridableAttrDescription("query", "read") + " The query value" + bodyParamDescription,
+				MarkdownDescription: operationOverridableAttrDescription("query", "read") + " The query value" + bodyParamDescription,
 				ElementType:         types.ListType{ElemType: types.StringType},
 				Optional:            true,
 			},
 			"delete_query": schema.MapAttribute{
-				Description:         operationOverridableAttrDescription("query", "delete"),
-				MarkdownDescription: operationOverridableAttrDescription("query", "delete"),
+				Description:         operationOverridableAttrDescription("query", "delete") + " The query value" + bodyParamDescription,
+				MarkdownDescription: operationOverridableAttrDescription("query", "delete") + " The query value" + bodyParamDescription,
 				ElementType:         types.ListType{ElemType: types.StringType},
 				Optional:            true,
 			},
@@ -500,20 +502,20 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				Optional:            true,
 			},
 			"update_header": schema.MapAttribute{
-				Description:         operationOverridableAttrDescription("header", "update"),
-				MarkdownDescription: operationOverridableAttrDescription("header", "update"),
+				Description:         operationOverridableAttrDescription("header", "update") + " The header value" + bodyParamDescription,
+				MarkdownDescription: operationOverridableAttrDescription("header", "update") + " The header value" + bodyParamDescription,
 				ElementType:         types.StringType,
 				Optional:            true,
 			},
 			"read_header": schema.MapAttribute{
-				Description:         operationOverridableAttrDescription("header", "read"),
-				MarkdownDescription: operationOverridableAttrDescription("header", "read"),
+				Description:         operationOverridableAttrDescription("header", "read") + " The header value" + bodyParamDescription,
+				MarkdownDescription: operationOverridableAttrDescription("header", "read") + " The header value" + bodyParamDescription,
 				ElementType:         types.StringType,
 				Optional:            true,
 			},
 			"delete_header": schema.MapAttribute{
-				Description:         operationOverridableAttrDescription("header", "delete"),
-				MarkdownDescription: operationOverridableAttrDescription("header", "delete"),
+				Description:         operationOverridableAttrDescription("header", "delete") + " The header value" + bodyParamDescription,
+				MarkdownDescription: operationOverridableAttrDescription("header", "delete") + " The header value" + bodyParamDescription,
 				ElementType:         types.StringType,
 				Optional:            true,
 			},
@@ -725,7 +727,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	}
 
 	if plan.CheckExistance.ValueBool() {
-		opt, diags := r.p.apiOpt.ForResourceRead(ctx, plan)
+		opt, diags := r.p.apiOpt.ForResourceRead(ctx, plan, nil)
 		resp.Diagnostics.Append(diags...)
 		if diags.HasError() {
 			return
@@ -929,7 +931,16 @@ func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *reso
 		tflog.Info(ctx, "Read a resource", map[string]interface{}{"id": state.ID.ValueString()})
 	}
 
-	opt, diags := r.p.apiOpt.ForResourceRead(ctx, state)
+	stateOutput, err := dynamic.ToJSON(state.Output)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Read failure",
+			fmt.Sprintf("marshal state output: %v", err),
+		)
+		return
+	}
+
+	opt, diags := r.p.apiOpt.ForResourceRead(ctx, state, stateOutput)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
@@ -958,14 +969,6 @@ func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *reso
 	b := response.Body()
 
 	if sel := state.ReadSelector.ValueString(); sel != "" {
-		stateOutput, err := dynamic.ToJSON(state.Output)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Read failure",
-				fmt.Sprintf("marshal state output: %v", err),
-			)
-			return
-		}
 		sel, err = exparam.ExpandBody(sel, stateOutput)
 		if err != nil {
 			resp.Diagnostics.AddError(
@@ -1126,11 +1129,20 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 
 	tflog.Info(ctx, "Update a resource", map[string]interface{}{"id": state.ID.ValueString()})
 
+	stateOutput, err := dynamic.ToJSON(state.Output)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Read failure",
+			fmt.Sprintf("marshal state output: %v", err),
+		)
+		return
+	}
+
 	// Temporarily set the output here, so that the Read at the end can
 	// expand the `$(body)` parameters.
 	plan.Output = state.Output
 
-	opt, diags := r.p.apiOpt.ForResourceUpdate(ctx, plan)
+	opt, diags := r.p.apiOpt.ForResourceUpdate(ctx, plan, stateOutput)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
@@ -1160,14 +1172,6 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 		return
 	}
 	if len(patches) != 0 {
-		stateOutput, err := dynamic.ToJSON(state.Output)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Read failure",
-				fmt.Sprintf("marshal state output: %v", err),
-			)
-			return
-		}
 		planBodyStr := string(planBody)
 		for i, patch := range patches {
 			pv, err := exparam.ExpandBody(patch.RawJSON.ValueString(), stateOutput)
@@ -1371,7 +1375,16 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 
 	tflog.Info(ctx, "Delete a resource", map[string]interface{}{"id": state.ID.ValueString()})
 
-	opt, diags := r.p.apiOpt.ForResourceDelete(ctx, state)
+	stateOutput, err := dynamic.ToJSON(state.Output)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Failed to marshal json for `output`",
+			err.Error(),
+		)
+		return
+	}
+
+	opt, diags := r.p.apiOpt.ForResourceDelete(ctx, state, stateOutput)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
@@ -1385,15 +1398,6 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 			return
 		}
 		defer unlockFunc()
-	}
-
-	stateOutput, err := dynamic.ToJSON(state.Output)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Failed to marshal json for `output`",
-			err.Error(),
-		)
-		return
 	}
 
 	path := state.ID.ValueString()

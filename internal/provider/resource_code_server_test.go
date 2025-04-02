@@ -253,6 +253,67 @@ func TestResource_CodeServer_HeaderQuery(t *testing.T) {
 	})
 }
 
+func TestResource_CodeServer_HeaderQueryFromBody(t *testing.T) {
+	addr := "restful_resource.test"
+
+	mux := http.NewServeMux()
+	srv := httptest.NewUnstartedServer(mux)
+	var body []byte
+	mux.HandleFunc("POST /tests/1", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("type") != "create" {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		if r.URL.Query().Get("type") != "create" {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		body, _ = io.ReadAll(r.Body)
+		w.Write(body)
+		return
+	})
+	mux.HandleFunc("PUT /tests/1", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("type") != "update_b" {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		if r.URL.Query().Get("type") != "update_b" {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		return
+	})
+	mux.HandleFunc("GET /tests/1", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("type") != "read_b" {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		if r.URL.Query().Get("type") != "read_b" {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		w.Write(body)
+		return
+	})
+	mux.HandleFunc("DELETE /tests/1", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("type") != "delete_b" {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		if r.URL.Query().Get("type") != "delete_b" {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		return
+	})
+	srv.Start()
+	d := codeServerData{}
+	resource.Test(t, resource.TestCase{
+		//CheckDestroy:             d.CheckDestroy(srv.URL, addr),
+		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+		Steps: []resource.TestStep{
+			{
+				Config: d.headerqueryFromBody(srv.URL),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.NotNull()),
+				},
+			},
+		},
+	})
+}
+
 func TestResource_CodeServer_ReadResponseTemplate(t *testing.T) {
 	addr := "restful_resource.test"
 
@@ -589,6 +650,47 @@ resource "restful_resource" "test" {
   	type = ["delete"]
   }
   body = {}
+}
+`, url)
+}
+
+func (d codeServerData) headerqueryFromBody(url string) string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+resource "restful_resource" "test" {
+  path = "/tests/1"
+  create_header = {
+  	type = "create"
+  }
+  create_query = {
+  	type = ["create"]
+  }
+  update_header = {
+  	type = "$(body.update)"
+  }
+  update_query = {
+  	type = ["$(body_update)"]
+  }
+  read_header = {
+  	type = "$(body.read)"
+  }
+  read_query = {
+  	type = ["$(body.read)"]
+  }
+  delete_header = {
+  	type = "$(body.delete)"
+  }
+  delete_query = {
+  	type = ["$(body.delete)"]
+  }
+  body = {
+    read = "read_b"
+    update = "update_b"
+    delete = "delete_b"
+  }
 }
 `, url)
 }
