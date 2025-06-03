@@ -380,7 +380,9 @@ func (e *EphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequest,
 			Method:        config.RenewMethod,
 			Path:          basetypes.NewStringValue(path),
 			Body:          config.RenewBody,
+			DefaultHeader: config.Header,
 			Header:        config.RenewHeader,
+			DefaultQuery:  config.Query,
 			Query:         config.RenewQuery,
 			ExpiryType:    config.ExpiryType,
 			ExpiryLocator: config.ExpiryLocator,
@@ -410,11 +412,13 @@ func (e *EphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequest,
 			)
 		}
 		ed := ephemeralResourcePrivateData{
-			Method: config.CloseMethod,
-			Path:   basetypes.NewStringValue(path),
-			Body:   config.CloseBody,
-			Header: config.CloseHeader,
-			Query:  config.CloseQuery,
+			Method:        config.CloseMethod,
+			Path:          basetypes.NewStringValue(path),
+			Body:          config.CloseBody,
+			DefaultHeader: config.Header,
+			Header:        config.CloseHeader,
+			DefaultQuery:  config.Query,
+			Query:         config.CloseQuery,
 		}
 		b, err := json.Marshal(ed)
 		if err != nil {
