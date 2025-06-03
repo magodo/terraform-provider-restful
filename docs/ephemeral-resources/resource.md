@@ -40,7 +40,8 @@ ephemeral "restful_resource" "test" {
 ### Optional
 
 - `body` (Dynamic) The payload to open the ephemeral resource.
-- `close_body` (Dynamic) The payload to close the ephemeral resource.
+- `close_body` (Dynamic) The payload to close the ephemeral resource. Conflicts with `renew_body_raw`.
+- `close_body_raw` (String) The raw payload for the `Close` call. It can contain `$(body.x.y.z)` parameter that reference property from the `Open` response. Conflicts with `renew_body`.
 - `close_header` (Map of String) The header parameters that are applied to each close request. This overrides the `header` set in the resource block.
 - `close_method` (String) The HTTP method to close the ephemeral resource. Possible values are `PUT`, `POST`, `PATCH`, `DELETE`.
 - `close_path` (String) The path used to close the ephemeral resource, relative to the `base_url` of the provider. This can be a string literal, or combined by following params: path param: `$(path)` expanded to `path`, body param: `$(body.x.y.z)` expands to the `x.y.z` property of the API body. Especially for the body param, it can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `query_escape` (URL query escape), `query_unescape` (URL query unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`).
@@ -54,7 +55,8 @@ ephemeral "restful_resource" "test" {
 - `open_query` (Map of List of String) The query parameters that are applied to each open request. This overrides the `query` set in the resource block.
 - `output_attrs` (Set of String) A set of `output` attribute paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) that will be exported in the `output`. If this is not specified, all attributes will be exported by `output`.
 - `query` (Map of List of String) The query parameters that are applied to each request. This overrides the `query` set in the provider block.
-- `renew_body` (Dynamic) The payload to renew the ephemeral resource.
+- `renew_body` (Dynamic) The payload to renew the ephemeral resource. Conflicts with `renew_body_raw`.
+- `renew_body_raw` (String) The raw payload for the `Renew` call. It can contain `$(body.x.y.z)` parameter that reference property from the `Open` response. Conflicts with `renew_body`.
 - `renew_header` (Map of String) The header parameters that are applied to each renew request. This overrides the `header` set in the resource block.
 - `renew_method` (String) The HTTP method to renew the ephemeral resource. Possible values are `GET`, `PUT`, `POST`, `PATCH`.
 - `renew_path` (String) The path used to renew the ephemeral resource, relative to the `base_url` of the provider. This can be a string literal, or combined by following params: path param: `$(path)` expanded to `path`, body param: `$(body.x.y.z)` expands to the `x.y.z` property of the API body. Especially for the body param, it can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `query_escape` (URL query escape), `query_unescape` (URL query unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`).

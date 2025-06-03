@@ -380,8 +380,8 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				},
 			},
 			"delete_body_raw": schema.StringAttribute{
-				Description:         "The raw json payload for the `Delete` call. It can contain `$(body.x.y.z)` parameter that reference property from the `state.output`. Conflicts with `delete_body`.",
-				MarkdownDescription: "The raw json payload for the `Delete` call. It can contain `$(body.x.y.z)` parameter that reference property from the `state.output`. Conflicts with `delete_body`.",
+				Description:         "The raw payload for the `Delete` call. It can contain `$(body.x.y.z)` parameter that reference property from the `state.output`. Conflicts with `delete_body`.",
+				MarkdownDescription: "The raw payload for the `Delete` call. It can contain `$(body.x.y.z)` parameter that reference property from the `state.output`. Conflicts with `delete_body`.",
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.ConflictsWith(

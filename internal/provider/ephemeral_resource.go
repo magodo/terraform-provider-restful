@@ -44,22 +44,24 @@ type ephemeralResourceData struct {
 	Query  types.Map `tfsdk:"query"`
 	Header types.Map `tfsdk:"header"`
 
-	RenewMethod types.String  `tfsdk:"renew_method"`
-	RenewBody   types.Dynamic `tfsdk:"renew_body"`
-	RenewPath   types.String  `tfsdk:"renew_path"`
-	RenewQuery  types.Map     `tfsdk:"renew_query"`
-	RenewHeader types.Map     `tfsdk:"renew_header"`
+	RenewMethod  types.String  `tfsdk:"renew_method"`
+	RenewBodyRaw types.String  `tfsdk:"renew_body_raw"`
+	RenewBody    types.Dynamic `tfsdk:"renew_body"`
+	RenewPath    types.String  `tfsdk:"renew_path"`
+	RenewQuery   types.Map     `tfsdk:"renew_query"`
+	RenewHeader  types.Map     `tfsdk:"renew_header"`
 
 	ExpiryAhead   types.String `tfsdk:"expiry_ahead"`
 	ExpiryType    types.String `tfsdk:"expiry_type"`
 	ExpiryLocator types.String `tfsdk:"expiry_locator"`
 	ExpiryUnit    types.String `tfsdk:"expiry_unit"`
 
-	CloseMethod types.String  `tfsdk:"close_method"`
-	CloseBody   types.Dynamic `tfsdk:"close_body"`
-	ClosePath   types.String  `tfsdk:"close_path"`
-	CloseQuery  types.Map     `tfsdk:"close_query"`
-	CloseHeader types.Map     `tfsdk:"close_header"`
+	CloseMethod  types.String  `tfsdk:"close_method"`
+	CloseBodyRaw types.String  `tfsdk:"close_body_raw"`
+	CloseBody    types.Dynamic `tfsdk:"close_body"`
+	ClosePath    types.String  `tfsdk:"close_path"`
+	CloseQuery   types.Map     `tfsdk:"close_query"`
+	CloseHeader  types.Map     `tfsdk:"close_header"`
 
 	OutputAttrs types.Set     `tfsdk:"output_attrs"`
 	Output      types.Dynamic `tfsdk:"output"`
@@ -158,12 +160,28 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 				},
 			},
 			"renew_body": schema.DynamicAttribute{
-				Description:         "The payload to renew the ephemeral resource.",
-				MarkdownDescription: "The payload to renew the ephemeral resource.",
+				Description:         "The payload to renew the ephemeral resource. Conflicts with `renew_body_raw`.",
+				MarkdownDescription: "The payload to renew the ephemeral resource. Conflicts with `renew_body_raw`.",
 				Optional:            true,
 				Validators: []validator.Dynamic{
 					dynamicvalidator.AlsoRequires(
 						path.MatchRoot("renew_method"),
+					),
+					dynamicvalidator.ConflictsWith(
+						path.MatchRoot("renew_body_raw"),
+					),
+				},
+			},
+			"renew_body_raw": schema.StringAttribute{
+				Description:         "The raw payload for the `Renew` call. It can contain `$(body.x.y.z)` parameter that reference property from the `Open` response. Conflicts with `renew_body`.",
+				MarkdownDescription: "The raw payload for the `Renew` call. It can contain `$(body.x.y.z)` parameter that reference property from the `Open` response. Conflicts with `renew_body`.",
+				Optional:            true,
+				Validators: []validator.String{
+					stringvalidator.AlsoRequires(
+						path.MatchRoot("renew_method"),
+					),
+					stringvalidator.ConflictsWith(
+						path.MatchRoot("renew_body"),
 					),
 				},
 			},
@@ -269,12 +287,28 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 				},
 			},
 			"close_body": schema.DynamicAttribute{
-				Description:         "The payload to close the ephemeral resource.",
-				MarkdownDescription: "The payload to close the ephemeral resource.",
+				Description:         "The payload to close the ephemeral resource. Conflicts with `renew_body_raw`.",
+				MarkdownDescription: "The payload to close the ephemeral resource. Conflicts with `renew_body_raw`.",
 				Optional:            true,
 				Validators: []validator.Dynamic{
 					dynamicvalidator.AlsoRequires(
 						path.MatchRoot("close_method"),
+					),
+					dynamicvalidator.ConflictsWith(
+						path.MatchRoot("close_body_raw"),
+					),
+				},
+			},
+			"close_body_raw": schema.StringAttribute{
+				Description:         "The raw payload for the `Close` call. It can contain `$(body.x.y.z)` parameter that reference property from the `Open` response. Conflicts with `renew_body`.",
+				MarkdownDescription: "The raw payload for the `Close` call. It can contain `$(body.x.y.z)` parameter that reference property from the `Open` response. Conflicts with `renew_body`.",
+				Optional:            true,
+				Validators: []validator.String{
+					stringvalidator.AlsoRequires(
+						path.MatchRoot("close_method"),
+					),
+					stringvalidator.ConflictsWith(
+						path.MatchRoot("close_body"),
 					),
 				},
 			},
@@ -375,11 +409,36 @@ func (e *EphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequest,
 				fmt.Sprintf("Failed to build the path for renew the resource"),
 				err.Error(),
 			)
+			return
 		}
+
+		var renewBody types.Dynamic
+		switch {
+		case !config.RenewBody.IsNull():
+			renewBody = config.RenewBody
+		case !config.RenewBodyRaw.IsNull():
+			renewBodyRaw, err := exparam.ExpandBody(config.RenewBodyRaw.ValueString(), response.Body())
+			if err != nil {
+				resp.Diagnostics.AddError(
+					fmt.Sprintf("Failed to expand the renew_body_raw"),
+					err.Error(),
+				)
+				return
+			}
+			renewBody, err = dynamic.FromJSONImplied([]byte(renewBodyRaw))
+			if err != nil {
+				resp.Diagnostics.AddError(
+					fmt.Sprintf("Failed to convert the expanded renew_body_raw to dynamic"),
+					err.Error(),
+				)
+				return
+			}
+		}
+
 		ed := ephemeralResourcePrivateData{
 			Method:        config.RenewMethod,
 			Path:          basetypes.NewStringValue(path),
-			Body:          config.RenewBody,
+			Body:          renewBody,
 			DefaultHeader: config.Header,
 			Header:        config.RenewHeader,
 			DefaultQuery:  config.Query,
@@ -411,10 +470,34 @@ func (e *EphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequest,
 				err.Error(),
 			)
 		}
+
+		var closeBody types.Dynamic
+		switch {
+		case !config.CloseBody.IsNull():
+			closeBody = config.CloseBody
+		case !config.CloseBodyRaw.IsNull():
+			closeBodyRaw, err := exparam.ExpandBody(config.CloseBodyRaw.ValueString(), response.Body())
+			if err != nil {
+				resp.Diagnostics.AddError(
+					fmt.Sprintf("Failed to expand the close_body_raw"),
+					err.Error(),
+				)
+				return
+			}
+			closeBody, err = dynamic.FromJSONImplied([]byte(closeBodyRaw))
+			if err != nil {
+				resp.Diagnostics.AddError(
+					fmt.Sprintf("Failed to convert the expanded close_body_raw to dynamic"),
+					err.Error(),
+				)
+				return
+			}
+		}
+
 		ed := ephemeralResourcePrivateData{
 			Method:        config.CloseMethod,
 			Path:          basetypes.NewStringValue(path),
-			Body:          config.CloseBody,
+			Body:          closeBody,
 			DefaultHeader: config.Header,
 			Header:        config.CloseHeader,
 			DefaultQuery:  config.Query,
