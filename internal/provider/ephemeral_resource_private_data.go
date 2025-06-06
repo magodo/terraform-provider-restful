@@ -24,6 +24,8 @@ type ephemeralResourcePrivateData struct {
 	ExpiryType    types.String
 	ExpiryLocator types.String
 	ExpiryUnit    types.String
+
+	Output types.Dynamic
 }
 
 type ephemeralResourcePrivateDataGo struct {
@@ -39,6 +41,8 @@ type ephemeralResourcePrivateDataGo struct {
 	ExpiryType    string `json:"expiry_type,omitempty"`
 	ExpiryLocator string `json:"expiry_locator,omitempty"`
 	ExpiryUnit    string `json:"expiry_unit,omitempty"`
+
+	Output []byte `json:"output,omitempty"`
 }
 
 func (d ephemeralResourcePrivateData) MarshalJSON() ([]byte, error) {
@@ -68,6 +72,11 @@ func (d ephemeralResourcePrivateData) MarshalJSON() ([]byte, error) {
 	dg.Query, err = queryToGo(d.Query)
 	if err != nil {
 		return nil, err
+	}
+
+	dg.Output, err = dynamic.ToJSON(d.Output)
+	if err != nil {
+		return nil, fmt.Errorf("convert dynamic output to json: %v", err)
 	}
 
 	return json.Marshal(dg)
@@ -130,6 +139,16 @@ func (d *ephemeralResourcePrivateData) UnmarshalJSON(b []byte) error {
 		expiryUnit = types.StringValue(dg.ExpiryUnit)
 	}
 	d.ExpiryUnit = expiryUnit
+
+	output := types.DynamicNull()
+	if len(dg.Output) != 0 {
+		var err error
+		output, err = dynamic.FromJSONImplied(dg.Output)
+		if err != nil {
+			return fmt.Errorf("convert dynamic output from json failed: %v", err)
+		}
+	}
+	d.Output = output
 
 	return nil
 }

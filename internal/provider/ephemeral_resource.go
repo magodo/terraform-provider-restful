@@ -365,13 +365,22 @@ func (e *EphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequest,
 
 	tflog.Info(ctx, "Open an ephemeral resource", map[string]interface{}{"path": config.Path.ValueString()})
 
-	opt, diags := e.p.apiOpt.ForOperation(ctx, config.Method, config.Query, config.Header, config.OpenQuery, config.OpenHeader)
+	opt, diags := e.p.apiOpt.ForOperation(ctx, config.Method, config.Query, config.Header, config.OpenQuery, config.OpenHeader, nil)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
 	}
 
-	response, err := c.Operation(ctx, config.Path.ValueString(), config.Body, *opt)
+	body, err := dynamic.ToJSON(config.Body)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Convert open body from dynamic to json",
+			err.Error(),
+		)
+		return
+	}
+
+	response, err := c.Operation(ctx, config.Path.ValueString(), body, *opt)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error to call open operation",
@@ -400,6 +409,37 @@ func (e *EphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequest,
 		tflog.Info(ctx, fmt.Sprintf("renew_at=%v", t))
 		resp.RenewAt = t
 	}
+
+	// Set Output
+	rb := response.Body()
+	if !config.OutputAttrs.IsNull() {
+		// Update the output to only contain the specified attributes.
+		var outputAttrs []string
+		diags = config.OutputAttrs.ElementsAs(ctx, &outputAttrs, false)
+		resp.Diagnostics.Append(diags...)
+		if diags.HasError() {
+			return
+		}
+		fb, err := FilterAttrsInJSON(string(rb), outputAttrs)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Filter `output` during operation",
+				err.Error(),
+			)
+			return
+		}
+		rb = []byte(fb)
+	}
+
+	output, err := dynamic.FromJSONImplied(rb)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Converting `output` from JSON to dynamic",
+			err.Error(),
+		)
+		return
+	}
+	config.Output = output
 
 	// Set Renew and Close, if any
 	if !config.RenewMethod.IsNull() {
@@ -447,6 +487,7 @@ func (e *EphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequest,
 			ExpiryLocator: config.ExpiryLocator,
 			ExpiryAhead:   config.ExpiryAhead,
 			ExpiryUnit:    config.ExpiryUnit,
+			Output:        output,
 		}
 		b, err := json.Marshal(ed)
 		if err != nil {
@@ -502,6 +543,7 @@ func (e *EphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequest,
 			Header:        config.CloseHeader,
 			DefaultQuery:  config.Query,
 			Query:         config.CloseQuery,
+			Output:        output,
 		}
 		b, err := json.Marshal(ed)
 		if err != nil {
@@ -516,37 +558,6 @@ func (e *EphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequest,
 			return
 		}
 	}
-
-	// Set Output
-	rb := response.Body()
-	if !config.OutputAttrs.IsNull() {
-		// Update the output to only contain the specified attributes.
-		var outputAttrs []string
-		diags = config.OutputAttrs.ElementsAs(ctx, &outputAttrs, false)
-		resp.Diagnostics.Append(diags...)
-		if diags.HasError() {
-			return
-		}
-		fb, err := FilterAttrsInJSON(string(rb), outputAttrs)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Filter `output` during operation",
-				err.Error(),
-			)
-			return
-		}
-		rb = []byte(fb)
-	}
-
-	output, err := dynamic.FromJSONImplied(rb)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Converting `output` from JSON to dynamic",
-			err.Error(),
-		)
-		return
-	}
-	config.Output = output
 
 	diags = resp.Result.Set(ctx, config)
 	resp.Diagnostics.Append(diags...)
@@ -580,13 +591,25 @@ func (e *EphemeralResource) Renew(ctx context.Context, req ephemeral.RenewReques
 
 	tflog.Info(ctx, "Renew an ephemeral resource", map[string]interface{}{"path": pd.Path.ValueString()})
 
-	opt, diags := e.p.apiOpt.ForOperation(ctx, pd.Method, pd.DefaultQuery, pd.DefaultHeader, pd.Query, pd.Header)
+	var output []byte
+	if !pd.Output.IsNull() {
+		var err error
+		output, err = dynamic.ToJSON(pd.Output)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"converting private output to json",
+				err.Error(),
+			)
+			return
+		}
+	}
+	opt, diags := e.p.apiOpt.ForOperation(ctx, pd.Method, pd.DefaultQuery, pd.DefaultHeader, pd.Query, pd.Header, output)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
 	}
 
-	response, err := c.Operation(ctx, pd.Path.ValueString(), pd.Body, *opt)
+	response, err := c.Operation(ctx, pd.Path.ValueString(), output, *opt)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error to call renew operation",
@@ -638,13 +661,25 @@ func (e *EphemeralResource) Close(ctx context.Context, req ephemeral.CloseReques
 
 	tflog.Info(ctx, "Close an ephemeral resource", map[string]interface{}{"path": pd.Path.ValueString()})
 
-	opt, diags := e.p.apiOpt.ForOperation(ctx, pd.Method, pd.DefaultQuery, pd.DefaultHeader, pd.Query, pd.Header)
+	var output []byte
+	if !pd.Output.IsNull() {
+		var err error
+		output, err = dynamic.ToJSON(pd.Output)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"converting private output to json",
+				err.Error(),
+			)
+			return
+		}
+	}
+	opt, diags := e.p.apiOpt.ForOperation(ctx, pd.Method, pd.DefaultQuery, pd.DefaultHeader, pd.Query, pd.Header, output)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
 	}
 
-	response, err := c.Operation(ctx, pd.Path.ValueString(), pd.Body, *opt)
+	response, err := c.Operation(ctx, pd.Path.ValueString(), output, *opt)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error to call close operation",

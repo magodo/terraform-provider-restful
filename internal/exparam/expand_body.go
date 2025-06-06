@@ -12,11 +12,13 @@ import (
 // The param can be prefixed by a chain of functions.
 // The form is like: $f1.f2(body.x.y.z)
 func ExpandBody(expr string, body []byte) (string, error) {
+	if len(body) == 0 {
+		return expr, nil
+	}
+
 	out := expr
 	ff := FuncFactory{}.Build()
-
 	matches := Pattern.FindAllStringSubmatch(out, -1)
-
 	for _, match := range matches {
 		var jp string
 		if match[2] == "body" {

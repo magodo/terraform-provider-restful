@@ -311,7 +311,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, reqConfig tfsdk.
 		tflog.Info(ctx, "Update an operation resource", map[string]interface{}{"id": plan.ID.ValueString()})
 	}
 
-	opt, diags := r.p.apiOpt.ForOperation(ctx, plan.Method, plan.Query, plan.Header, plan.OperationQuery, plan.OperationHeader)
+	opt, diags := r.p.apiOpt.ForOperation(ctx, plan.Method, plan.Query, plan.Header, plan.OperationQuery, plan.OperationHeader, nil)
 	respDiags.Append(diags...)
 	if respDiags.HasError() {
 		return
@@ -328,10 +328,10 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, reqConfig tfsdk.
 	}
 
 	// Build the body
-	body := plan.Body
-	var eb []byte
+	var eb, body []byte
 	if !plan.Body.IsNull() {
-		b, err := dynamic.ToJSON(plan.Body)
+		var err error
+		body, err = dynamic.ToJSON(plan.Body)
 		if err != nil {
 			respDiags.AddError(
 				`Error to marshal "body"`,
@@ -341,14 +341,14 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, reqConfig tfsdk.
 		}
 
 		if !config.EphemeralBody.IsNull() {
-			eb, diags = validateEphemeralBody(b, config.EphemeralBody)
+			eb, diags = validateEphemeralBody(body, config.EphemeralBody)
 			respDiags.Append(diags...)
 			if respDiags.HasError() {
 				return
 			}
 
 			// Merge patch the ephemeral body to the body
-			b, err = jsonpatch.MergePatch(b, eb)
+			body, err = jsonpatch.MergePatch(body, eb)
 			if err != nil {
 				respDiags.AddError(
 					"Merge patching `body` with `ephemeral_body`",
@@ -356,16 +356,6 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, reqConfig tfsdk.
 				)
 				return
 			}
-		}
-
-		// This is not ideal, but just to conform to the c.Operation() signature.
-		body, err = dynamic.FromJSONImplied(b)
-		if err != nil {
-			respDiags.AddError(
-				"Converting body back to dynamic type failed",
-				err.Error(),
-			)
-			return
 		}
 	}
 
@@ -454,7 +444,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, reqConfig tfsdk.
 	plan.ID = types.StringValue(resourceId)
 
 	// Set Output to state
-	b := response.Body()
+	rb := response.Body()
 	if !plan.OutputAttrs.IsNull() {
 		// Update the output to only contain the specified attributes.
 		var outputAttrs []string
@@ -463,7 +453,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, reqConfig tfsdk.
 		if diags.HasError() {
 			return
 		}
-		fb, err := FilterAttrsInJSON(string(b), outputAttrs)
+		fb, err := FilterAttrsInJSON(string(rb), outputAttrs)
 		if err != nil {
 			respDiags.AddError(
 				"Filter `output` during operation",
@@ -471,11 +461,11 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, reqConfig tfsdk.
 			)
 			return
 		}
-		b = []byte(fb)
+		rb = []byte(fb)
 	}
 
 	if eb != nil {
-		b, err = jsonset.Difference(b, eb)
+		rb, err = jsonset.Difference(rb, eb)
 		if err != nil {
 			respDiags.AddError(
 				"Removing `ephemeral_body` from `output`",
@@ -485,7 +475,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, reqConfig tfsdk.
 		}
 	}
 
-	output, err := dynamic.FromJSONImplied(b)
+	output, err := dynamic.FromJSONImplied(rb)
 	if err != nil {
 		respDiags.AddError(
 			"Converting `output` from JSON to dynamic",
@@ -533,13 +523,22 @@ func (r *OperationResource) Delete(ctx context.Context, req resource.DeleteReque
 		return
 	}
 
+	output, err := dynamic.ToJSON(state.Output)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			fmt.Sprintf("Failed to build the path for deleting the operation resource"),
+			fmt.Sprintf("Failed to marshal the output: %v", err),
+		)
+		return
+	}
+
 	tflog.Info(ctx, "Delete an operation resource", map[string]interface{}{"id": state.ID.ValueString()})
 
 	if state.DeleteMethod.IsNull() {
 		return
 	}
 
-	opt, diags := r.p.apiOpt.ForOperation(ctx, state.DeleteMethod, state.Query, state.Header, state.DeleteQuery, state.DeleteHeader)
+	opt, diags := r.p.apiOpt.ForOperation(ctx, state.DeleteMethod, state.Query, state.Header, state.DeleteQuery, state.DeleteHeader, output)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
@@ -557,25 +556,26 @@ func (r *OperationResource) Delete(ctx context.Context, req resource.DeleteReque
 
 	path := state.ID.ValueString()
 	if !state.DeletePath.IsNull() {
-		body, err := dynamic.ToJSON(state.Output)
+		path, err = exparam.ExpandBodyOrPath(state.DeletePath.ValueString(), state.Path.ValueString(), output)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				fmt.Sprintf("Failed to build the path for deleting the operation resource"),
-				fmt.Sprintf("Failed to marshal the output: %v", err),
-			)
-			return
-		}
-		path, err = exparam.ExpandBodyOrPath(state.DeletePath.ValueString(), state.Path.ValueString(), body)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				fmt.Sprintf("Failed to build the path for deleting the operation resource"),
-				fmt.Sprintf("Can't build path with `delete_path`: %q, `path`: %q, `body`: %q, error: %v", state.DeletePath.ValueString(), state.Path.ValueString(), string(body), err),
+				fmt.Sprintf("Can't build path with `delete_path`: %q, `path`: %q, `body`: %q, error: %v", state.DeletePath.ValueString(), state.Path.ValueString(), string(output), err),
 			)
 			return
 		}
 	}
 
-	response, err := c.Operation(ctx, path, state.DeleteBody, *opt)
+	b, err := dynamic.ToJSON(state.DeleteBody)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			`Error to marshal "delete_body"`,
+			err.Error(),
+		)
+		return
+	}
+
+	response, err := c.Operation(ctx, path, b, *opt)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Delete: Error to call operation",

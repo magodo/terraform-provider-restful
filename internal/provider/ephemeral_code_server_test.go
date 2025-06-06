@@ -2,6 +2,7 @@ package provider_test
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -95,6 +96,45 @@ func TestEphemeral_CodeServer_complete(t *testing.T) {
 	require.Equal(t, 6, unleaseCnt, "close")
 }
 
+func TestEphemeral_CodeServer_HeaderQueryFromBody(t *testing.T) {
+	mux := http.NewServeMux()
+	srv := httptest.NewUnstartedServer(mux)
+	var body []byte
+	mux.HandleFunc("POST /open", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("type") != "open" {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		if r.URL.Query().Get("type") != "open" {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		body, _ = io.ReadAll(r.Body)
+		w.Write(body)
+		return
+	})
+	mux.HandleFunc("POST /close", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("type") != "close_b" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(``))
+		}
+		if r.URL.Query().Get("type") != "close_b" {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		return
+	})
+
+	srv.Start()
+	d := codeServerEphemeral{}
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+		Steps: []resource.TestStep{
+			{
+				Config:            d.headerqueryFromBody(srv.URL),
+				ConfigStateChecks: []statecheck.StateCheck{},
+			},
+		},
+	})
+}
+
 func (d codeServerEphemeral) basic(url string) string {
 	return fmt.Sprintf(`
 provider "restful" {
@@ -159,4 +199,35 @@ provider "echo" {
 
 resource "echo" "test" {}
 `, url, url)
+}
+
+func (d codeServerEphemeral) headerqueryFromBody(url string) string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+ephemeral "restful_resource" "test" {
+  path = "/open"
+  method = "POST"
+  open_header = {
+  	type = "open"
+  }
+  open_query = {
+  	type = ["open"]
+  }
+  body = {
+    close = "close_b"
+  }
+
+  close_path = "/close"
+  close_method = "POST"
+  close_header = {
+  	type = "$(body.close)"
+  }
+  close_query = {
+  	type = ["$(body.close)"]
+  }
+}
+`, url)
 }
