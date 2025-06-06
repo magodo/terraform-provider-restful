@@ -2,6 +2,7 @@ package provider_test
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -94,7 +95,7 @@ func TestOperation_CodeServer_HeaderQuery(t *testing.T) {
 		return
 	})
 	srv.Start()
-	d := codeServerOperation{}
+	d := newCodeServerOperation(srv.URL)
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
 		Steps: []resource.TestStep{
@@ -102,6 +103,47 @@ func TestOperation_CodeServer_HeaderQuery(t *testing.T) {
 				Config: d.headerquery(srv.URL),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.Null()),
+				},
+			},
+		},
+	})
+}
+
+func TestOperation_CodeServer_HeaderQueryFromBody(t *testing.T) {
+	addr := "restful_operation.test"
+
+	mux := http.NewServeMux()
+	srv := httptest.NewUnstartedServer(mux)
+	var body []byte
+	mux.HandleFunc("POST /tests/1", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("type") != "operation" {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		if r.URL.Query().Get("type") != "operation" {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		body, _ = io.ReadAll(r.Body)
+		w.Write(body)
+		return
+	})
+	mux.HandleFunc("DELETE /tests/1", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("type") != "delete_b" {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		if r.URL.Query().Get("type") != "delete_b" {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		return
+	})
+	srv.Start()
+	d := newCodeServerOperation(srv.URL)
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+		Steps: []resource.TestStep{
+			{
+				Config: d.headerqueryFromBody(srv.URL),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.NotNull()),
 				},
 			},
 		},
@@ -168,6 +210,35 @@ resource "restful_operation" "test" {
   }
 
   body = {}
+}
+`, url)
+}
+
+func (d codeServerOperation) headerqueryFromBody(url string) string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+resource "restful_operation" "test" {
+  path = "/tests/1"
+  method = "POST"
+  delete_method = "DELETE"
+  operation_header = {
+  	type = "operation"
+  }
+  operation_query = {
+  	type = ["operation"]
+  }
+  delete_header = {
+  	type = "$(body.delete)"
+  }
+  delete_query = {
+  	type = ["$(body.delete)"]
+  }
+  body = {
+    delete = "delete_b"
+  }
 }
 `, url)
 }

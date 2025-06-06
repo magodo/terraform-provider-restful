@@ -85,11 +85,11 @@ func (opt apiOption) ForDataSourceRead(ctx context.Context, d dataSourceData) (*
 	return &out, nil
 }
 
-func (opt apiOption) ForOperation(ctx context.Context, method basetypes.StringValue, defQuery, defHeader, ovQuery, ovHeader basetypes.MapValue) (*client.OperationOption, diag.Diagnostics) {
+func (opt apiOption) ForOperation(ctx context.Context, method basetypes.StringValue, defQuery, defHeader, ovQuery, ovHeader basetypes.MapValue, body []byte) (*client.OperationOption, diag.Diagnostics) {
 	out := client.OperationOption{
 		Method: method.ValueString(),
-		Query:  opt.Query.Clone().TakeOrSelf(ctx, defQuery).TakeOrSelf(ctx, ovQuery),
-		Header: opt.Header.Clone().TakeOrSelf(ctx, defHeader).TakeOrSelf(ctx, ovHeader),
+		Query:  opt.Query.Clone().TakeOrSelf(ctx, defQuery).TakeWithExparamOrSelf(ctx, ovQuery, body),
+		Header: opt.Header.Clone().TakeOrSelf(ctx, defHeader).TakeWithExparamOrSelf(ctx, ovHeader, body),
 	}
 
 	return &out, nil

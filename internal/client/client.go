@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/cookiejar"
@@ -11,8 +12,6 @@ import (
 	"github.com/go-resty/resty/v2"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
-	"github.com/magodo/terraform-provider-restful/internal/dynamic"
 	"github.com/magodo/terraform-provider-restful/internal/exparam"
 	"golang.org/x/net/publicsuffix"
 )
@@ -296,7 +295,7 @@ type OperationOption struct {
 	Header Header
 }
 
-func (c *Client) Operation(ctx context.Context, path string, body basetypes.DynamicValue, opt OperationOption) (*resty.Response, error) {
+func (c *Client) Operation(ctx context.Context, path string, body []byte, opt OperationOption) (*resty.Response, error) {
 	req := c.R().SetContext(ctx)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 
@@ -305,28 +304,16 @@ func (c *Client) Operation(ctx context.Context, path string, body basetypes.Dyna
 	req = req.SetHeader("Content-Type", "application/json")
 	req.SetHeaders(opt.Header)
 
-	if !body.IsNull() {
+	if len(body) != 0 {
 		switch req.Header.Get("Content-Type") {
 		case "application/x-www-form-urlencoded":
-			ov, ok := body.UnderlyingValue().(types.Object)
-			if !ok {
-				return nil, fmt.Errorf("body expects to be an object, got=%T", body.UnderlyingValue())
-			}
 			m := map[string]string{}
-			for k, v := range ov.Attributes() {
-				vs, ok := v.(types.String)
-				if !ok {
-					return nil, fmt.Errorf("body value expects to be a string, got=%T", v)
-				}
-				m[k] = vs.ValueString()
+			if err := json.Unmarshal(body, &m); err != nil {
+				return nil, fmt.Errorf("unmarshaling the operation body to a map of string: %v", err)
 			}
 			req.SetFormData(m)
 		default:
-			b, err := dynamic.ToJSON(body)
-			if err != nil {
-				return nil, fmt.Errorf("convert body from dynamic to json: %v", err)
-			}
-			req.SetBody(string(b))
+			req.SetBody(string(body))
 		}
 	}
 
