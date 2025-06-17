@@ -1501,7 +1501,7 @@ type importSpec struct {
 	Query *url.Values `json:"query"`
 
 	// Header is only required when it is mandatory for reading the resource.
-	Header *url.Values `json:"header"`
+	Header map[string]string `json:"header"`
 
 	// Body represents the properties expected to be managed and tracked by Terraform. The value of these properties can be null as a place holder.
 	// When absent, all the response payload read wil be set to `body`.
