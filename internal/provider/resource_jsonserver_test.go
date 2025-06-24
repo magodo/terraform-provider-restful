@@ -68,6 +68,32 @@ func TestResource_JSONServer_Basic(t *testing.T) {
 					return fmt.Sprintf(`{"id": %q, "path": "posts", "body": {"foo": null}}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
 				},
 			},
+			// Should also be able to import without "body" specified.
+			{
+				ResourceName:            addr,
+				ImportState:             true,
+				ImportStateVerify:       false,
+				ImportStateVerifyIgnore: []string{"read_path"},
+				ImportStateIdFunc: func(s *terraform.State) (string, error) {
+					return fmt.Sprintf(`{"id": %q, "path": "posts"}`, s.RootModule().Resources[addr].Primary.Attributes["id"]), nil
+				},
+				ImportStateCheck: func(is []*terraform.InstanceState) error {
+					if len(is) != 1 {
+						return fmt.Errorf("expect instance state has only one item, got=%d", len(is))
+					}
+					inst := is[0]
+					if v := inst.Attributes["body.%"]; v != "2" {
+						return fmt.Errorf(`expect "body.%%" to be "2", got=%s`, v)
+					}
+					if v := inst.Attributes["body.foo"]; v != "foo" {
+						return fmt.Errorf(`expect "body.foo" to be "foo", got=%s`, v)
+					}
+					if _, ok := inst.Attributes["body.id"]; !ok {
+						return fmt.Errorf(`expect "body.id" to exist`)
+					}
+					return nil
+				},
+			},
 			{
 				Config: d.basic("bar"),
 				ConfigStateChecks: []statecheck.StateCheck{
