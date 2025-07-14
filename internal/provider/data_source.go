@@ -26,6 +26,7 @@ type dataSourceData struct {
 	Method        types.String  `tfsdk:"method"`
 	Query         types.Map     `tfsdk:"query"`
 	Header        types.Map     `tfsdk:"header"`
+	Body          types.Dynamic `tfsdk:"body"`
 	Selector      types.String  `tfsdk:"selector"`
 	OutputAttrs   types.Set     `tfsdk:"output_attrs"`
 	AllowNotExist types.Bool    `tfsdk:"allow_not_exist"`
@@ -65,6 +66,11 @@ func (d *DataSource) Schema(ctx context.Context, req datasource.SchemaRequest, r
 				Description:         "The header parameters that are applied to each request. This overrides the `header` set in the provider block.",
 				MarkdownDescription: "The header parameters that are applied to each request. This overrides the `header` set in the provider block.",
 				ElementType:         types.StringType,
+				Optional:            true,
+			},
+			"body": schema.DynamicAttribute{
+				Description:         "The request body that is sent when using POST method. Only applicable when method is set to POST.",
+				MarkdownDescription: "The request body that is sent when using POST method. Only applicable when method is set to POST.",
 				Optional:            true,
 			},
 			"selector": schema.StringAttribute{
@@ -140,12 +146,27 @@ func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp 
 
 	state := dataSourceData{
 		ID:            config.ID,
+		Method:        config.Method,
 		Query:         config.Query,
 		Header:        config.Header,
+		Body:          config.Body,
 		Selector:      config.Selector,
 		OutputAttrs:   config.OutputAttrs,
 		AllowNotExist: config.AllowNotExist,
 		Precheck:      config.Precheck,
+	}
+
+	// Set body if provided
+	if !config.Body.IsNull() && config.Method.ValueString() == "POST" {
+		bodyBytes, err := dynamic.ToJSON(config.Body)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error to call Read",
+				err.Error(),
+			)
+			return
+		}
+		opt.Body = string(bodyBytes)
 	}
 
 	response, err := c.ReadDS(ctx, config.ID.ValueString(), *opt)
