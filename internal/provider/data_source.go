@@ -26,6 +26,7 @@ type dataSourceData struct {
 	Method        types.String  `tfsdk:"method"`
 	Query         types.Map     `tfsdk:"query"`
 	Header        types.Map     `tfsdk:"header"`
+	Body          types.Dynamic `tfsdk:"body"`
 	Selector      types.String  `tfsdk:"selector"`
 	OutputAttrs   types.Set     `tfsdk:"output_attrs"`
 	AllowNotExist types.Bool    `tfsdk:"allow_not_exist"`
@@ -67,6 +68,11 @@ func (d *DataSource) Schema(ctx context.Context, req datasource.SchemaRequest, r
 				ElementType:         types.StringType,
 				Optional:            true,
 			},
+			"body": schema.DynamicAttribute{
+				Description:         "The request body that is sent when using `POST` method.",
+				MarkdownDescription: "The request body that is sent when using `POST` method.",
+				Optional:            true,
+			},
 			"selector": schema.StringAttribute{
 				Description:         "A selector in gjson query syntax, that is used when `id` represents a collection of resources, to select exactly one member resource of from it",
 				MarkdownDescription: "A selector in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries), that is used when `id` represents a collection of resources, to select exactly one member resource of from it",
@@ -90,6 +96,25 @@ func (d *DataSource) Schema(ctx context.Context, req datasource.SchemaRequest, r
 				Computed:            true,
 			},
 		},
+	}
+}
+
+func (d *DataSource) ValidateConfig(ctx context.Context, req datasource.ValidateConfigRequest, resp *datasource.ValidateConfigResponse) {
+	var config dataSourceData
+	diags := req.Config.Get(ctx, &config)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
+	if !config.Body.IsUnknown() && !config.Body.IsNull() {
+		if !config.Method.IsUnknown() {
+			if config.Method.ValueString() != "POST" {
+				resp.Diagnostics.AddError(
+					"Invalid configuration",
+					"`body` is only applicable when `method` is set to `POST`",
+				)
+			}
+		}
 	}
 }
 
@@ -140,15 +165,31 @@ func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp 
 
 	state := dataSourceData{
 		ID:            config.ID,
+		Method:        config.Method,
 		Query:         config.Query,
 		Header:        config.Header,
+		Body:          config.Body,
 		Selector:      config.Selector,
 		OutputAttrs:   config.OutputAttrs,
 		AllowNotExist: config.AllowNotExist,
 		Precheck:      config.Precheck,
 	}
 
-	response, err := c.ReadDS(ctx, config.ID.ValueString(), *opt)
+	// Set body if provided
+	var body []byte
+	if !config.Body.IsNull() && config.Method.ValueString() == "POST" {
+		var err error
+		body, err = dynamic.ToJSON(config.Body)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error to convert body",
+				err.Error(),
+			)
+			return
+		}
+	}
+
+	response, err := c.ReadDS(ctx, config.ID.ValueString(), body, *opt)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error to call Read",
