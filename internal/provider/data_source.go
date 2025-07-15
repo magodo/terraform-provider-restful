@@ -69,8 +69,8 @@ func (d *DataSource) Schema(ctx context.Context, req datasource.SchemaRequest, r
 				Optional:            true,
 			},
 			"body": schema.DynamicAttribute{
-				Description:         "The request body that is sent when using POST method. Only applicable when method is set to POST.",
-				MarkdownDescription: "The request body that is sent when using POST method. Only applicable when method is set to POST.",
+				Description:         "The request body that is sent when using `POST` method.",
+				MarkdownDescription: "The request body that is sent when using `POST` method.",
 				Optional:            true,
 			},
 			"selector": schema.StringAttribute{
@@ -96,6 +96,25 @@ func (d *DataSource) Schema(ctx context.Context, req datasource.SchemaRequest, r
 				Computed:            true,
 			},
 		},
+	}
+}
+
+func (d *DataSource) ValidateConfig(ctx context.Context, req datasource.ValidateConfigRequest, resp *datasource.ValidateConfigResponse) {
+	var config dataSourceData
+	diags := req.Config.Get(ctx, &config)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
+	if !config.Body.IsUnknown() && !config.Body.IsNull() {
+		if !config.Method.IsUnknown() {
+			if config.Method.ValueString() != "POST" {
+				resp.Diagnostics.AddError(
+					"Invalid configuration",
+					"`body` is only applicable when `method` is set to `POST`",
+				)
+			}
+		}
 	}
 }
 
@@ -157,19 +176,20 @@ func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp 
 	}
 
 	// Set body if provided
+	var body []byte
 	if !config.Body.IsNull() && config.Method.ValueString() == "POST" {
-		bodyBytes, err := dynamic.ToJSON(config.Body)
+		var err error
+		body, err = dynamic.ToJSON(config.Body)
 		if err != nil {
 			resp.Diagnostics.AddError(
-				"Error to call Read",
+				"Error to convert body",
 				err.Error(),
 			)
 			return
 		}
-		opt.Body = string(bodyBytes)
 	}
 
-	response, err := c.ReadDS(ctx, config.ID.ValueString(), *opt)
+	response, err := c.ReadDS(ctx, config.ID.ValueString(), body, *opt)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error to call Read",

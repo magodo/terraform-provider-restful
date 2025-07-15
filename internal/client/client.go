@@ -338,19 +338,17 @@ type ReadOptionDS struct {
 	Method string
 	Query  Query
 	Header Header
-	// Body used when making POST requests
-	Body string
 }
 
-func (c *Client) ReadDS(ctx context.Context, path string, opt ReadOptionDS) (*resty.Response, error) {
+func (c *Client) ReadDS(ctx context.Context, path string, body []byte, opt ReadOptionDS) (*resty.Response, error) {
 	req := c.R().SetContext(ctx)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 	req.SetHeaders(opt.Header)
 
 	// Set the body for POST requests if provided
-	if opt.Body != "" && opt.Method == "POST" {
+	if len(body) != 0 && opt.Method == "POST" {
 		req = req.SetHeader("Content-Type", "application/json")
-		req = req.SetBody(opt.Body)
+		req = req.SetBody(body)
 	}
 
 	switch opt.Method {
