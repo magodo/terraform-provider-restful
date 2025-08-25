@@ -380,7 +380,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, reqConfig tfsdk.
 		resourceId, err = exparam.ExpandBodyOrPath(plan.IdBuilder.ValueString(), plan.Path.ValueString(), response.Body())
 		if err != nil {
 			respDiags.AddError(
-				fmt.Sprintf("Failed to build the id for this resource"),
+				"Failed to build the id for this resource",
 				fmt.Sprintf("Can't build resource id with `id_builder`: %q, `path`: %q: %v", plan.IdBuilder.ValueString(), plan.Path.ValueString(), err),
 			)
 			return
@@ -500,16 +500,13 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, reqConfig tfsdk.
 
 func (r *OperationResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	r.createOrUpdate(ctx, req.Config, req.Plan, tfsdk.State{}, resp.Private, &resp.State, &resp.Diagnostics, true)
-	return
 }
 
 func (r *OperationResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	r.createOrUpdate(ctx, req.Config, req.Plan, req.State, resp.Private, &resp.State, &resp.Diagnostics, false)
-	return
 }
 
 func (r *OperationResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	return
 }
 
 func (r *OperationResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -526,7 +523,7 @@ func (r *OperationResource) Delete(ctx context.Context, req resource.DeleteReque
 	output, err := dynamic.ToJSON(state.Output)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			fmt.Sprintf("Failed to build the path for deleting the operation resource"),
+			"Failed to build the path for deleting the operation resource",
 			fmt.Sprintf("Failed to marshal the output: %v", err),
 		)
 		return
@@ -559,7 +556,7 @@ func (r *OperationResource) Delete(ctx context.Context, req resource.DeleteReque
 		path, err = exparam.ExpandBodyOrPath(state.DeletePath.ValueString(), state.Path.ValueString(), output)
 		if err != nil {
 			resp.Diagnostics.AddError(
-				fmt.Sprintf("Failed to build the path for deleting the operation resource"),
+				"Failed to build the path for deleting the operation resource",
 				fmt.Sprintf("Can't build path with `delete_path`: %q, `path`: %q, `body`: %q, error: %v", state.DeletePath.ValueString(), state.Path.ValueString(), string(output), err),
 			)
 			return
@@ -619,6 +616,4 @@ func (r *OperationResource) Delete(ctx context.Context, req resource.DeleteReque
 			return
 		}
 	}
-
-	return
 }

@@ -111,6 +111,8 @@ func NewPollableForPoll(resp resty.Response, opt PollOption) (*Pollable, error) 
 			return nil, fmt.Errorf("invalid Retry-After value in the initiated response: %s", dur)
 		}
 		p.InitDelay = d
+	} else {
+		p.InitDelay = opt.DefaultDelay
 	}
 
 	var rawURL string

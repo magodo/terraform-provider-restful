@@ -64,6 +64,7 @@ resource "restful_resource" "rg" {
 - `poll_create` (Attributes) The polling option for the "Create" operation (see [below for nested schema](#nestedatt--poll_create))
 - `poll_delete` (Attributes) The polling option for the "Delete" operation (see [below for nested schema](#nestedatt--poll_delete))
 - `poll_update` (Attributes) The polling option for the "Update" operation (see [below for nested schema](#nestedatt--poll_update))
+- `post_create_read` (Attributes) An additional read after creation (after polling, if any) for overriding the `$(body)` used for `read_path`, which was representing the response body of the initial create call. This is only meant to be used for APIs that only forms a resource id after the resource is completely created. One example is the AzureDevOps `project` API: A `project` is identified by a UUID, the user needs to create the project, polling the long running operation, then query the `project` by its (mutable) name, where it returns you the (immutable) UUID. (see [below for nested schema](#nestedatt--post_create_read))
 - `precheck_create` (Attributes List) An array of prechecks that need to pass prior to the "Create" operation. Exactly one of `mutex` or `api` should be specified. (see [below for nested schema](#nestedatt--precheck_create))
 - `precheck_delete` (Attributes List) An array of prechecks that need to pass prior to the "Delete" operation. Exactly one of `mutex` or `api` should be specified. (see [below for nested schema](#nestedatt--precheck_delete))
 - `precheck_update` (Attributes List) An array of prechecks that need to pass prior to the "Update" operation. Exactly one of `mutex` or `api` should be specified. (see [below for nested schema](#nestedatt--precheck_update))
@@ -97,7 +98,7 @@ Optional:
 
 - `default_delay_sec` (Number) The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `10`.
 - `header` (Map of String) The header parameters. This overrides the `header` set in the resource block.
-- `url_locator` (String) Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the current operation's URL is used for polling, execpt `Create` where it fallbacks to use the resource id as the polling URL.
+- `url_locator` (String) Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the current operation's URL is used for polling, execpt `Create` where it fallbacks to use the path constructed by the `read_path` as the polling URL.
 
 <a id="nestedatt--poll_create--status"></a>
 ### Nested Schema for `poll_create.status`
@@ -124,7 +125,7 @@ Optional:
 
 - `default_delay_sec` (Number) The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `10`.
 - `header` (Map of String) The header parameters. This overrides the `header` set in the resource block.
-- `url_locator` (String) Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the current operation's URL is used for polling, execpt `Create` where it fallbacks to use the resource id as the polling URL.
+- `url_locator` (String) Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the current operation's URL is used for polling, execpt `Create` where it fallbacks to use the path constructed by the `read_path` as the polling URL.
 
 <a id="nestedatt--poll_delete--status"></a>
 ### Nested Schema for `poll_delete.status`
@@ -151,7 +152,7 @@ Optional:
 
 - `default_delay_sec` (Number) The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `10`.
 - `header` (Map of String) The header parameters. This overrides the `header` set in the resource block.
-- `url_locator` (String) Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the current operation's URL is used for polling, execpt `Create` where it fallbacks to use the resource id as the polling URL.
+- `url_locator` (String) Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the current operation's URL is used for polling, execpt `Create` where it fallbacks to use the path constructed by the `read_path` as the polling URL.
 
 <a id="nestedatt--poll_update--status"></a>
 ### Nested Schema for `poll_update.status`
@@ -164,6 +165,20 @@ Optional:
 
 - `pending` (List of String) The expected status sentinels for pending status.
 
+
+
+<a id="nestedatt--post_create_read"></a>
+### Nested Schema for `post_create_read`
+
+Required:
+
+- `path` (String) The API path used to read the resource. This can be a string literal, or combined by following params: path param: `$(path)` expanded to `path`, body param: `$(body.x.y.z)` expands to the `x.y.z` property of the API body. Especially for the body param, it can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `query_escape` (URL query escape), `query_unescape` (URL query unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`).
+
+Optional:
+
+- `header` (Map of String) The header parameters that are applied to each post create read request. This overrides the `header` set in the resource block. The header value can be a string literal, or combined by the body param: `$(body.x.y.z)` that expands to the `x.y.z` property of the API body. It can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `query_escape` (URL query escape), `query_unescape` (URL query unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`).
+- `query` (Map of List of String) The query parameters that are applied to each post create read request. This overrides the `query` set in the resource block. The query value can be a string literal, or combined by the body param: `$(body.x.y.z)` that expands to the `x.y.z` property of the API body. It can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `query_escape` (URL query escape), `query_unescape` (URL query unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`).
+- `selector` (String) A selector expression in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries), that is used when read returns a collection of resources, to select exactly one member resource of from it. This can be a string literal, or combined by the body param: `$(body.x.y.z)` that expands to the `x.y.z` property of the API body. It can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `query_escape` (URL query escape), `query_unescape` (URL query unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`). By default, the whole response body is used as the body.
 
 
 <a id="nestedatt--precheck_create"></a>
