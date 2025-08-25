@@ -71,6 +71,8 @@ type resourceData struct {
 	PollUpdate types.Object `tfsdk:"poll_update"`
 	PollDelete types.Object `tfsdk:"poll_delete"`
 
+	PostCreateRead types.Object `tfsdk:"post_create_read"`
+
 	WriteOnlyAttributes types.List `tfsdk:"write_only_attrs"`
 	MergePatchDisabled  types.Bool `tfsdk:"merge_patch_disabled"`
 
@@ -123,6 +125,13 @@ type precheckDataApi struct {
 type statusDataGo struct {
 	Success string   `tfsdk:"success"`
 	Pending []string `tfsdk:"pending"`
+}
+
+type postCreateRead struct {
+	Path     types.String `tfsdk:"path"`
+	Query    types.Map    `tfsdk:"query"`
+	Header   types.Map    `tfsdk:"header"`
+	Selector types.String `tfsdk:"selector"`
 }
 
 func (r *Resource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -271,8 +280,8 @@ func pollAttribute(s string) schema.SingleNestedAttribute {
 				},
 			},
 			"url_locator": schema.StringAttribute{
-				Description:         "Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the current operation's URL is used for polling, execpt `Create` where it fallbacks to use the resource id as the polling URL.",
-				MarkdownDescription: "Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the current operation's URL is used for polling, execpt `Create` where it fallbacks to use the resource id as the polling URL.",
+				Description:         "Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the current operation's URL is used for polling, execpt `Create` where it fallbacks to use the path constructed by the `read_path` as the polling URL.",
+				MarkdownDescription: "Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the current operation's URL is used for polling, execpt `Create` where it fallbacks to use the path constructed by the `read_path` as the polling URL.",
 				Optional:            true,
 				Validators: []validator.String{
 					myvalidator.StringIsParsable("url_locator", func(s string) error {
@@ -423,6 +432,39 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 			"precheck_create": precheckAttribute("Create", true, "", false),
 			"precheck_update": precheckAttribute("Update", false, "By default, the `id` of this resource is used.", true),
 			"precheck_delete": precheckAttribute("Delete", false, "By default, the `id` of this resource is used.", true),
+
+			"post_create_read": schema.SingleNestedAttribute{
+				Description:         "An additional read after creation (after polling, if any) for overriding the `$(body)` used for `read_path`, which was representing the response body of the initial create call. This is only meant to be used for APIs that only forms a resource id after the resource is completely created. One example is the AzureDevOps `project` API: A `project` is identified by a UUID, the user needs to create the project, polling the long running operation, then query the `project` by its (mutable) name, where it returns you the (immutable) UUID.",
+				MarkdownDescription: "An additional read after creation (after polling, if any) for overriding the `$(body)` used for `read_path`, which was representing the response body of the initial create call. This is only meant to be used for APIs that only forms a resource id after the resource is completely created. One example is the AzureDevOps `project` API: A `project` is identified by a UUID, the user needs to create the project, polling the long running operation, then query the `project` by its (mutable) name, where it returns you the (immutable) UUID.",
+				Optional:            true,
+				Attributes: map[string]schema.Attribute{
+					"path": schema.StringAttribute{
+						Description:         "The API path used to read the resource. " + bodyOrPathParamDescription,
+						MarkdownDescription: "The API path used to read the resource. " + bodyOrPathParamDescription,
+						Required:            true,
+						Validators: []validator.String{
+							myvalidator.StringIsPathBuilder(),
+						},
+					},
+					"query": schema.MapAttribute{
+						Description:         operationOverridableAttrDescription("query", "post create read") + " The query value" + bodyParamDescription,
+						MarkdownDescription: operationOverridableAttrDescription("query", "post create read") + " The query value" + bodyParamDescription,
+						ElementType:         types.ListType{ElemType: types.StringType},
+						Optional:            true,
+					},
+					"header": schema.MapAttribute{
+						Description:         operationOverridableAttrDescription("header", "post create read") + " The header value" + bodyParamDescription,
+						MarkdownDescription: operationOverridableAttrDescription("header", "post create read") + " The header value" + bodyParamDescription,
+						ElementType:         types.StringType,
+						Optional:            true,
+					},
+					"selector": schema.StringAttribute{
+						Description:         "A selector expression in gjson query syntax, that is used when read returns a collection of resources, to select exactly one member resource of from it. This" + bodyParamDescription + " By default, the whole response body is used as the body.",
+						MarkdownDescription: "A selector expression in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries), that is used when read returns a collection of resources, to select exactly one member resource of from it. This" + bodyParamDescription + " By default, the whole response body is used as the body.",
+						Optional:            true,
+					},
+				},
+			},
 
 			"create_method": schema.StringAttribute{
 				Description:         "The method used to create the resource. Possible values are `PUT`, `POST` and `PATCH`. This overrides the `create_method` set in the provider block (defaults to POST).",
@@ -812,7 +854,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 		sb, ok := bodyLocator.LocateValueInResp(*response)
 		if !ok {
 			resp.Diagnostics.AddError(
-				fmt.Sprintf("`create_selector` failed to select from the response"),
+				"`create_selector` failed to select from the response",
 				string(response.Body()),
 			)
 			return
@@ -820,37 +862,27 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 		b = []byte(sb)
 	}
 
-	// Construct the resource id, which is used as the path to read the resource later on. By default, it is the same as the "path", unless "read_path" is specified.
+	// Construct the resource id, which is used as the path to:
+	// - Be the fallback read path for polling (if any) if no URL locator is specified
+	// - Read the resource later on
 	resourceId := plan.Path.ValueString()
 	if !plan.ReadPath.IsNull() {
 		resourceId, err = exparam.ExpandBodyOrPath(plan.ReadPath.ValueString(), plan.Path.ValueString(), b)
 		if err != nil {
 			resp.Diagnostics.AddError(
-				fmt.Sprintf("Failed to build the path for reading the resource"),
+				"Failed to build the path for reading the resource",
 				fmt.Sprintf("Can't build resource id with `read_path`: %q, `path`: %q, `body`: %q: %v", plan.ReadPath.ValueString(), plan.Path.ValueString(), string(b), err),
 			)
 			return
 		}
 	}
 
-	// Set resource ID
-	plan.ID = types.StringValue(resourceId)
-
-	// Temporarily set the output here, so that the Read at the end can
-	// expand the `$(body)` parameters.
 	output, err := dynamic.FromJSONImplied(b)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Evaluating `output` during Read",
 			err.Error(),
 		)
-		return
-	}
-	plan.Output = output
-
-	diags = resp.State.Set(ctx, plan)
-	resp.Diagnostics.Append(diags...)
-	if diags.HasError() {
 		return
 	}
 
@@ -892,6 +924,86 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 			)
 			return
 		}
+	}
+
+	// PostCreateRead is to update the resource ID and the Output by sending a post-create only read call.
+	if !plan.PostCreateRead.IsNull() {
+		var pr postCreateRead
+		if diags := plan.PostCreateRead.As(ctx, &pr, basetypes.ObjectAsOptions{}); diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
+		opt, diags := r.p.apiOpt.ForResourcePostCreateRead(ctx, plan, pr, b)
+		if diags.HasError() {
+			resp.Diagnostics.Append(diags...)
+			return
+		}
+		response, err := c.Read(ctx, pr.Path.ValueString(), *opt)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error to call post-create read",
+				err.Error(),
+			)
+			return
+		}
+		if !response.IsSuccess() {
+			resp.Diagnostics.AddError(
+				fmt.Sprintf("Post-create read API returns %d", response.StatusCode()),
+				string(response.Body()),
+			)
+			return
+		}
+
+		b := response.Body()
+
+		if sel := pr.Selector.ValueString(); sel != "" {
+			sel, err = exparam.ExpandBody(sel, b)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Post-create read failure",
+					fmt.Sprintf("Failed to expand the post-create read selector: %v", err),
+				)
+				return
+			}
+			bodyLocator := client.BodyLocator(sel)
+			sb, _ := bodyLocator.LocateValueInResp(*response)
+			// This means the tracked resource selected (filtered) from the response now disappears (deleted out of band).
+			b = []byte(sb)
+		}
+
+		// Update the resource Id
+		if !plan.ReadPath.IsNull() {
+			resourceId, err = exparam.ExpandBodyOrPath(plan.ReadPath.ValueString(), plan.Path.ValueString(), b)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Failed to build the path for reading the resource (post-create phase)",
+					fmt.Sprintf("Can't build resource id with `read_path`: %q, `path`: %q, `body`: %q: %v", plan.ReadPath.ValueString(), plan.Path.ValueString(), string(b), err),
+				)
+				return
+			}
+		}
+
+		// Update the output
+		output, err = dynamic.FromJSONImplied(b)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Evaluating `output` during Read",
+				err.Error(),
+			)
+			return
+		}
+	}
+
+	// Set resource ID
+	plan.ID = types.StringValue(resourceId)
+
+	// Temporarily set the output here, so that the Read at the end can expand the `$(body)` parameters.
+	plan.Output = output
+
+	diags = resp.State.Set(ctx, plan)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
 	}
 
 	rreq := resource.ReadRequest{
@@ -1491,8 +1603,6 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 			return
 		}
 	}
-
-	return
 }
 
 type importSpec struct {
@@ -1541,7 +1651,7 @@ func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest
 	if imp.Id == "" {
 		resp.Diagnostics.AddError(
 			"Resource Import Error",
-			fmt.Sprintf("`id` not specified in the import spec"),
+			"`id` not specified in the import spec",
 		)
 		return
 	}
@@ -1549,7 +1659,7 @@ func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest
 	if imp.Path == "" {
 		resp.Diagnostics.AddError(
 			"Resource Import Error",
-			fmt.Sprintf("`path` not specified in the import spec"),
+			"`path` not specified in the import spec",
 		)
 		return
 	}

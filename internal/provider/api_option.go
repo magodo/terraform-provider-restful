@@ -44,6 +44,15 @@ func (opt apiOption) ForResourceRead(ctx context.Context, d resourceData, body [
 	return &out, nil
 }
 
+func (opt apiOption) ForResourcePostCreateRead(ctx context.Context, d resourceData, pr postCreateRead, body []byte) (*client.ReadOption, diag.Diagnostics) {
+	out := client.ReadOption{
+		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query).TakeWithExparamOrSelf(ctx, pr.Query, body),
+		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header).TakeWithExparamOrSelf(ctx, pr.Header, body),
+	}
+
+	return &out, nil
+}
+
 func (opt apiOption) ForResourceUpdate(ctx context.Context, d resourceData, body []byte) (*client.UpdateOption, diag.Diagnostics) {
 	out := client.UpdateOption{
 		Method:             opt.UpdateMethod,
