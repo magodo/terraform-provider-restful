@@ -10,7 +10,7 @@ require (
 	github.com/hashicorp/terraform-plugin-framework-validators v0.16.0
 	github.com/hashicorp/terraform-plugin-go v0.27.0
 	github.com/hashicorp/terraform-plugin-testing v1.11.0
-	github.com/magodo/terraform-plugin-framework-helper v0.0.0-20250907005631-3717ae811c11
+	github.com/magodo/terraform-plugin-framework-helper v0.0.0-20250907073206-395952c51883
 	github.com/stretchr/testify v1.11.1
 	github.com/tidwall/sjson v1.2.4
 	golang.org/x/oauth2 v0.26.0

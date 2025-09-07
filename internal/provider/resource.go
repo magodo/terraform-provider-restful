@@ -713,7 +713,7 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 	}
 
 	// Set output as unknown to trigger a plan diff, if ephemral body has changed
-	diff, diags := ephemeralBodyPrivateMgr.ChangeInPlan(ctx, req.Private, config.EphemeralBody)
+	diff, diags := ephemeral.ChangeInPlan(ctx, req.Private, config.EphemeralBody)
 	resp.Diagnostics = append(resp.Diagnostics, diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -887,7 +887,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 		return
 	}
 
-	diags = ephemeralBodyPrivateMgr.Set(ctx, resp.Private, eb)
+	diags = ephemeral.Set(ctx, resp.Private, eb)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
@@ -1188,7 +1188,7 @@ func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *reso
 		b = []byte(fb)
 	}
 
-	eb, diags := ephemeralBodyPrivateMgr.GetNullBody(ctx, req.Private)
+	eb, diags := ephemeral.GetNullBody(ctx, req.Private)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -1342,7 +1342,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 		// 2. The ephemeral body is removed from the config. In this case, the body is the same between state and plan.
 		// 	  We need to do a tricky check about private data.
 		if config.EphemeralBody.IsNull() {
-			ok, diags := ephemeralBodyPrivateMgr.Exists(ctx, req.Private)
+			ok, diags := ephemeral.Exists(ctx, req.Private)
 			resp.Diagnostics.Append(diags...)
 			if resp.Diagnostics.HasError() {
 				return
@@ -1456,7 +1456,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 		return
 	}
 
-	diags = ephemeralBodyPrivateMgr.Set(ctx, resp.Private, eb)
+	diags = ephemeral.Set(ctx, resp.Private, eb)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
