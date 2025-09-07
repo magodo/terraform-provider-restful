@@ -6,7 +6,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/magodo/terraform-provider-restful/internal/dynamic"
+	"github.com/magodo/terraform-plugin-framework-helper/dynamic"
 	"github.com/magodo/terraform-provider-restful/internal/provider/migrate"
 )
 

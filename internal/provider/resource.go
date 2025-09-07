@@ -23,10 +23,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/magodo/terraform-plugin-framework-helper/dynamic"
+	"github.com/magodo/terraform-plugin-framework-helper/ephemeral"
+	"github.com/magodo/terraform-plugin-framework-helper/jsonset"
 	"github.com/magodo/terraform-provider-restful/internal/client"
-	"github.com/magodo/terraform-provider-restful/internal/dynamic"
 	"github.com/magodo/terraform-provider-restful/internal/exparam"
-	"github.com/magodo/terraform-provider-restful/internal/jsonset"
 	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
@@ -620,7 +621,7 @@ func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConf
 			}
 		}
 
-		_, diags := validateEphemeralBody(b, config.EphemeralBody)
+		_, diags := ephemeral.ValidateEphemeralBody(b, config.EphemeralBody)
 		resp.Diagnostics = append(resp.Diagnostics, diags...)
 		if diags.HasError() {
 			return
@@ -712,7 +713,7 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 	}
 
 	// Set output as unknown to trigger a plan diff, if ephemral body has changed
-	diff, diags := ephemeralBodyChangeInPlan(ctx, req.Private, config.EphemeralBody)
+	diff, diags := ephemeralBodyPrivateMgr.ChangeInPlan(ctx, req.Private, config.EphemeralBody)
 	resp.Diagnostics = append(resp.Diagnostics, diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -813,7 +814,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 
 	var eb []byte
 	if !config.EphemeralBody.IsNull() {
-		eb, diags = validateEphemeralBody(b, config.EphemeralBody)
+		eb, diags = ephemeral.ValidateEphemeralBody(b, config.EphemeralBody)
 		resp.Diagnostics = append(resp.Diagnostics, diags...)
 		if resp.Diagnostics.HasError() {
 			return
@@ -1315,7 +1316,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 	// Optionally patch the body with emphemeral_body
 	var eb []byte
 	if !config.EphemeralBody.IsNull() {
-		eb, diags = validateEphemeralBody(planBody, config.EphemeralBody)
+		eb, diags = ephemeral.ValidateEphemeralBody(planBody, config.EphemeralBody)
 		resp.Diagnostics = append(resp.Diagnostics, diags...)
 		if resp.Diagnostics.HasError() {
 			return

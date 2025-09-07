@@ -19,10 +19,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/magodo/terraform-plugin-framework-helper/dynamic"
+	"github.com/magodo/terraform-plugin-framework-helper/ephemeral"
+	"github.com/magodo/terraform-plugin-framework-helper/jsonset"
 	"github.com/magodo/terraform-provider-restful/internal/client"
-	"github.com/magodo/terraform-provider-restful/internal/dynamic"
 	"github.com/magodo/terraform-provider-restful/internal/exparam"
-	"github.com/magodo/terraform-provider-restful/internal/jsonset"
 	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
 )
 
@@ -223,7 +224,7 @@ func (r *OperationResource) ValidateConfig(ctx context.Context, req resource.Val
 			return
 		}
 
-		_, diags := validateEphemeralBody(b, config.EphemeralBody)
+		_, diags := ephemeral.ValidateEphemeralBody(b, config.EphemeralBody)
 		resp.Diagnostics = append(resp.Diagnostics, diags...)
 		if diags.HasError() {
 			return
@@ -257,7 +258,7 @@ func (r *OperationResource) ModifyPlan(ctx context.Context, req resource.ModifyP
 	}()
 
 	// Set output as unknown to trigger a plan diff, if ephemral body has changed
-	diff, diags := ephemeralBodyChangeInPlan(ctx, req.Private, config.EphemeralBody)
+	diff, diags := ephemeralBodyPrivateMgr.ChangeInPlan(ctx, req.Private, config.EphemeralBody)
 	resp.Diagnostics = append(resp.Diagnostics, diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -287,7 +288,7 @@ func (r *OperationResource) Configure(ctx context.Context, req resource.Configur
 	r.p = providerData.provider
 }
 
-func (r *OperationResource) createOrUpdate(ctx context.Context, reqConfig tfsdk.Config, reqPlan tfsdk.Plan, reqState tfsdk.State, respPrivate PrivateData, respState *tfsdk.State, respDiags *diag.Diagnostics, forCreate bool) {
+func (r *OperationResource) createOrUpdate(ctx context.Context, reqConfig tfsdk.Config, reqPlan tfsdk.Plan, reqState tfsdk.State, respPrivate ephemeral.PrivateData, respState *tfsdk.State, respDiags *diag.Diagnostics, forCreate bool) {
 	c := r.p.client
 	c.SetLoggerContext(ctx)
 
@@ -341,7 +342,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, reqConfig tfsdk.
 		}
 
 		if !config.EphemeralBody.IsNull() {
-			eb, diags = validateEphemeralBody(body, config.EphemeralBody)
+			eb, diags = ephemeral.ValidateEphemeralBody(body, config.EphemeralBody)
 			respDiags.Append(diags...)
 			if respDiags.HasError() {
 				return

@@ -9,7 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/magodo/terraform-provider-restful/internal/client"
-	"github.com/magodo/terraform-provider-restful/internal/dynamic"
+	"github.com/magodo/terraform-plugin-framework-helper/dynamic"
 )
 
 type apiOption struct {
