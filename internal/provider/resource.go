@@ -1315,7 +1315,13 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 
 	// Optionally patch the body with emphemeral_body
 	var eb []byte
-	if !config.EphemeralBody.IsNull() {
+	diff, diags := ephemeral.Diff(ctx, req.Private, config.EphemeralBody)
+	resp.Diagnostics = append(resp.Diagnostics, diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if diff {
 		eb, diags = ephemeral.ValidateEphemeralBody(planBody, config.EphemeralBody)
 		resp.Diagnostics = append(resp.Diagnostics, diags...)
 		if resp.Diagnostics.HasError() {
@@ -1333,26 +1339,8 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 		}
 	}
 
-	// We need to invoke the API in only two cases:
-	var callAPI bool
-	if string(stateBody) != string(planBody) {
-		// 1. The body changes between state and plan (after patching with ephemeral_body)
-		callAPI = true
-	} else {
-		// 2. The ephemeral body is removed from the config. In this case, the body is the same between state and plan.
-		// 	  We need to do a tricky check about private data.
-		if config.EphemeralBody.IsNull() {
-			ok, diags := ephemeral.Exists(ctx, req.Private)
-			resp.Diagnostics.Append(diags...)
-			if resp.Diagnostics.HasError() {
-				return
-			}
-			callAPI = ok
-		}
-	}
-
 	// Invoke API to Update the resource only when there are changes in the body (regardless of the TF type diff).
-	if callAPI {
+	if string(stateBody) != string(planBody) {
 		// Precheck
 		if !plan.PrecheckUpdate.IsNull() {
 			unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, state.ID.ValueString(), opt.Header, opt.Query, plan.PrecheckUpdate, state.Output)
