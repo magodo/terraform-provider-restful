@@ -258,7 +258,7 @@ func (r *OperationResource) ModifyPlan(ctx context.Context, req resource.ModifyP
 	}()
 
 	// Set output as unknown to trigger a plan diff, if ephemral body has changed
-	diff, diags := ephemeral.ChangeInPlan(ctx, req.Private, config.EphemeralBody)
+	diff, diags := ephemeral.Diff(ctx, req.Private, config.EphemeralBody)
 	resp.Diagnostics = append(resp.Diagnostics, diags...)
 	if resp.Diagnostics.HasError() {
 		return
