@@ -208,7 +208,9 @@ func (c *Client) Create(ctx context.Context, path string, body string, opt Creat
 	req := c.R().SetContext(ctx).SetBody(body)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 	req.SetHeaders(opt.Header)
-	req = req.SetHeader("Content-Type", "application/json")
+	if req.Header.Get("content-type") == "" {
+		req = req.SetHeader("Content-Type", "application/json")
+	}
 
 	switch opt.Method {
 	case "POST":
