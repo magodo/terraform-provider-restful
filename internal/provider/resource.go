@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	tfpath "github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/identityschema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -39,6 +40,11 @@ type Resource struct {
 
 var _ resource.Resource = &Resource{}
 var _ resource.ResourceWithUpgradeState = &Resource{}
+var _ resource.ResourceWithIdentity = &Resource{}
+
+type resourceIdentityModel struct {
+	ID types.String `tfsdk:"id"`
+}
 
 type resourceData struct {
 	ID types.String `tfsdk:"id"`
@@ -1014,12 +1020,14 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	}
 	rresp := resource.ReadResponse{
 		State:       resp.State,
+		Identity:    resp.Identity,
 		Diagnostics: resp.Diagnostics,
 	}
 	r.read(ctx, rreq, &rresp, false)
 
 	*resp = resource.CreateResponse{
 		State:       rresp.State,
+		Identity:    rresp.Identity,
 		Diagnostics: rresp.Diagnostics,
 		Private:     resp.Private,
 	}
@@ -1457,12 +1465,14 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 	}
 	rresp := resource.ReadResponse{
 		State:       resp.State,
+		Identity:    resp.Identity,
 		Diagnostics: resp.Diagnostics,
 	}
 	r.read(ctx, rreq, &rresp, false)
 
 	*resp = resource.UpdateResponse{
 		State:       rresp.State,
+		Identity:    rresp.Identity,
 		Diagnostics: rresp.Diagnostics,
 		Private:     resp.Private,
 	}
@@ -1619,6 +1629,17 @@ type importSpec struct {
 	ReadResponseTemplate *string `json:"read_response_template"`
 }
 
+func (r *Resource) IdentitySchema(ctx context.Context, req resource.IdentitySchemaRequest, resp *resource.IdentitySchemaResponse) {
+	resp.IdentitySchema = identityschema.Schema{
+		Attributes: map[string]identityschema.Attribute{
+			"id": identityschema.StringAttribute{
+				Description:       "The import spec described at: https://registry.terraform.io/providers/magodo/restful/latest/docs/resources/resource#import.",
+				RequiredForImport: true,
+			},
+		},
+	}
+}
+
 func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	idPath := tfpath.Root("id")
 	path := tfpath.Root("path")
@@ -1628,8 +1649,21 @@ func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest
 	readSelector := tfpath.Root("read_selector")
 	readResponseTemplate := tfpath.Root("read_response_template")
 
-	var imp importSpec
-	if err := json.Unmarshal([]byte(req.ID), &imp); err != nil {
+	var (
+		imp importSpec
+		err error
+	)
+	if req.ID != "" {
+		err = json.Unmarshal([]byte(req.ID), &imp)
+	} else {
+		var identity types.String
+		resp.Diagnostics.Append(req.Identity.GetAttribute(ctx, idPath, &identity)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		err = json.Unmarshal([]byte(identity.ValueString()), &imp)
+	}
+	if err != nil {
 		resp.Diagnostics.AddError(
 			"Resource Import Error",
 			fmt.Sprintf("failed to unmarshal ID: %v", err),

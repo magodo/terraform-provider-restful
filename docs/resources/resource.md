@@ -302,22 +302,23 @@ Required:
 
 ## Import
 
-Import is supported using the following syntax:
+The resource has a *import spec* defined, which consists of the following attributes:
 
-```shell
-# The import spec consists of following keys:
-#
-# - id (Required)                        : The resource id.
-# - path (Required)                      : The path used to create the resource (as this is force new)
-# - query (Optional)                     : The query parameters.
-# - header (Optional)                    : The header.
-# - body (Optional)                      : The interested properties in the response body that you want to manage via this resource.
-#                                          If you omit this, then all the properties will be keeping track, which in most cases is 
-#                                          not what you want (e.g. the read only attributes shouldn't be managed).
-#                                          The value of each property is not important here, hence leave them as `null`.
-# - read_selector (Optional)             : The read_selector used to specify the resource from a collection of resources.
-# - read_response_template (Optional)    : The read_response_template used to transform the structure of the read response.
-terraform import restful_resource.example '{
+- id (Required)                        : The resource id.
+- path (Required)                      : The path used to create the resource (as this is force new)
+- query (Optional)                     : The query parameters.
+- header (Optional)                    : The header.
+- body (Optional)                      : The interested properties in the response body that you want to manage via this resource.
+                                         If you omit this, then all the properties will be keeping track, which in most cases is 
+                                         not what you want (e.g. the read only attributes shouldn't be managed).
+                                         The value of each property is not important here, hence leave them as `null`.
+- read_selector (Optional)             : The read_selector used to specify the resource from a collection of resources.
+- read_response_template (Optional)    : The read_response_template used to transform the structure of the read response.
+
+An example *import spec* is like below:
+
+```json
+{
   "id": "/subscriptions/0-0-0-0/resourceGroups/example",
   "path": "/subscriptions/0-0-0-0/resourceGroups/example",
   "query": {"api-version": ["2020-06-01"]},
@@ -325,5 +326,32 @@ terraform import restful_resource.example '{
     "location": null,
     "tags": null
   }
-}'
+}
 ```
+
+Users can import it via two means, as is mentioned in https://developer.hashicorp.com/terraform/plugin/framework/resources/import:
+
+- Import by ID: E.g. one can import a resource via running the following command:
+
+    ```shell
+    $ terraform import restful_resource.example "<import spec>"
+    ```
+
+- Import by Identity: The identity schema is defined as below:
+
+    ```hcl
+    {
+        id = <import spec>
+    }
+    ```
+
+    E.g. one can compose the following `import` block:
+
+    ```hcl
+    import {
+      to = restful_resource.test
+      identity = {
+          id = "<import spec>" # Suggests to use `jsonencode()` to wrap a native HCL block
+      }
+    }
+    ```
