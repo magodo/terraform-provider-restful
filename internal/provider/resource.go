@@ -1612,7 +1612,7 @@ type importSpec struct {
 	Path string `json:"path"`
 
 	// Query is only required when it is mandatory for reading the resource.
-	Query *url.Values `json:"query"`
+	Query url.Values `json:"query"`
 
 	// Header is only required when it is mandatory for reading the resource.
 	Header map[string]string `json:"header"`

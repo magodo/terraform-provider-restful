@@ -14,7 +14,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/magodo/terraform-plugin-framework-helper/dynamic"
 	"github.com/magodo/terraform-provider-restful/internal/client"
 	"github.com/magodo/terraform-provider-restful/internal/exparam"
@@ -45,9 +44,22 @@ type ListResourceData struct {
 }
 
 var _ list.ListResourceWithConfigure = &ListResource{}
+var _ list.ListResourceWithRawV6Schemas = &ListResource{}
 
 func (l *ListResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_resource"
+}
+
+func (l *ListResource) RawV6Schemas(ctx context.Context, req list.RawV6SchemaRequest, resp *list.RawV6SchemaResponse) {
+	res := Resource{}
+	sresp := resource.SchemaResponse{}
+	res.Schema(ctx, resource.SchemaRequest{}, &sresp)
+
+	idsresp := resource.IdentitySchemaResponse{}
+	res.IdentitySchema(ctx, resource.IdentitySchemaRequest{}, &idsresp)
+
+	// TODO: figure out a way to convert the schema to protov6 scheam
+	// See: https://github.com/hashicorp/terraform-plugin-framework/issues/1237
 }
 
 func (l *ListResource) ListResourceConfigSchema(ctx context.Context, req list.ListResourceSchemaRequest, resp *list.ListResourceSchemaResponse) {
@@ -151,17 +163,6 @@ func (l *ListResource) List(ctx context.Context, req list.ListRequest, stream *l
 	c.SetLoggerContext(ctx)
 
 	var config ListResourceData
-
-	// TODO: So far we don't support listing the resource with its state, since it is unclear what is it used for.
-	if req.IncludeResource {
-		emsg := "List with resource state included is not supported by this provider"
-		tflog.Error(ctx, emsg)
-		stream.Results = list.ListResultsStreamDiagnostics(diag.Diagnostics{diag.NewErrorDiagnostic(
-			"List Resource failed",
-			emsg,
-		)})
-		return
-	}
 
 	diags := req.Config.Get(ctx, &config)
 	if diags.HasError() {
@@ -268,7 +269,7 @@ func (l *ListResource) List(ctx context.Context, req list.ListRequest, stream *l
 			}
 
 			if !config.ResourceQuery.IsNull() {
-				impspec.Query = ToPtr(url.Values(client.Query{}.TakeOrSelf(ctx, config.ResourceQuery)))
+				impspec.Query = url.Values(client.Query{}.TakeOrSelf(ctx, config.ResourceQuery))
 			}
 			if !config.ResourceHeader.IsNull() {
 				impspec.Header = client.Header{}.TakeOrSelf(ctx, config.ResourceHeader)
@@ -312,7 +313,59 @@ func (l *ListResource) List(ctx context.Context, req list.ListRequest, stream *l
 			}
 
 			// Set the resource information on the result
-			// TODO: So far we don't support listing the resource with its state, since it is unclear what is it used for.
+			state := resourceData{
+				ID:                   types.StringValue(impspec.Id),
+				Path:                 types.StringValue(impspec.Path),
+				ReadSelector:         types.StringPointerValue(impspec.ReadSelector),
+				ReadResponseTemplate: types.StringPointerValue(impspec.ReadResponseTemplate),
+			}
+			if q := impspec.Query; q != nil {
+				state.Query, diags = types.MapValueFrom(ctx, types.ListType{ElemType: types.StringType}, q)
+				if diags.HasError() {
+					result.Diagnostics = append(result.Diagnostics, diags...)
+					push(result)
+					return
+				}
+			}
+			if h := impspec.Header; h != nil {
+				state.Header, diags = types.MapValueFrom(ctx, types.StringType, h)
+				if diags.HasError() {
+					result.Diagnostics = append(result.Diagnostics, diags...)
+					push(result)
+					return
+				}
+			}
+
+			body := types.DynamicNull()
+			if nullBody := impspec.Body; nullBody != nil {
+				nb, err := dynamic.FromJSONImplied(*nullBody)
+				if err != nil {
+					result.Diagnostics = append(result.Diagnostics, diag.NewErrorDiagnostic(
+						"failed to convert the body in import spec to dynamic type",
+						err.Error(),
+					))
+					push(result)
+					return
+				}
+				body, err = dynamic.FromJSON(resRaw, nb.UnderlyingValue().Type(ctx))
+			} else {
+				body, err = dynamic.FromJSONImplied(resRaw)
+			}
+			if err != nil {
+				result.Diagnostics = append(result.Diagnostics, diag.NewErrorDiagnostic(
+					"failed to convert the response body to dynamic type",
+					err.Error(),
+				))
+				push(result)
+				return
+			}
+			state.Body = body
+
+			if diags := result.Resource.Set(ctx, state); diags.HasError() {
+				result.Diagnostics = append(result.Diagnostics, diags...)
+				push(result)
+				return
+			}
 
 			// Send the result to the stream.
 			if !push(result) {
