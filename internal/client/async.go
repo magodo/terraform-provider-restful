@@ -49,6 +49,7 @@ func (loc BodyLocator) LocateValueInResp(resp resty.Response) (string, bool) {
 	result := gjson.GetBytes(resp.Body(), string(loc))
 	return result.String(), result.Exists()
 }
+
 func (loc BodyLocator) String() string {
 	return fmt.Sprintf(`body.%s`, string(loc))
 }

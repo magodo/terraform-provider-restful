@@ -17,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/ephemeral"
+	"github.com/hashicorp/terraform-plugin-framework/list"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
@@ -173,6 +174,14 @@ func (*Provider) EphemeralResources(context.Context) []func() ephemeral.Ephemera
 	return []func() ephemeral.EphemeralResource{
 		func() ephemeral.EphemeralResource {
 			return &EphemeralResource{}
+		},
+	}
+}
+
+func (*Provider) ListResources(_ context.Context) []func() list.ListResource {
+	return []func() list.ListResource{
+		func() list.ListResource {
+			return &ListResource{}
 		},
 	}
 }
@@ -669,8 +678,7 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 	resp.ResourceData = data
 	resp.DataSourceData = data
 	resp.EphemeralResourceData = data
-
-	return
+	resp.ListResourceData = data
 }
 
 func (p *Provider) Init(ctx context.Context, config providerConfig) diag.Diagnostics {

@@ -364,3 +364,33 @@ func (c *Client) ReadDS(ctx context.Context, path string, body []byte, opt ReadO
 		return nil, fmt.Errorf("unknown read (ds) method: %s", opt.Method)
 	}
 }
+
+type ReadOptionLR struct {
+	// Method used for reading, which defaults to GET
+	Method string
+	Query  Query
+	Header Header
+}
+
+func (c *Client) ReadLR(ctx context.Context, path string, body []byte, opt ReadOptionLR) (*resty.Response, error) {
+	req := c.R().SetContext(ctx)
+	req.SetQueryParamsFromValues(url.Values(opt.Query))
+	req.SetHeaders(opt.Header)
+
+	// Set the body for POST requests if provided
+	if len(body) != 0 && opt.Method == "POST" {
+		req = req.SetHeader("Content-Type", "application/json")
+		req = req.SetBody(body)
+	}
+
+	switch opt.Method {
+	case "", "GET":
+		return req.Get(path)
+	case "POST":
+		return req.Post(path)
+	case "HEAD":
+		return req.Head(path)
+	default:
+		return nil, fmt.Errorf("unknown read (lr) method: %s", opt.Method)
+	}
+}

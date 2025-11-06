@@ -8,8 +8,8 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
-	"github.com/magodo/terraform-provider-restful/internal/client"
 	"github.com/magodo/terraform-plugin-framework-helper/dynamic"
+	"github.com/magodo/terraform-provider-restful/internal/client"
 )
 
 type apiOption struct {
@@ -99,6 +99,16 @@ func (opt apiOption) ForOperation(ctx context.Context, method basetypes.StringVa
 		Method: method.ValueString(),
 		Query:  opt.Query.Clone().TakeOrSelf(ctx, defQuery).TakeWithExparamOrSelf(ctx, ovQuery, body),
 		Header: opt.Header.Clone().TakeOrSelf(ctx, defHeader).TakeWithExparamOrSelf(ctx, ovHeader, body),
+	}
+
+	return &out, nil
+}
+
+func (opt apiOption) ForListResourceRead(ctx context.Context, d ListResourceData) (*client.ReadOptionLR, diag.Diagnostics) {
+	out := client.ReadOptionLR{
+		Method: d.Method.ValueString(),
+		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
+		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
 	}
 
 	return &out, nil

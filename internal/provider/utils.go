@@ -18,3 +18,15 @@ func DiagToError(diags diag.Diagnostics) error {
 	}
 	return err
 }
+
+func ToPtr[T any](v T) *T {
+	return &v
+}
+
+func FromPtr[T any](p *T) T {
+	var v T
+	if p != nil {
+		v = *p
+	}
+	return v
+}
