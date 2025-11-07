@@ -1642,7 +1642,7 @@ func (r *Resource) IdentitySchema(ctx context.Context, req resource.IdentitySche
 
 func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	idPath := tfpath.Root("id")
-	path := tfpath.Root("path")
+	pathPath := tfpath.Root("path")
 	queryPath := tfpath.Root("query")
 	headerPath := tfpath.Root("header")
 	bodyPath := tfpath.Root("body")
@@ -1699,18 +1699,9 @@ func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest
 		}
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, bodyPath, body)...)
 	}
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path, imp.Path)...)
-
-	if imp.Query != nil {
-		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, queryPath, imp.Query)...)
-	}
-	if imp.Header != nil {
-		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, headerPath, imp.Header)...)
-	}
-	if imp.ReadSelector != nil {
-		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, readSelector, imp.ReadSelector)...)
-	}
-	if imp.ReadResponseTemplate != nil {
-		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, readResponseTemplate, imp.ReadResponseTemplate)...)
-	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, pathPath, imp.Path)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, queryPath, imp.Query)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, headerPath, imp.Header)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, readSelector, imp.ReadSelector)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, readResponseTemplate, imp.ReadResponseTemplate)...)
 }

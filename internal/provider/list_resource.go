@@ -11,13 +11,13 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/list"
 	"github.com/hashicorp/terraform-plugin-framework/list/schema"
+	tfpath "github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/magodo/terraform-plugin-framework-helper/dynamic"
 	"github.com/magodo/terraform-provider-restful/internal/client"
 	"github.com/magodo/terraform-provider-restful/internal/exparam"
-	"github.com/tidwall/gjson"
 )
 
 type ListResource struct {
@@ -25,16 +25,16 @@ type ListResource struct {
 }
 
 type ListResourceData struct {
-	Path        types.String  `tfsdk:"path"`
-	NameLocator types.String  `tfsdk:"name_locator"`
-	Method      types.String  `tfsdk:"method"`
-	Query       types.Map     `tfsdk:"query"`
-	Header      types.Map     `tfsdk:"header"`
-	Body        types.Dynamic `tfsdk:"body"`
-	Selector    types.String  `tfsdk:"selector"`
+	Path     types.String  `tfsdk:"path"`
+	Name     types.String  `tfsdk:"name"`
+	Method   types.String  `tfsdk:"method"`
+	Query    types.Map     `tfsdk:"query"`
+	Header   types.Map     `tfsdk:"header"`
+	Body     types.Dynamic `tfsdk:"body"`
+	Selector types.String  `tfsdk:"selector"`
 
 	// Used for constructing eahc resource's identity and state
-	ResourceIdLocator            types.String  `tfsdk:"resource_id_locator"`
+	ResourceId                   types.String  `tfsdk:"resource_id"`
 	ResourcePath                 types.String  `tfsdk:"resource_path"`
 	ResourceQuery                types.Map     `tfsdk:"resource_query"`
 	ResourceHeader               types.Map     `tfsdk:"resource_header"`
@@ -44,22 +44,9 @@ type ListResourceData struct {
 }
 
 var _ list.ListResourceWithConfigure = &ListResource{}
-var _ list.ListResourceWithRawV6Schemas = &ListResource{}
 
 func (l *ListResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_resource"
-}
-
-func (l *ListResource) RawV6Schemas(ctx context.Context, req list.RawV6SchemaRequest, resp *list.RawV6SchemaResponse) {
-	res := Resource{}
-	sresp := resource.SchemaResponse{}
-	res.Schema(ctx, resource.SchemaRequest{}, &sresp)
-
-	idsresp := resource.IdentitySchemaResponse{}
-	res.IdentitySchema(ctx, resource.IdentitySchemaRequest{}, &idsresp)
-
-	// TODO: figure out a way to convert the schema to protov6 scheam
-	// See: https://github.com/hashicorp/terraform-plugin-framework/issues/1237
 }
 
 func (l *ListResource) ListResourceConfigSchema(ctx context.Context, req list.ListResourceSchemaRequest, resp *list.ListResourceSchemaResponse) {
@@ -72,8 +59,8 @@ func (l *ListResource) ListResourceConfigSchema(ctx context.Context, req list.Li
 				MarkdownDescription: "The API path of the List Resource, relative to the `base_url` of the provider. The response, optionally filtered by `selector`, shall be a JSON array.",
 				Required:            true,
 			},
-			"name_locator": schema.StringAttribute{
-				MarkdownDescription: "An expression in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries), that is used to get the display name of each instance of the List Resource. The value " + bodyParamDescription + " Defaults to `name`.",
+			"name": schema.StringAttribute{
+				MarkdownDescription: "An expression in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries), that is used to get the display name of each instance of the List Resource. The value " + bodyParamDescription + " Defaults to `$(body.name)`.",
 				Optional:            true,
 			},
 			"method": schema.StringAttribute{
@@ -105,13 +92,13 @@ func (l *ListResource) ListResourceConfigSchema(ctx context.Context, req list.Li
 			//////////////////////////
 			// Identity related attributes
 			//////////////////////////
-			"resource_id_locator": schema.StringAttribute{
-				MarkdownDescription: "A [gjson query](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries) to get the id of each instance of the List Resource, which is used to compose the Resource Identity. Defaults to `id`.",
-				Optional:            true,
-			},
 			"resource_path": schema.StringAttribute{
 				MarkdownDescription: "The value of the `path` attribute used to compose the Resource Identity.",
 				Required:            true,
+			},
+			"resource_id": schema.StringAttribute{
+				MarkdownDescription: "An expression in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries), that is used to get the id of each instance of the List Resource. The value " + bodyOrPathParamDescription + " Defaults to `$(body.id)`.",
+				Optional:            true,
 			},
 			"resource_query": schema.MapAttribute{
 				MarkdownDescription: "The value of the `query` attribute used to compose the Resource Identity.",
@@ -233,14 +220,14 @@ func (l *ListResource) List(ctx context.Context, req list.ListRequest, stream *l
 			result := req.NewListResult(ctx)
 
 			// Set resource display name on the result
-			nameLoc := config.NameLocator.ValueString()
-			if nameLoc == "" {
-				nameLoc = "$(body.name)"
+			nameExp := config.Name.ValueString()
+			if nameExp == "" {
+				nameExp = "$(body.name)"
 			}
-			name, err := exparam.ExpandBody(nameLoc, resRaw)
+			name, err := exparam.ExpandBody(nameExp, resRaw)
 			if err != nil {
 				result.Diagnostics = append(result.Diagnostics, diag.NewErrorDiagnostic(
-					"Failed to expand the `name_locator` expression",
+					"Failed to expand the `name` expression",
 					err.Error(),
 				))
 				push(result)
@@ -249,24 +236,31 @@ func (l *ListResource) List(ctx context.Context, req list.ListRequest, stream *l
 			result.DisplayName = name
 
 			// Set resource identity data on the result
-			idPath := config.ResourceIdLocator.ValueString()
-			if idPath == "" {
-				idPath = "id"
+			impspec := importSpec{
+				Path: config.ResourcePath.ValueString(),
 			}
-			idResult := gjson.GetBytes(resRaw, idPath)
-			id := idResult.String()
-			if id == "" {
+			idExp := config.ResourceId.ValueString()
+			if idExp == "" {
+				idExp = "$(body.id)"
+			}
+			id, err := exparam.ExpandBodyOrPath(idExp, impspec.Path, resRaw)
+			if err != nil {
 				result.Diagnostics = append(result.Diagnostics, diag.NewErrorDiagnostic(
-					"failed to query the id from the response",
-					fmt.Sprintf("path=%s", idPath),
+					"Failed to expand the `name` expression",
+					err.Error(),
 				))
 				push(result)
 				return
 			}
-			impspec := importSpec{
-				Path: config.ResourcePath.ValueString(),
-				Id:   id,
+			if id == "" {
+				result.Diagnostics = append(result.Diagnostics, diag.NewErrorDiagnostic(
+					"failed to query the id from the response",
+					fmt.Sprintf("path=%s", idExp),
+				))
+				push(result)
+				return
 			}
+			impspec.Id = id
 
 			if !config.ResourceQuery.IsNull() {
 				impspec.Query = url.Values(client.Query{}.TakeOrSelf(ctx, config.ResourceQuery))
@@ -313,23 +307,36 @@ func (l *ListResource) List(ctx context.Context, req list.ListRequest, stream *l
 			}
 
 			// Set the resource information on the result
-			state := resourceData{
-				ID:                   types.StringValue(impspec.Id),
-				Path:                 types.StringValue(impspec.Path),
-				ReadSelector:         types.StringPointerValue(impspec.ReadSelector),
-				ReadResponseTemplate: types.StringPointerValue(impspec.ReadResponseTemplate),
+			if diags := result.Resource.SetAttribute(ctx, tfpath.Root("id"), impspec.Id); diags.HasError() {
+				result.Diagnostics = append(result.Diagnostics, diags...)
+				push(result)
+				return
 			}
+			if diags := result.Resource.SetAttribute(ctx, tfpath.Root("path"), impspec.Path); diags.HasError() {
+				result.Diagnostics = append(result.Diagnostics, diags...)
+				push(result)
+				return
+			}
+			if diags := result.Resource.SetAttribute(ctx, tfpath.Root("read_selector"), impspec.ReadSelector); diags.HasError() {
+				result.Diagnostics = append(result.Diagnostics, diags...)
+				push(result)
+				return
+			}
+			if diags := result.Resource.SetAttribute(ctx, tfpath.Root("read_response_template"), impspec.ReadResponseTemplate); diags.HasError() {
+				result.Diagnostics = append(result.Diagnostics, diags...)
+				push(result)
+				return
+			}
+
 			if q := impspec.Query; q != nil {
-				state.Query, diags = types.MapValueFrom(ctx, types.ListType{ElemType: types.StringType}, q)
-				if diags.HasError() {
+				if diags := result.Resource.SetAttribute(ctx, tfpath.Root("query"), q); diags.HasError() {
 					result.Diagnostics = append(result.Diagnostics, diags...)
 					push(result)
 					return
 				}
 			}
 			if h := impspec.Header; h != nil {
-				state.Header, diags = types.MapValueFrom(ctx, types.StringType, h)
-				if diags.HasError() {
+				if diags := result.Resource.SetAttribute(ctx, tfpath.Root("header"), h); diags.HasError() {
 					result.Diagnostics = append(result.Diagnostics, diags...)
 					push(result)
 					return
@@ -359,9 +366,7 @@ func (l *ListResource) List(ctx context.Context, req list.ListRequest, stream *l
 				push(result)
 				return
 			}
-			state.Body = body
-
-			if diags := result.Resource.Set(ctx, state); diags.HasError() {
+			if diags := result.Resource.SetAttribute(ctx, tfpath.Root("body"), body); diags.HasError() {
 				result.Diagnostics = append(result.Diagnostics, diags...)
 				push(result)
 				return
