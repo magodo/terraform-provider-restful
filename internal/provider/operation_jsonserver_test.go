@@ -107,7 +107,7 @@ func TestOperation_JSONServer_EphemeralBodyOverlap(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config:      d.ephemeralBodyOverlap(),
-				ExpectError: regexp.MustCompile(`"body" and "ephemeral_body" are not disjointed`),
+				ExpectError: regexp.MustCompile(`the body and the ephemeral body are not disjointed`),
 			},
 		},
 	})

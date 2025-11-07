@@ -45,6 +45,8 @@ resource "restful_resource" "rg" {
 
 ### Optional
 
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
 - `check_existance` (Boolean) Whether to check resource already existed? Defaults to `false`.
 - `create_header` (Map of String) The header parameters that are applied to each create request. This overrides the `header` set in the resource block.
 - `create_method` (String) The method used to create the resource. Possible values are `PUT`, `POST` and `PATCH`. This overrides the `create_method` set in the provider block (defaults to POST).
@@ -56,7 +58,7 @@ resource "restful_resource" "rg" {
 - `delete_method` (String) The method used to delete the resource. Possible values are `DELETE`, `POST`, `PUT` and `PATCH`. This overrides the `delete_method` set in the provider block (defaults to DELETE).
 - `delete_path` (String) The API path used to delete the resource. The `id` is used instead if `delete_path` is absent. This can be a string literal, or combined by following params: path param: `$(path)` expanded to `path`, body param: `$(body.x.y.z)` expands to the `x.y.z` property of the API body. Especially for the body param, it can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `query_escape` (URL query escape), `query_unescape` (URL query unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`).
 - `delete_query` (Map of List of String) The query parameters that are applied to each delete request. This overrides the `query` set in the resource block. The query value can be a string literal, or combined by the body param: `$(body.x.y.z)` that expands to the `x.y.z` property of the API body. It can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `query_escape` (URL query escape), `query_unescape` (URL query unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`).
-- `ephemeral_body` (Dynamic) The ephemeral (write-only) properties of the resource. This will be merge-patched to the `body` to construct the actual request body.
+- `ephemeral_body` (Dynamic, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) The ephemeral (write-only) properties of the resource. This will be merge-patched to the `body` to construct the actual request body.
 - `force_new_attrs` (Set of String) A set of `body` attribute paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) whose value once changed, will trigger a replace of this resource. Note this only take effects when the `body` is a unknown before apply. Technically, we do a JSON merge patch and check whether the attribute path appear in the merge patch.
 - `header` (Map of String) The header parameters that are applied to each request. This overrides the `header` set in the provider block.
 - `merge_patch_disabled` (Boolean) Whether to use a JSON Merge Patch as the request body in the PATCH update? This is only effective when `update_method` is set to `PATCH`. This overrides the `merge_patch_disabled` set in the provider block (defaults to `false`).
@@ -302,23 +304,75 @@ Required:
 
 ## Import
 
-The resource has a *import spec* defined, which consists of the following attributes:
+Import is supported using the following syntax:
 
-- id (Required)                        : The resource id.
-- path (Required)                      : The path used to create the resource (as this is force new)
-- query (Optional)                     : The query parameters.
-- header (Optional)                    : The header.
-- body (Optional)                      : The interested properties in the response body that you want to manage via this resource.
-                                         If you omit this, then all the properties will be keeping track, which in most cases is 
-                                         not what you want (e.g. the read only attributes shouldn't be managed).
-                                         The value of each property is not important here, hence leave them as `null`.
-- read_selector (Optional)             : The read_selector used to specify the resource from a collection of resources.
-- read_response_template (Optional)    : The read_response_template used to transform the structure of the read response.
+In Terraform v1.12.0 and later, the [`import` block](https://developer.hashicorp.com/terraform/language/import) can be used with the `identity` attribute, for example:
 
-An example *import spec* is like below:
+```terraform
+import {
+  to = restful_resource.test
+  identity = {
+    id = jsonencode({
+      id = "/posts/1"
+      path = "/posts"
+      body = {
+        foo = null
+      }
+      header = {
+        key = "val"
+      }
+      query = {
+        x = ["y"]
+      }
+    })
+  }
+}
+```
 
-```json
-{
+<!-- schema generated by tfplugindocs -->
+### Identity Schema
+
+#### Required
+
+- `id` (String) The import spec described at: https://registry.terraform.io/providers/magodo/restful/latest/docs/resources/resource#import.
+
+In Terraform v1.5.0 and later, the [`import` block](https://developer.hashicorp.com/terraform/language/import) can be used with the `id` attribute, for example:
+
+```terraform
+import {
+  to = restful_resource.test
+  id = jsonencode({
+    id = "/posts/1"
+    path = "/posts"
+    body = {
+      foo = null
+    }
+    header = {
+      key = "val"
+    }
+    query = {
+      x = ["y"]
+    }
+  })
+}
+```
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+# The import spec consists of following keys:
+#
+# - id (Required)                        : The resource id.
+# - path (Required)                      : The path used to create the resource (as this is force new)
+# - query (Optional)                     : The query parameters.
+# - header (Optional)                    : The header.
+# - body (Optional)                      : The interested properties in the response body that you want to manage via this resource.
+#                                          If you omit this, then all the properties will be keeping track, which in most cases is 
+#                                          not what you want (e.g. the read only attributes shouldn't be managed).
+#                                          The value of each property is not important here, hence leave them as `null`.
+# - read_selector (Optional)             : The read_selector used to specify the resource from a collection of resources.
+# - read_response_template (Optional)    : The read_response_template used to transform the structure of the read response.
+terraform import restful_resource.example '{
   "id": "/subscriptions/0-0-0-0/resourceGroups/example",
   "path": "/subscriptions/0-0-0-0/resourceGroups/example",
   "query": {"api-version": ["2020-06-01"]},
@@ -326,32 +380,5 @@ An example *import spec* is like below:
     "location": null,
     "tags": null
   }
-}
+}'
 ```
-
-Users can import it via two means, as is mentioned in https://developer.hashicorp.com/terraform/plugin/framework/resources/import:
-
-- Import by ID: E.g. one can import a resource via running the following command:
-
-    ```shell
-    $ terraform import restful_resource.example "<import spec>"
-    ```
-
-- Import by Identity: The identity schema is defined as below:
-
-    ```hcl
-    {
-        id = <import spec>
-    }
-    ```
-
-    E.g. one can compose the following `import` block:
-
-    ```hcl
-    import {
-      to = restful_resource.test
-      identity = {
-          id = "<import spec>" # Suggests to use `jsonencode()` to wrap a native HCL block
-      }
-    }
-    ```
