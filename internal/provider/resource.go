@@ -1013,6 +1013,59 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 		return
 	}
 
+	// Set resource identity
+	impspec := ImportSpec{
+		Id:   resourceId,
+		Path: plan.Path.ValueString(),
+	}
+	if !plan.Query.IsNull() {
+		impspec.Query = url.Values(client.Query{}.TakeOrSelf(ctx, plan.Query))
+	}
+	if !plan.Header.IsNull() {
+		impspec.Header = client.Header{}.TakeOrSelf(ctx, plan.Header)
+	}
+	if !plan.Body.IsNull() {
+		body, err := dynamic.ToJSON(plan.Body)
+		if err != nil {
+			diags.AddError(
+				"Failed to construct resource identity",
+				fmt.Sprintf("convert `body` to JSON: %v", err),
+			)
+			return
+		}
+		nullBody, err := jsonset.NullifyObject(body)
+		if err != nil {
+			diags.AddError(
+				"Failed to construct resource identity",
+				fmt.Sprintf("nullify `body`: %v", err),
+			)
+			return
+		}
+		impspec.Body = ToPtr(json.RawMessage(nullBody))
+	}
+	if !plan.ReadSelector.IsNull() {
+		impspec.ReadSelector = plan.ReadSelector.ValueStringPointer()
+	}
+	if !plan.ReadResponseTemplate.IsNull() {
+		impspec.ReadResponseTemplate = plan.ReadResponseTemplate.ValueStringPointer()
+	}
+
+	impspecJSON, err := json.Marshal(impspec)
+	if err != nil {
+		diags.AddError(
+			"Failed to construct resource identity",
+			fmt.Sprintf("failed to marshal the import spec: %v", err),
+		)
+		return
+	}
+
+	if diags := resp.Identity.Set(ctx, resourceIdentityModel{
+		ID: types.StringValue(string(impspecJSON)),
+	}); diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+
 	rreq := resource.ReadRequest{
 		State:        resp.State,
 		ProviderMeta: req.ProviderMeta,
@@ -1020,17 +1073,12 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	}
 	rresp := resource.ReadResponse{
 		State:       resp.State,
-		Identity:    resp.Identity,
 		Diagnostics: resp.Diagnostics,
 	}
 	r.read(ctx, rreq, &rresp, false)
 
-	*resp = resource.CreateResponse{
-		State:       rresp.State,
-		Identity:    rresp.Identity,
-		Diagnostics: rresp.Diagnostics,
-		Private:     resp.Private,
-	}
+	resp.State = rresp.State
+	resp.Diagnostics = rresp.Diagnostics
 }
 
 func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -1323,13 +1371,13 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 
 	// Optionally patch the body with emphemeral_body
 	var eb []byte
-	diff, diags := ephemeral.Diff(ctx, req.Private, config.EphemeralBody)
+	ephemeralDiff, diags := ephemeral.Diff(ctx, req.Private, config.EphemeralBody)
 	resp.Diagnostics = append(resp.Diagnostics, diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	if diff {
+	if ephemeralDiff {
 		eb, diags = ephemeral.ValidateEphemeralBody(planBody, config.EphemeralBody)
 		resp.Diagnostics = append(resp.Diagnostics, diags...)
 		if resp.Diagnostics.HasError() {
@@ -1337,18 +1385,20 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 		}
 
 		// Merge patch the ephemeral body to the body
-		planBody, err = jsonpatch.MergePatch(planBody, eb)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Merge patching `body` with `ephemeral_body`",
-				err.Error(),
-			)
-			return
+		if len(eb) != 0 {
+			planBody, err = jsonpatch.MergePatch(planBody, eb)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Merge patching `body` with `ephemeral_body`",
+					err.Error(),
+				)
+				return
+			}
 		}
 	}
 
 	// Invoke API to Update the resource only when there are changes in the body (regardless of the TF type diff).
-	if string(stateBody) != string(planBody) {
+	if string(stateBody) != string(planBody) || ephemeralDiff {
 		// Precheck
 		if !plan.PrecheckUpdate.IsNull() {
 			unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, state.ID.ValueString(), opt.Header, opt.Query, plan.PrecheckUpdate, state.Output)
@@ -1465,17 +1515,12 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 	}
 	rresp := resource.ReadResponse{
 		State:       resp.State,
-		Identity:    resp.Identity,
 		Diagnostics: resp.Diagnostics,
 	}
 	r.read(ctx, rreq, &rresp, false)
 
-	*resp = resource.UpdateResponse{
-		State:       rresp.State,
-		Identity:    rresp.Identity,
-		Diagnostics: rresp.Diagnostics,
-		Private:     resp.Private,
-	}
+	resp.State = rresp.State
+	resp.Diagnostics = rresp.Diagnostics
 }
 
 func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -1604,7 +1649,7 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 	}
 }
 
-type importSpec struct {
+type ImportSpec struct {
 	// Id is the resource id. Required.
 	Id string `json:"id"`
 
@@ -1650,11 +1695,14 @@ func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest
 	readResponseTemplate := tfpath.Root("read_response_template")
 
 	var (
-		imp importSpec
+		imp ImportSpec
 		err error
 	)
 	if req.ID != "" {
 		err = json.Unmarshal([]byte(req.ID), &imp)
+
+		// Ensure the identity is set and populated to the response
+		resp.Identity.SetAttribute(ctx, idPath, req.ID)
 	} else {
 		var identity types.String
 		resp.Diagnostics.Append(req.Identity.GetAttribute(ctx, idPath, &identity)...)
@@ -1686,6 +1734,8 @@ func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest
 		)
 		return
 	}
+
+	// Set the state to passthrough to the read
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, idPath, imp.Id)...)
 
 	if imp.Body != nil {

@@ -236,7 +236,7 @@ func (l *ListResource) List(ctx context.Context, req list.ListRequest, stream *l
 			result.DisplayName = name
 
 			// Set resource identity data on the result
-			impspec := importSpec{
+			impspec := ImportSpec{
 				Path: config.ResourcePath.ValueString(),
 			}
 			idExp := config.ResourceId.ValueString()
