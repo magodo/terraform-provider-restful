@@ -57,6 +57,7 @@ func TestResource_JSONServer_Basic(t *testing.T) {
 				Config: d.basic("foo"),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("foo"), knownvalue.StringExact("foo")),
 				},
 			},
 			{
@@ -98,6 +99,7 @@ func TestResource_JSONServer_Basic(t *testing.T) {
 				Config: d.basic("bar"),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("foo"), knownvalue.StringExact("bar")),
 				},
 			},
 			{

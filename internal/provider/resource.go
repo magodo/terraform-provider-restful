@@ -143,6 +143,10 @@ type postCreateRead struct {
 
 func (r *Resource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_resource"
+	resp.ResourceBehavior = resource.ResourceBehavior{
+		// The identity contains the "body" field, which can be changed during update
+		MutableIdentity: true,
+	}
 }
 
 const paramFuncDescription = "Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `query_escape` (URL query escape), `query_unescape` (URL query unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`)."
@@ -1013,72 +1017,22 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 		return
 	}
 
-	// Set resource identity
-	impspec := ImportSpec{
-		Id:   resourceId,
-		Path: plan.Path.ValueString(),
-	}
-	if !plan.Query.IsNull() {
-		impspec.Query = url.Values(client.Query{}.TakeOrSelf(ctx, plan.Query))
-	}
-	if !plan.Header.IsNull() {
-		impspec.Header = client.Header{}.TakeOrSelf(ctx, plan.Header)
-	}
-	if !plan.Body.IsNull() {
-		body, err := dynamic.ToJSON(plan.Body)
-		if err != nil {
-			diags.AddError(
-				"Failed to construct resource identity",
-				fmt.Sprintf("convert `body` to JSON: %v", err),
-			)
-			return
-		}
-		nullBody, err := jsonset.NullifyObject(body)
-		if err != nil {
-			diags.AddError(
-				"Failed to construct resource identity",
-				fmt.Sprintf("nullify `body`: %v", err),
-			)
-			return
-		}
-		impspec.Body = ToPtr(json.RawMessage(nullBody))
-	}
-	if !plan.ReadSelector.IsNull() {
-		impspec.ReadSelector = plan.ReadSelector.ValueStringPointer()
-	}
-	if !plan.ReadResponseTemplate.IsNull() {
-		impspec.ReadResponseTemplate = plan.ReadResponseTemplate.ValueStringPointer()
-	}
-
-	impspecJSON, err := json.Marshal(impspec)
-	if err != nil {
-		diags.AddError(
-			"Failed to construct resource identity",
-			fmt.Sprintf("failed to marshal the import spec: %v", err),
-		)
-		return
-	}
-
-	if diags := resp.Identity.Set(ctx, resourceIdentityModel{
-		ID: types.StringValue(string(impspecJSON)),
-	}); diags.HasError() {
-		resp.Diagnostics.Append(diags...)
-		return
-	}
-
 	rreq := resource.ReadRequest{
 		State:        resp.State,
-		ProviderMeta: req.ProviderMeta,
 		Private:      resp.Private,
+		Identity:     req.Identity,
+		ProviderMeta: req.ProviderMeta,
 	}
 	rresp := resource.ReadResponse{
 		State:       resp.State,
 		Diagnostics: resp.Diagnostics,
+		Identity:    resp.Identity,
 	}
 	r.read(ctx, rreq, &rresp, false)
 
 	resp.State = rresp.State
 	resp.Diagnostics = rresp.Diagnostics
+	resp.Identity = rresp.Identity
 }
 
 func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -1272,6 +1226,60 @@ func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *reso
 	diags = resp.State.Set(ctx, state)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
+		return
+	}
+
+	// Set resource identity
+	impspec := ImportSpec{
+		Id:   state.ID.ValueString(),
+		Path: state.Path.ValueString(),
+	}
+	if !state.Query.IsNull() {
+		impspec.Query = url.Values(client.Query{}.TakeOrSelf(ctx, state.Query))
+	}
+	if !state.Header.IsNull() {
+		impspec.Header = client.Header{}.TakeOrSelf(ctx, state.Header)
+	}
+	if !state.Body.IsNull() {
+		body, err := dynamic.ToJSON(state.Body)
+		if err != nil {
+			diags.AddError(
+				"Failed to construct resource identity",
+				fmt.Sprintf("convert `body` to JSON: %v", err),
+			)
+			return
+		}
+		nullBody, err := jsonset.NullifyObject(body)
+		if err != nil {
+			diags.AddError(
+				"Failed to construct resource identity",
+				fmt.Sprintf("nullify `body`: %v", err),
+			)
+			return
+		}
+		if string(nullBody) != "null" {
+			impspec.Body = ToPtr(json.RawMessage(nullBody))
+		}
+	}
+	if !state.ReadSelector.IsNull() {
+		impspec.ReadSelector = state.ReadSelector.ValueStringPointer()
+	}
+	if !state.ReadResponseTemplate.IsNull() {
+		impspec.ReadResponseTemplate = state.ReadResponseTemplate.ValueStringPointer()
+	}
+
+	impspecJSON, err := json.Marshal(impspec)
+	if err != nil {
+		diags.AddError(
+			"Failed to construct resource identity",
+			fmt.Sprintf("failed to marshal the import spec: %v", err),
+		)
+		return
+	}
+	if diags := resp.Identity.Set(ctx, resourceIdentityModel{
+		ID: types.StringValue(string(impspecJSON)),
+	}); diags.HasError() {
+		resp.Diagnostics.Append(diags...)
 		return
 	}
 }
@@ -1510,17 +1518,20 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 
 	rreq := resource.ReadRequest{
 		State:        resp.State,
-		ProviderMeta: req.ProviderMeta,
 		Private:      resp.Private,
+		ProviderMeta: req.ProviderMeta,
+		Identity:     req.Identity,
 	}
 	rresp := resource.ReadResponse{
 		State:       resp.State,
 		Diagnostics: resp.Diagnostics,
+		Identity:    resp.Identity,
 	}
 	r.read(ctx, rreq, &rresp, false)
 
 	resp.State = rresp.State
 	resp.Diagnostics = rresp.Diagnostics
+	resp.Identity = rresp.Identity
 }
 
 func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -1657,21 +1668,21 @@ type ImportSpec struct {
 	Path string `json:"path"`
 
 	// Query is only required when it is mandatory for reading the resource.
-	Query url.Values `json:"query"`
+	Query url.Values `json:"query,omitempty"`
 
 	// Header is only required when it is mandatory for reading the resource.
-	Header map[string]string `json:"header"`
+	Header map[string]string `json:"header,omitempty"`
 
 	// Body represents the properties expected to be managed and tracked by Terraform. The value of these properties can be null as a place holder.
 	// When absent, all the response payload read wil be set to `body`.
-	Body *json.RawMessage `json:"body"`
+	Body *json.RawMessage `json:"body,omitempty"`
 
 	// ReadSelector is only required when reading the ID returns a list of resources, and you'd like to read only one of them.
 	// Note that in this case, the value of the `Body` is likely required if the selector reference the body.
-	ReadSelector *string `json:"read_selector"`
+	ReadSelector *string `json:"read_selector,omitempty"`
 
 	// ReadResponseTemplate is only required when the response from read is structually different than the `body`.
-	ReadResponseTemplate *string `json:"read_response_template"`
+	ReadResponseTemplate *string `json:"read_response_template,omitempty"`
 }
 
 func (r *Resource) IdentitySchema(ctx context.Context, req resource.IdentitySchemaRequest, resp *resource.IdentitySchemaResponse) {
