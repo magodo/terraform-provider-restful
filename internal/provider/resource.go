@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	jsonpatch "github.com/evanphx/json-patch"
+	"github.com/hashicorp/terraform-plugin-framework-validators/boolvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/dynamicvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/objectvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -105,6 +106,7 @@ type resourceData struct {
 type bodyPatchData struct {
 	Path    types.String `tfsdk:"path"`
 	RawJSON types.String `tfsdk:"raw_json"`
+	Removed types.Bool   `tfsdk:"removed"`
 }
 
 type pollData struct {
@@ -422,9 +424,25 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 							Required:            true,
 						},
 						"raw_json": schema.StringAttribute{
-							Description:         "The raw json used as the patch value. It can contain `$(body.x.y.z)` parameter that reference property from the `state.output`.",
-							MarkdownDescription: "The raw json used as the patch value. It can contain `$(body.x.y.z)` parameter that reference property from the `state.output`.",
-							Required:            true,
+							MarkdownDescription: "The raw json used as the patch value. It can contain `$(body.x.y.z)` parameter that reference property from the `state.output`. Exactly one of `raw_json` and `removed` shall be specified.",
+							Optional:            true,
+							Validators: []validator.String{
+								stringvalidator.ExactlyOneOf(
+									path.MatchRelative().AtParent().AtName("raw_json"),
+									path.MatchRelative().AtParent().AtName("removed"),
+								),
+							},
+						},
+						"removed": schema.BoolAttribute{
+							MarkdownDescription: "Remove the value specified by `path` from the update body. Exactly one of `raw_json` and `removed` shall be specified",
+							Optional:            true,
+							Validators: []validator.Bool{
+								boolvalidator.Equals(true),
+								boolvalidator.ExactlyOneOf(
+									path.MatchRelative().AtParent().AtName("raw_json"),
+									path.MatchRelative().AtParent().AtName("removed"),
+								),
+							},
 						},
 					},
 				},
@@ -1356,22 +1374,34 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 	if len(patches) != 0 {
 		planBodyStr := string(planBody)
 		for i, patch := range patches {
-			pv, err := exparam.ExpandBody(patch.RawJSON.ValueString(), stateOutput)
-			if err != nil {
-				resp.Diagnostics.AddError(
-					fmt.Sprintf("Failed to expand the %d-th patch for expression params", i),
-					err.Error(),
-				)
-				return
-			}
+			switch {
+			case !patch.Removed.IsNull():
+				planBodyStr, err = sjson.Delete(planBodyStr, patch.Path.ValueString())
+				if err != nil {
+					resp.Diagnostics.AddError(
+						fmt.Sprintf("Failed to delete json for the %d-th patch at path %q", i, patch.Path.ValueString()),
+						err.Error(),
+					)
+					return
+				}
+			case !patch.RawJSON.IsNull():
+				pv, err := exparam.ExpandBody(patch.RawJSON.ValueString(), stateOutput)
+				if err != nil {
+					resp.Diagnostics.AddError(
+						fmt.Sprintf("Failed to expand the %d-th patch for expression params", i),
+						err.Error(),
+					)
+					return
+				}
 
-			planBodyStr, err = sjson.SetRaw(planBodyStr, patch.Path.ValueString(), pv)
-			if err != nil {
-				resp.Diagnostics.AddError(
-					fmt.Sprintf("Failed to set json for the %d-th patch for expression params", i),
-					err.Error(),
-				)
-				return
+				planBodyStr, err = sjson.SetRaw(planBodyStr, patch.Path.ValueString(), pv)
+				if err != nil {
+					resp.Diagnostics.AddError(
+						fmt.Sprintf("Failed to set json for the %d-th patch with %q", i, pv),
+						err.Error(),
+					)
+					return
+				}
 			}
 		}
 		planBody = []byte(planBodyStr)

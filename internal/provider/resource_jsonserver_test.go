@@ -282,7 +282,8 @@ func TestResource_JSONServer_UpdateBodyPatch(t *testing.T) {
 		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
 		Steps: []resource.TestStep{
 			{
-				Config: d.updateBodyPatch("foo"),
+				// The initial creation won't honor the "update_body_patches"
+				Config: d.updateBodyPatchBase(),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
 					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("foo"), knownvalue.NotNull()),
@@ -290,10 +291,20 @@ func TestResource_JSONServer_UpdateBodyPatch(t *testing.T) {
 				},
 			},
 			{
-				Config: d.updateBodyPatch("bar"),
+				Config: d.updateBodyPatchUpdate(),
 				ConfigStateChecks: []statecheck.StateCheck{
-					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("addon").AtMapKey("a"), knownvalue.StringExact("hmm")),
-					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("addon").AtMapKey("b"), knownvalue.NotNull()),
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.MapExact(
+						map[string]knownvalue.Check{
+							"addon": knownvalue.MapExact(
+								map[string]knownvalue.Check{
+									"a": knownvalue.StringExact("hmm"),
+									"b": knownvalue.NotNull(),
+								},
+							),
+							"id": knownvalue.NotNull(),
+						},
+					)),
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.MapSizeExact(2)),
 				},
 			},
 		},
@@ -644,7 +655,7 @@ resource "restful_resource" "test" {
 `, d.url, v)
 }
 
-func (d jsonServerData) updateBodyPatch(v string) string {
+func (d jsonServerData) updateBodyPatchBase() string {
 	return fmt.Sprintf(`
 provider "restful" {
   base_url = %q
@@ -653,8 +664,24 @@ provider "restful" {
 resource "restful_resource" "test" {
   path = "posts"
   body = {
-  	foo = %q
+  	foo = "bar"
   }
+  read_path = "$(path)/$(body.id)"
+}
+`, d.url)
+}
+func (d jsonServerData) updateBodyPatchUpdate() string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+resource "restful_resource" "test" {
+  path = "posts"
+  body = {
+  	foo = "bar"
+  }
+  read_path = "$(path)/$(body.id)"
   update_body_patches = [
     {
 	  path = "addon.a"
@@ -664,10 +691,16 @@ resource "restful_resource" "test" {
 	  path = "addon.b"
 	  raw_json = "$(body.id)"
 	},
+	{
+	  path = "foo"
+	  removed = true
+	},
   ]
-  read_path = "$(path)/$(body.id)"
+  lifecycle {
+	ignore_changes = [body.foo]
+  }
 }
-`, d.url, v)
+`, d.url)
 }
 
 func (d jsonServerData) ephemeralBodyOverlap() string {
