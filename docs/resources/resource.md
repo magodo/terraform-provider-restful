@@ -300,7 +300,11 @@ Optional:
 Required:
 
 - `path` (String) The path (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attribute to [patch](https://github.com/tidwall/sjson?tab=readme-ov-file#set-a-value).
-- `raw_json` (String) The raw json used as the patch value. It can contain `$(body.x.y.z)` parameter that reference property from the `state.output`.
+
+Optional:
+
+- `raw_json` (String) The raw json used as the patch value. It can contain `$(body.x.y.z)` parameter that reference property from the `state.output`. Exactly one of `raw_json` and `removed` shall be specified.
+- `removed` (Boolean) Remove the value specified by `path` from the update body. Exactly one of `raw_json` and `removed` shall be specified
 
 ## Import
 
