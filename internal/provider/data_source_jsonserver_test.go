@@ -171,3 +171,44 @@ data "restful_resource" "test" {
 `, d.url)
 
 }
+
+func TestDataSource_JSONServer_UseSensitiveOutput(t *testing.T) {
+	dsaddr := "data.restful_resource.test"
+	d := newJsonServerData()
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { d.precheck(t) },
+		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+		Steps: []resource.TestStep{
+			{
+				Config: d.dsUseSensitiveOutput(),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(dsaddr, tfjsonpath.New("sensitive_output").AtMapKey("id"), knownvalue.NotNull()),
+					statecheck.ExpectKnownValue(dsaddr, tfjsonpath.New("sensitive_output").AtMapKey("foo"), knownvalue.StringExact("bar")),
+					statecheck.ExpectKnownValue(dsaddr, tfjsonpath.New("output"), knownvalue.Null()),
+				},
+			},
+		},
+	})
+}
+
+func (d jsonServerData) dsUseSensitiveOutput() string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+resource "restful_resource" "test" {
+  path = "/posts"
+  body = {
+  	foo = "bar"
+  }
+  read_path = "$(path)/$(body.id)"
+}
+
+data "restful_resource" "test" {
+  id = restful_resource.test.id
+  use_sensitive_output = true
+}
+`, d.url)
+
+}

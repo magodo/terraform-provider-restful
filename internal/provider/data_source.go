@@ -22,16 +22,18 @@ type DataSource struct {
 var _ datasource.DataSource = &DataSource{}
 
 type dataSourceData struct {
-	ID            types.String  `tfsdk:"id"`
-	Method        types.String  `tfsdk:"method"`
-	Query         types.Map     `tfsdk:"query"`
-	Header        types.Map     `tfsdk:"header"`
-	Body          types.Dynamic `tfsdk:"body"`
-	Selector      types.String  `tfsdk:"selector"`
-	OutputAttrs   types.Set     `tfsdk:"output_attrs"`
-	AllowNotExist types.Bool    `tfsdk:"allow_not_exist"`
-	Precheck      types.List    `tfsdk:"precheck"`
-	Output        types.Dynamic `tfsdk:"output"`
+	ID                 types.String  `tfsdk:"id"`
+	Method             types.String  `tfsdk:"method"`
+	Query              types.Map     `tfsdk:"query"`
+	Header             types.Map     `tfsdk:"header"`
+	Body               types.Dynamic `tfsdk:"body"`
+	Selector           types.String  `tfsdk:"selector"`
+	OutputAttrs        types.Set     `tfsdk:"output_attrs"`
+	AllowNotExist      types.Bool    `tfsdk:"allow_not_exist"`
+	Precheck           types.List    `tfsdk:"precheck"`
+	UseSensitiveOutput types.Bool    `tfsdk:"use_sensitive_output"`
+	Output             types.Dynamic `tfsdk:"output"`
+	SensitiveOutput    types.Dynamic `tfsdk:"sensitive_output"`
 }
 
 func (d *DataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -90,10 +92,21 @@ func (d *DataSource) Schema(ctx context.Context, req datasource.SchemaRequest, r
 				Optional:            true,
 			},
 			"precheck": precheckAttribute("Read", true, "", false),
+			"use_sensitive_output": schema.BoolAttribute{
+				Description:         "Whether to use `sensitive_output` instead of `output`. When true, the response will be stored in `sensitive_output` (which is marked as sensitive). Defaults to `false`.",
+				MarkdownDescription: "Whether to use `sensitive_output` instead of `output`. When true, the response will be stored in `sensitive_output` (which is marked as sensitive). Defaults to `false`.",
+				Optional:            true,
+			},
 			"output": schema.DynamicAttribute{
-				Description:         "The response body after reading the resource.",
-				MarkdownDescription: "The response body after reading the resource.",
+				Description:         "The response body after reading the resource. This is only populated when `use_sensitive_output` is false.",
+				MarkdownDescription: "The response body after reading the resource. This is only populated when `use_sensitive_output` is false.",
 				Computed:            true,
+			},
+			"sensitive_output": schema.DynamicAttribute{
+				Description:         "The response body after reading the resource (sensitive). This is only populated when `use_sensitive_output` is true.",
+				MarkdownDescription: "The response body after reading the resource (sensitive). This is only populated when `use_sensitive_output` is true.",
+				Computed:            true,
+				Sensitive:           true,
 			},
 		},
 	}
@@ -260,7 +273,14 @@ func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp 
 		)
 		return
 	}
-	state.Output = output
+	// Populate the appropriate output based on use_sensitive_output
+	if !state.UseSensitiveOutput.IsNull() && state.UseSensitiveOutput.ValueBool() {
+		state.SensitiveOutput = output
+		state.Output = types.DynamicNull()
+	} else {
+		state.Output = output
+		state.SensitiveOutput = types.DynamicNull()
+	}
 
 	diags = resp.State.Set(ctx, state)
 	resp.Diagnostics.Append(diags...)

@@ -61,7 +61,9 @@ ephemeral "restful_resource" "test" {
 - `renew_method` (String) The HTTP method to renew the ephemeral resource. Possible values are `GET`, `PUT`, `POST`, `PATCH`.
 - `renew_path` (String) The path used to renew the ephemeral resource, relative to the `base_url` of the provider. This can be a string literal, or combined by following params: path param: `$(path)` expanded to `path`, body param: `$(body.x.y.z)` expands to the `x.y.z` property of the API body. Especially for the body param, it can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `query_escape` (URL query escape), `query_unescape` (URL query unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`).
 - `renew_query` (Map of List of String) The query parameters that are applied to each renew request. This overrides the `query` set in the resource block.
+- `use_sensitive_output` (Boolean) Whether to use `sensitive_output` instead of `output`. When true, the response will be stored in `sensitive_output` (which is marked as sensitive). Defaults to `false`.
 
 ### Read-Only
 
-- `output` (Dynamic) The response body.
+- `output` (Dynamic) The response body. This is only populated when `use_sensitive_output` is false.
+- `sensitive_output` (Dynamic, Sensitive) The response body (sensitive). This is only populated when `use_sensitive_output` is true.

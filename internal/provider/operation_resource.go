@@ -59,7 +59,10 @@ type operationResourceData struct {
 	PrecheckDelete types.List    `tfsdk:"precheck_delete"`
 	PollDelete     types.Object  `tfsdk:"poll_delete"`
 	OutputAttrs    types.Set     `tfsdk:"output_attrs"`
-	Output         types.Dynamic `tfsdk:"output"`
+
+	UseSensitiveOutput types.Bool    `tfsdk:"use_sensitive_output"`
+	Output             types.Dynamic `tfsdk:"output"`
+	SensitiveOutput    types.Dynamic `tfsdk:"sensitive_output"`
 }
 
 func (r *OperationResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -196,11 +199,22 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 				Optional:            true,
 				ElementType:         types.StringType,
 			},
+			"use_sensitive_output": schema.BoolAttribute{
+				Description:         "Whether to use `sensitive_output` instead of `output`. When true, the response will be stored in `sensitive_output` (which is marked as sensitive). Defaults to `false`.",
+				MarkdownDescription: "Whether to use `sensitive_output` instead of `output`. When true, the response will be stored in `sensitive_output` (which is marked as sensitive). Defaults to `false`.",
+				Optional:            true,
+			},
 
 			"output": schema.DynamicAttribute{
-				Description:         "The response body. If `ephemeral_body` get returned by API, it will be removed from `output`.",
-				MarkdownDescription: "The response body. If `ephemeral_body` get returned by API, it will be removed from `output`.",
+				Description:         "The response body. If `ephemeral_body` get returned by API, it will be removed from `output`. This is only populated when `use_sensitive_output` is false.",
+				MarkdownDescription: "The response body. If `ephemeral_body` get returned by API, it will be removed from `output`. This is only populated when `use_sensitive_output` is false.",
 				Computed:            true,
+			},
+			"sensitive_output": schema.DynamicAttribute{
+				Description:         "The response body (sensitive). If `ephemeral_body` get returned by API, it will be removed from `sensitive_output`. This is only populated when `use_sensitive_output` is true.",
+				MarkdownDescription: "The response body (sensitive). If `ephemeral_body` get returned by API, it will be removed from `sensitive_output`. This is only populated when `use_sensitive_output` is true.",
+				Computed:            true,
+				Sensitive:           true,
 			},
 		},
 	}
@@ -265,7 +279,12 @@ func (r *OperationResource) ModifyPlan(ctx context.Context, req resource.ModifyP
 	}
 	if diff {
 		tflog.Info(ctx, `"ephemeral_body" has changed`)
-		plan.Output = types.DynamicUnknown()
+		// Mark the appropriate output as unknown based on use_sensitive_output
+		if !plan.UseSensitiveOutput.IsNull() && plan.UseSensitiveOutput.ValueBool() {
+			plan.SensitiveOutput = types.DynamicUnknown()
+		} else {
+			plan.Output = types.DynamicUnknown()
+		}
 	}
 }
 
@@ -484,7 +503,14 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, reqConfig tfsdk.
 		)
 		return
 	}
-	plan.Output = output
+	// Populate the appropriate output based on use_sensitive_output
+	if !plan.UseSensitiveOutput.IsNull() && plan.UseSensitiveOutput.ValueBool() {
+		plan.SensitiveOutput = output
+		plan.Output = types.DynamicNull()
+	} else {
+		plan.Output = output
+		plan.SensitiveOutput = types.DynamicNull()
+	}
 
 	diags = respState.Set(ctx, plan)
 	respDiags.Append(diags...)

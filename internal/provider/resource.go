@@ -100,7 +100,9 @@ type resourceData struct {
 	ForceNewAttrs  types.Set  `tfsdk:"force_new_attrs"`
 	OutputAttrs    types.Set  `tfsdk:"output_attrs"`
 
-	Output types.Dynamic `tfsdk:"output"`
+	UseSensitiveOutput types.Bool    `tfsdk:"use_sensitive_output"`
+	Output             types.Dynamic `tfsdk:"output"`
+	SensitiveOutput    types.Dynamic `tfsdk:"sensitive_output"`
 }
 
 type bodyPatchData struct {
@@ -607,10 +609,21 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				Optional:            true,
 				ElementType:         types.StringType,
 			},
+			"use_sensitive_output": schema.BoolAttribute{
+				Description:         "Whether to use `sensitive_output` instead of `output`. When true, the response will be stored in `sensitive_output` (which is marked as sensitive). Defaults to `false`.",
+				MarkdownDescription: "Whether to use `sensitive_output` instead of `output`. When true, the response will be stored in `sensitive_output` (which is marked as sensitive). Defaults to `false`.",
+				Optional:            true,
+			},
 			"output": schema.DynamicAttribute{
-				Description:         "The response body. If `ephemeral_body` get returned by API, it will be removed from `output`.",
-				MarkdownDescription: "The response body. If `ephemeral_body` get returned by API, it will be removed from `output`.",
+				Description:         "The response body. If `ephemeral_body` get returned by API, it will be removed from `output`. This is only populated when `use_sensitive_output` is false.",
+				MarkdownDescription: "The response body. If `ephemeral_body` get returned by API, it will be removed from `output`. This is only populated when `use_sensitive_output` is false.",
 				Computed:            true,
+			},
+			"sensitive_output": schema.DynamicAttribute{
+				Description:         "The response body (sensitive). If `ephemeral_body` get returned by API, it will be removed from `sensitive_output`. This is only populated when `use_sensitive_output` is true.",
+				MarkdownDescription: "The response body (sensitive). If `ephemeral_body` get returned by API, it will be removed from `sensitive_output`. This is only populated when `use_sensitive_output` is true.",
+				Computed:            true,
+				Sensitive:           true,
 			},
 		},
 	}
@@ -748,8 +761,21 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 	}
 	if diff {
 		tflog.Info(ctx, `"ephemeral_body" has changed`)
-		plan.Output = types.DynamicUnknown()
+		// Mark the appropriate output as unknown based on use_sensitive_output
+		if !plan.UseSensitiveOutput.IsNull() && plan.UseSensitiveOutput.ValueBool() {
+			plan.SensitiveOutput = types.DynamicUnknown()
+		} else {
+			plan.Output = types.DynamicUnknown()
+		}
 	}
+}
+
+// getOutput returns the appropriate output (sensitive or normal) based on use_sensitive_output
+func getOutput(data resourceData) types.Dynamic {
+	if !data.UseSensitiveOutput.IsNull() && data.UseSensitiveOutput.ValueBool() {
+		return data.SensitiveOutput
+	}
+	return data.Output
 }
 
 func (r *Resource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
@@ -1027,7 +1053,14 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	plan.ID = types.StringValue(resourceId)
 
 	// Temporarily set the output here, so that the Read at the end can expand the `$(body)` parameters.
-	plan.Output = output
+	// Populate the appropriate output based on use_sensitive_output
+	if !plan.UseSensitiveOutput.IsNull() && plan.UseSensitiveOutput.ValueBool() {
+		plan.SensitiveOutput = output
+		plan.Output = types.DynamicNull()
+	} else {
+		plan.Output = output
+		plan.SensitiveOutput = types.DynamicNull()
+	}
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
@@ -1072,7 +1105,7 @@ func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *reso
 		tflog.Info(ctx, "Read a resource", map[string]interface{}{"id": state.ID.ValueString()})
 	}
 
-	stateOutput, err := dynamic.ToJSON(state.Output)
+	stateOutput, err := dynamic.ToJSON(getOutput(state))
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Read failure",
@@ -1239,7 +1272,14 @@ func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *reso
 		)
 		return
 	}
-	state.Output = output
+	// Populate the appropriate output based on use_sensitive_output
+	if !state.UseSensitiveOutput.IsNull() && state.UseSensitiveOutput.ValueBool() {
+		state.SensitiveOutput = output
+		state.Output = types.DynamicNull()
+	} else {
+		state.Output = output
+		state.SensitiveOutput = types.DynamicNull()
+	}
 
 	diags = resp.State.Set(ctx, state)
 	resp.Diagnostics.Append(diags...)
@@ -1329,7 +1369,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 
 	tflog.Info(ctx, "Update a resource", map[string]interface{}{"id": state.ID.ValueString()})
 
-	stateOutput, err := dynamic.ToJSON(state.Output)
+	stateOutput, err := dynamic.ToJSON(getOutput(state))
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Read failure",
@@ -1340,7 +1380,13 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 
 	// Temporarily set the output here, so that the Read at the end can
 	// expand the `$(body)` parameters.
-	plan.Output = state.Output
+	if !state.UseSensitiveOutput.IsNull() && state.UseSensitiveOutput.ValueBool() {
+		plan.SensitiveOutput = state.SensitiveOutput
+		plan.Output = types.DynamicNull()
+	} else {
+		plan.Output = state.Output
+		plan.SensitiveOutput = types.DynamicNull()
+	}
 
 	opt, diags := r.p.apiOpt.ForResourceUpdate(ctx, plan, stateOutput)
 	resp.Diagnostics.Append(diags...)
@@ -1577,7 +1623,7 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 
 	tflog.Info(ctx, "Delete a resource", map[string]interface{}{"id": state.ID.ValueString()})
 
-	stateOutput, err := dynamic.ToJSON(state.Output)
+	stateOutput, err := dynamic.ToJSON(getOutput(state))
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Failed to marshal json for `output`",
@@ -1594,7 +1640,7 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 
 	// Precheck
 	if !state.PrecheckDelete.IsNull() {
-		unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, state.ID.ValueString(), opt.Header, opt.Query, state.PrecheckDelete, state.Output)
+		unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, state.ID.ValueString(), opt.Header, opt.Query, state.PrecheckDelete, getOutput(state))
 		if diags.HasError() {
 			resp.Diagnostics.Append(diags...)
 			return
