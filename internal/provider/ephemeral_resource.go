@@ -63,8 +63,10 @@ type ephemeralResourceData struct {
 	CloseQuery   types.Map     `tfsdk:"close_query"`
 	CloseHeader  types.Map     `tfsdk:"close_header"`
 
-	OutputAttrs types.Set     `tfsdk:"output_attrs"`
-	Output      types.Dynamic `tfsdk:"output"`
+	OutputAttrs        types.Set     `tfsdk:"output_attrs"`
+	UseSensitiveOutput types.Bool    `tfsdk:"use_sensitive_output"`
+	Output             types.Dynamic `tfsdk:"output"`
+	SensitiveOutput    types.Dynamic `tfsdk:"sensitive_output"`
 }
 
 func (e *EphemeralResource) Metadata(ctx context.Context, req ephemeral.MetadataRequest, resp *ephemeral.MetadataResponse) {
@@ -341,11 +343,22 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 				Optional:            true,
 				ElementType:         types.StringType,
 			},
+			"use_sensitive_output": schema.BoolAttribute{
+				Description:         "Whether to use `sensitive_output` instead of `output`. When true, the response will be stored in `sensitive_output` (which is marked as sensitive). Defaults to `false`.",
+				MarkdownDescription: "Whether to use `sensitive_output` instead of `output`. When true, the response will be stored in `sensitive_output` (which is marked as sensitive). Defaults to `false`.",
+				Optional:            true,
+			},
 
 			"output": schema.DynamicAttribute{
-				Description:         "The response body.",
-				MarkdownDescription: "The response body.",
+				Description:         "The response body. This is only populated when `use_sensitive_output` is false.",
+				MarkdownDescription: "The response body. This is only populated when `use_sensitive_output` is false.",
 				Computed:            true,
+			},
+			"sensitive_output": schema.DynamicAttribute{
+				Description:         "The response body (sensitive). This is only populated when `use_sensitive_output` is true.",
+				MarkdownDescription: "The response body (sensitive). This is only populated when `use_sensitive_output` is true.",
+				Computed:            true,
+				Sensitive:           true,
 			},
 		},
 	}
@@ -439,7 +452,14 @@ func (e *EphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequest,
 		)
 		return
 	}
-	config.Output = output
+	// Populate the appropriate output based on use_sensitive_output
+	if !config.UseSensitiveOutput.IsNull() && config.UseSensitiveOutput.ValueBool() {
+		config.SensitiveOutput = output
+		config.Output = types.DynamicNull()
+	} else {
+		config.Output = output
+		config.SensitiveOutput = types.DynamicNull()
+	}
 
 	// Set Renew and Close, if any
 	if !config.RenewMethod.IsNull() {
