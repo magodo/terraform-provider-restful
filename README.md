@@ -1,8 +1,12 @@
-# Terraform Provider Restful
+# Terraform Provider Restful (Fork)
+
+> **Note**: This is a fork of [magodo/terraform-provider-restful](https://github.com/magodo/terraform-provider-restful) with additional features.
+> A pull request with these changes has been opened upstream at https://github.com/magodo/terraform-provider-restful/pull/164
+> This version base was based with the magodo/terraform-provider-restful v0.24.0
 
 This is a general Terraform provider aims to work for any platform as long as it exposes a RESTful API.
 
-The document of this provider is available on [Terraform Provider Registry](https://registry.terraform.io/providers/magodo/restful/latest/docs).
+The document of this provider is available on [Terraform Provider Registry](https://registry.terraform.io/providers/lfventura/restful/latest/docs).
 
 ## Features
 

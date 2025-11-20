@@ -7,7 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
-	"github.com/magodo/terraform-provider-restful/internal/exparam"
+	"github.com/lfventura/terraform-provider-restful/internal/exparam"
 )
 
 type stringsIsPathBuilder struct{}

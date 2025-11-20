@@ -11,8 +11,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/querycheck"
 	"github.com/hashicorp/terraform-plugin-testing/tfversion"
-	"github.com/magodo/terraform-provider-restful/internal/acceptance"
-	"github.com/magodo/terraform-provider-restful/internal/provider"
+	"github.com/lfventura/terraform-provider-restful/internal/acceptance"
+	"github.com/lfventura/terraform-provider-restful/internal/provider"
 )
 
 type jsonServerList struct {

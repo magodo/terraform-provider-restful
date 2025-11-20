@@ -1,4 +1,4 @@
-module github.com/magodo/terraform-provider-restful
+module github.com/lfventura/terraform-provider-restful
 
 go 1.25.1
 

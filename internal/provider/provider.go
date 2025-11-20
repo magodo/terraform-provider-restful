@@ -25,9 +25,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
-	"github.com/magodo/terraform-provider-restful/internal/client"
-	"github.com/magodo/terraform-provider-restful/internal/defaults"
-	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
+	"github.com/lfventura/terraform-provider-restful/internal/client"
+	"github.com/lfventura/terraform-provider-restful/internal/defaults"
+	myvalidator "github.com/lfventura/terraform-provider-restful/internal/validator"
 )
 
 var _ provider.Provider = &Provider{}

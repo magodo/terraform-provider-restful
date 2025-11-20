@@ -17,8 +17,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/magodo/terraform-plugin-framework-helper/dynamic"
-	"github.com/magodo/terraform-provider-restful/internal/exparam"
-	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
+	"github.com/lfventura/terraform-provider-restful/internal/exparam"
+	myvalidator "github.com/lfventura/terraform-provider-restful/internal/validator"
 )
 
 type EphemeralResource struct {

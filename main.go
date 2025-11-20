@@ -5,7 +5,7 @@ import (
 	"flag"
 	"log"
 
-	"github.com/magodo/terraform-provider-restful/internal/provider"
+	"github.com/lfventura/terraform-provider-restful/internal/provider"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 )

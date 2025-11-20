@@ -22,9 +22,9 @@ import (
 	"github.com/magodo/terraform-plugin-framework-helper/dynamic"
 	"github.com/magodo/terraform-plugin-framework-helper/ephemeral"
 	"github.com/magodo/terraform-plugin-framework-helper/jsonset"
-	"github.com/magodo/terraform-provider-restful/internal/client"
-	"github.com/magodo/terraform-provider-restful/internal/exparam"
-	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
+	"github.com/lfventura/terraform-provider-restful/internal/client"
+	"github.com/lfventura/terraform-provider-restful/internal/exparam"
+	myvalidator "github.com/lfventura/terraform-provider-restful/internal/validator"
 )
 
 type OperationResource struct {

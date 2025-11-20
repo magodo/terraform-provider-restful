@@ -13,7 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
-	"github.com/magodo/terraform-provider-restful/internal/acceptance"
+	"github.com/lfventura/terraform-provider-restful/internal/acceptance"
 	"github.com/stretchr/testify/require"
 )
 

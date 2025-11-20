@@ -12,8 +12,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
-	"github.com/magodo/terraform-provider-restful/internal/acceptance"
-	"github.com/magodo/terraform-provider-restful/internal/client"
+	"github.com/lfventura/terraform-provider-restful/internal/acceptance"
+	"github.com/lfventura/terraform-provider-restful/internal/client"
 )
 
 const RESTFUL_ADO_PAT = "RESTFUL_ADO_PAT"
