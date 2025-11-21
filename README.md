@@ -4,6 +4,11 @@
 > A pull request with these changes has been opened upstream at https://github.com/magodo/terraform-provider-restful/pull/164
 > This version base was based with the magodo/terraform-provider-restful v0.24.0
 
+## Recent Changes
+
+- `base_url` in the provider is now optional. If not defined in the provider, it must be specified in each resource or operation.
+- Resources and operations now support `base_url` and `security` overrides, allowing per-resource configuration for different APIs.
+
 This is a general Terraform provider aims to work for any platform as long as it exposes a RESTful API.
 
 The document of this provider is available on [Terraform Provider Registry](https://registry.terraform.io/providers/lfventura/restful/latest/docs).
@@ -11,7 +16,7 @@ The document of this provider is available on [Terraform Provider Registry](http
 ## Features
 
 - Different authentication choices: HTTP auth (basic, token), API Key auth and OAuth2 (client credential, password credential, refresh token).
-- Resource-level security configuration: Override provider-level authentication per resource for fine-grained control.
+- Resource-level configuration overrides: Override provider-level `base_url` and `security` per resource for fine-grained control.
 - Customized CRUD methods and paths
 - Support precheck conditions
 - Support polling asynchronous operations
