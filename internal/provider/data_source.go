@@ -274,7 +274,7 @@ func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp 
 		return
 	}
 	// Populate the appropriate output based on use_sensitive_output
-	if !state.UseSensitiveOutput.IsNull() && state.UseSensitiveOutput.ValueBool() {
+	if state.UseSensitiveOutput.ValueBool() {
 		state.SensitiveOutput = output
 		state.Output = types.DynamicNull()
 	} else {
