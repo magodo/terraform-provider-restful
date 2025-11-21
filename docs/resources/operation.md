@@ -56,6 +56,7 @@ resource "restful_operation" "register_rp" {
 
 ### Optional
 
+- `base_url` (String) The base URL of the API for this operation. If defined, overrides the provider's base_url.
 - `body` (Dynamic) The payload for the `Create`/`Update` call.
 - `delete_body` (Dynamic) The payload for the `Delete` call.
 - `delete_header` (Map of String) The header parameters that are applied to each delete request. This overrides the `header` set in the resource block.

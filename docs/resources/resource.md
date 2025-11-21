@@ -61,6 +61,7 @@ resource "restful_resource" "rg" {
 
 ### Optional
 
+- `base_url` (String) The base URL of the API for this resource. If defined, overrides the provider's base_url.
 - `check_existance` (Boolean) Whether to check resource already existed? Defaults to `false`.
 - `create_header` (Map of String) The header parameters that are applied to each create request. This overrides the `header` set in the resource block.
 - `create_method` (String) The method used to create the resource. Possible values are `PUT`, `POST` and `PATCH`. This overrides the `create_method` set in the provider block (defaults to POST).

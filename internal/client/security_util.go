@@ -5,26 +5,14 @@ import (
 	"net/http"
 )
 
-// NewWithSecurityFromExisting creates a new client by copying the base client's configs, but with a new SecurityOption.
-func NewWithSecurityFromExisting(base *Client, security SecurityOption) (*Client, error) {
-	// Usa o mesmo baseURL e BuildOption do client base, mas troca a security
-	baseURL := base.BaseURL
+// NewWithOverridesFromExisting creates a new client by copying the base client's configs, but with optional overrides for baseURL and SecurityOption.
+// If an override is not needed, the existing value from the base client is used.
+// We need this function because of resty's design, which does not allow changing the base URL or security settings after the client is created.
+func NewWithOverridesFromExisting(base *Client, baseURL string, security SecurityOption) (*Client, error) {
 	opt := &BuildOption{
 		Security:      security,
 		CookieEnabled: base.Client.GetClient().Jar != nil,
 		TLSConfig:     *base.Client.GetClient().Transport.(*http.Transport).TLSClientConfig,
-		// Retry pode ser nil ou copiado se necessário
-	}
-	return New(context.Background(), baseURL, opt)
-}
-
-// NewWithBaseURLFromExisting creates a new client by copying the base client's configs, but with a new baseURL.
-func NewWithBaseURLFromExisting(base *Client, baseURL string) (*Client, error) {
-	opt := &BuildOption{
-		Security:      base.Security,
-		CookieEnabled: base.Client.GetClient().Jar != nil,
-		TLSConfig:     *base.Client.GetClient().Transport.(*http.Transport).TLSClientConfig,
-		// Retry pode ser nil ou copiado se necessário
 	}
 	return New(context.Background(), baseURL, opt)
 }

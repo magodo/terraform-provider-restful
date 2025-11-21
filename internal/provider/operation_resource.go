@@ -640,7 +640,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, reqConfig tfsdk.
 		if respDiags.HasError() {
 			return
 		}
-		tmpClient, err := client.NewWithSecurityFromExisting(c, security)
+		tmpClient, err := client.NewWithOverridesFromExisting(c, c.BaseURL, security)
 		if err != nil {
 			respDiags.AddError("Failed to create client with resource security", err.Error())
 			return
@@ -885,7 +885,7 @@ func (r *OperationResource) Delete(ctx context.Context, req resource.DeleteReque
 
 	// If base URL is overridden, create a temporary client with the new base URL
 	if baseURL != r.p.apiOpt.BaseURL.String() {
-		tmpClient, err := client.NewWithBaseURLFromExisting(c, baseURL)
+		tmpClient, err := client.NewWithOverridesFromExisting(c, baseURL, c.Security)
 		if err != nil {
 			resp.Diagnostics.AddError("Failed to create client with resource base URL", err.Error())
 			return
@@ -901,7 +901,7 @@ func (r *OperationResource) Delete(ctx context.Context, req resource.DeleteReque
 		if diags.HasError() {
 			return
 		}
-		tmpClient, err := client.NewWithSecurityFromExisting(c, security)
+		tmpClient, err := client.NewWithOverridesFromExisting(c, c.BaseURL, security)
 		if err != nil {
 			resp.Diagnostics.AddError("Failed to create client with resource security", err.Error())
 			return

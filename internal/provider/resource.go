@@ -1415,7 +1415,7 @@ func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *reso
 				       if diags.HasError() {
 					       return
 				       }
-				       tmpClient, err := client.NewWithSecurityFromExisting(c, security)
+				       tmpClient, err := client.NewWithOverridesFromExisting(c, c.BaseURL, security)
 				       if err != nil {
 					       resp.Diagnostics.AddError("Failed to create client with resource security", err.Error())
 					       return
