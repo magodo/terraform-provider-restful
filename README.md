@@ -1,8 +1,10 @@
 # Terraform Provider Restful (Fork)
 
 > **Note**: This is a fork of [magodo/terraform-provider-restful](https://github.com/magodo/terraform-provider-restful) with additional features.
-> A pull request with these changes has been opened upstream at https://github.com/magodo/terraform-provider-restful/pull/164
-> This version base was based with the magodo/terraform-provider-restful v0.24.0
+> This version base was based initially with the magodo/terraform-provider-restful v0.24.0
+> This forks adds the following functionality:
+> * base_url and security can be defined inside the resource itself
+> * adds sensitive_output option
 
 This is a general Terraform provider aims to work for any platform as long as it exposes a RESTful API.
 
