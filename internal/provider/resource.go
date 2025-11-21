@@ -1054,7 +1054,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 
 	// Temporarily set the output here, so that the Read at the end can expand the `$(body)` parameters.
 	// Populate the appropriate output based on use_sensitive_output
-	if !plan.UseSensitiveOutput.IsNull() && plan.UseSensitiveOutput.ValueBool() {
+	if plan.UseSensitiveOutput.ValueBool() {
 		plan.SensitiveOutput = output
 		plan.Output = types.DynamicNull()
 	} else {
@@ -1273,7 +1273,7 @@ func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *reso
 		return
 	}
 	// Populate the appropriate output based on use_sensitive_output
-	if !state.UseSensitiveOutput.IsNull() && state.UseSensitiveOutput.ValueBool() {
+	if state.UseSensitiveOutput.ValueBool() {
 		state.SensitiveOutput = output
 		state.Output = types.DynamicNull()
 	} else {
