@@ -13,6 +13,22 @@ description: |-
 ## Example Usage
 
 ```terraform
+resource "restful_operation" "get_token" {
+  path               = "/auth/token"
+  method             = "POST"
+  use_sensitive_output = true
+  body = {
+    grant_type = "client_credentials"
+  }
+}
+
+output "access_token" {
+  value     = restful_operation.get_token.sensitive_output.access_token
+  sensitive = true
+}
+```
+
+```terraform
 resource "restful_operation" "register_rp" {
   path = format("/subscriptions/%s/providers/Microsoft.ProviderHub/register", var.subscription_id)
   query = {
@@ -40,15 +56,13 @@ resource "restful_operation" "register_rp" {
 
 ### Optional
 
-> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
-
 - `body` (Dynamic) The payload for the `Create`/`Update` call.
 - `delete_body` (Dynamic) The payload for the `Delete` call.
 - `delete_header` (Map of String) The header parameters that are applied to each delete request. This overrides the `header` set in the resource block.
 - `delete_method` (String) The method for the `Delete` call. Possible values are `POST`, `PUT`, `PATCH` and `DELETE`. If this is not specified, no `Delete` call will occur.
 - `delete_path` (String) The path for the `Delete` call, relative to the `base_url` of the provider. The `path` is used instead if `delete_path` is absent.
 - `delete_query` (Map of List of String) The query parameters that are applied to each delete request. This overrides the `query` set in the resource block.
-- `ephemeral_body` (Dynamic, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) The ephemeral (write-only) properties of the resource. This will be merge-patched to the `body` to construct the actual request body.
+- `ephemeral_body` (Dynamic) The ephemeral (write-only) properties of the resource. This will be merge-patched to the `body` to construct the actual request body.
 - `header` (Map of String) The header parameters that are applied to each request. This overrides the `header` set in the provider block.
 - `id_builder` (String) The pattern used to build the `id`. The `path` is used as the `id` instead if absent.This can be a string literal, or combined by following params: path param: `$(path)` expanded to `path`, body param: `$(body.x.y.z)` expands to the `x.y.z` property of the API body. Especially for the body param, it can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `query_escape` (URL query escape), `query_unescape` (URL query unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`).
 - `operation_header` (Map of String) The header parameters that are applied to each operation request. This overrides the `header` set in the resource block.
@@ -59,6 +73,7 @@ resource "restful_operation" "register_rp" {
 - `precheck` (Attributes List) An array of prechecks that need to pass prior to the "`Create`/`Update`" operation. Exactly one of `mutex` or `api` should be specified. (see [below for nested schema](#nestedatt--precheck))
 - `precheck_delete` (Attributes List) An array of prechecks that need to pass prior to the "`Delete`" operation. Exactly one of `mutex` or `api` should be specified. (see [below for nested schema](#nestedatt--precheck_delete))
 - `query` (Map of List of String) The query parameters that are applied to each request. This overrides the `query` set in the provider block.
+- `security` (Attributes, Sensitive) The OpenAPI security scheme that is used for auth. Only one of `http`, `apikey`, or `oauth2` can be specified. If defined here, it overrides the provider's security. (see [below for nested schema](#nestedatt--security))
 - `use_sensitive_output` (Boolean) Whether to use `sensitive_output` instead of `output`. When true, the response will be stored in `sensitive_output` (which is marked as sensitive). Defaults to `false`.
 
 ### Read-Only
@@ -191,3 +206,114 @@ Required:
 Optional:
 
 - `pending` (List of String) The expected status sentinels for pending status.
+
+
+
+
+<a id="nestedatt--security"></a>
+### Nested Schema for `security`
+
+Optional:
+
+- `apikey` (Attributes Set) Configuration for the API Key authentication scheme. (see [below for nested schema](#nestedatt--security--apikey))
+- `http` (Attributes) Configuration for the HTTP authentication scheme. Exactly one of `basic` and `token` must be specified. (see [below for nested schema](#nestedatt--security--http))
+- `oauth2` (Attributes) Configuration for the OAuth2 authentication scheme. Exactly one of `password`, `client_credentials` and `refresh_token` must be specified. (see [below for nested schema](#nestedatt--security--oauth2))
+
+<a id="nestedatt--security--apikey"></a>
+### Nested Schema for `security.apikey`
+
+Required:
+
+- `in` (String) Specifies how the API Key is sent. Possible values are `query`, `header`, or `cookie`.
+- `name` (String) The API Key name
+- `value` (String) The API Key value
+
+
+<a id="nestedatt--security--http"></a>
+### Nested Schema for `security.http`
+
+Optional:
+
+- `basic` (Attributes) Basic authentication (see [below for nested schema](#nestedatt--security--http--basic))
+- `token` (Attributes) Auth token (e.g. Bearer). (see [below for nested schema](#nestedatt--security--http--token))
+
+<a id="nestedatt--security--http--basic"></a>
+### Nested Schema for `security.http.basic`
+
+Required:
+
+- `password` (String, Sensitive) The password
+- `username` (String) The username
+
+
+<a id="nestedatt--security--http--token"></a>
+### Nested Schema for `security.http.token`
+
+Required:
+
+- `token` (String, Sensitive) The value of the token.
+
+Optional:
+
+- `scheme` (String) The auth scheme. Defaults to `Bearer`.
+
+
+
+<a id="nestedatt--security--oauth2"></a>
+### Nested Schema for `security.oauth2`
+
+Optional:
+
+- `client_credentials` (Attributes) Client credentials. (see [below for nested schema](#nestedatt--security--oauth2--client_credentials))
+- `password` (Attributes) Resource owner password credential. (see [below for nested schema](#nestedatt--security--oauth2--password))
+- `refresh_token` (Attributes) Refresh token. (see [below for nested schema](#nestedatt--security--oauth2--refresh_token))
+
+<a id="nestedatt--security--oauth2--client_credentials"></a>
+### Nested Schema for `security.oauth2.client_credentials`
+
+Required:
+
+- `client_id` (String) The application's ID.
+- `client_secret` (String, Sensitive) The application's secret.
+- `token_url` (String) The token URL to be used for this flow.
+
+Optional:
+
+- `endpoint_params` (Map of List of String) The additional parameters for requests to the token endpoint.
+- `in` (String) Specifies how is the client ID & secret sent. Possible values are `params` e `header`. Se ausente, será auto detectado.
+- `scopes` (List of String) The optional requested permissions.
+
+
+<a id="nestedatt--security--oauth2--password"></a>
+### Nested Schema for `security.oauth2.password`
+
+Required:
+
+- `password` (String, Sensitive) The password.
+- `token_url` (String) The token URL to be used for this flow.
+- `username` (String) The username.
+
+Optional:
+
+- `client_id` (String) The application's ID.
+- `client_secret` (String, Sensitive) The application's secret.
+- `endpoint_params` (Map of List of String) The additional parameters for requests to the token endpoint.
+- `in` (String) Specifies how is the client ID & secret sent. Possible values are `params` e `header`. Se ausente, será auto detectado.
+- `scopes` (List of String) The optional requested permissions.
+
+
+<a id="nestedatt--security--oauth2--refresh_token"></a>
+### Nested Schema for `security.oauth2.refresh_token`
+
+Required:
+
+- `refresh_token` (String, Sensitive) The refresh token.
+- `token_url` (String) The token URL to be used for this flow.
+
+Optional:
+
+- `client_id` (String) The application's ID.
+- `client_secret` (String, Sensitive) The application's secret.
+- `in` (String) Specifies how is the client ID & secret sent. Possible values are `params` e `header`. Se ausente, será auto detectado.
+- `scopes` (List of String) The optional requested permissions.
+- `token_type` (String) The type of the access token. Defaults to "Bearer".

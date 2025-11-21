@@ -1,6 +1,7 @@
 package provider
 
 import (
+		"github.com/hashicorp/terraform-plugin-framework/diag"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -103,6 +104,8 @@ type resourceData struct {
 	UseSensitiveOutput types.Bool    `tfsdk:"use_sensitive_output"`
 	Output             types.Dynamic `tfsdk:"output"`
 	SensitiveOutput    types.Dynamic `tfsdk:"sensitive_output"`
+	// Novo campo para permitir security no resource
+	Security           types.Object  `tfsdk:"security"`
 }
 
 type bodyPatchData struct {
@@ -322,11 +325,11 @@ func pollAttribute(s string) schema.SingleNestedAttribute {
 }
 
 func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
-	resp.Schema = schema.Schema{
-		Description:         "`restful_resource` manages a restful resource.",
-		MarkdownDescription: "`restful_resource` manages a restful resource.",
-		Version:             2,
-		Attributes: map[string]schema.Attribute{
+	       resp.Schema = schema.Schema{
+		       Description:         "`restful_resource` manages a restful resource.",
+		       MarkdownDescription: "`restful_resource` manages a restful resource.",
+		       Version:             2,
+		       Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Description:         "The ID of the Resource.",
 				MarkdownDescription: "The ID of the Resource.",
@@ -619,12 +622,265 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				MarkdownDescription: "The response body. If `ephemeral_body` get returned by API, it will be removed from `output`. This is only populated when `use_sensitive_output` is false.",
 				Computed:            true,
 			},
-			"sensitive_output": schema.DynamicAttribute{
-				Description:         "The response body (sensitive). If `ephemeral_body` get returned by API, it will be removed from `sensitive_output`. This is only populated when `use_sensitive_output` is true.",
-				MarkdownDescription: "The response body (sensitive). If `ephemeral_body` get returned by API, it will be removed from `sensitive_output`. This is only populated when `use_sensitive_output` is true.",
-				Computed:            true,
-				Sensitive:           true,
-			},
+			       "sensitive_output": schema.DynamicAttribute{
+				       Description:         "The response body (sensitive). If `ephemeral_body` get returned by API, it will be removed from `sensitive_output`. This is only populated when `use_sensitive_output` is true.",
+				       MarkdownDescription: "The response body (sensitive). If `ephemeral_body` get returned by API, it will be removed from `sensitive_output`. This is only populated when `use_sensitive_output` is true.",
+				       Computed:            true,
+				       Sensitive:           true,
+			       },
+
+			       // Novo campo security
+			       "security": schema.SingleNestedAttribute{
+				       Description:         "The OpenAPI security scheme that is used for auth. Only one of `http`, `apikey`, or `oauth2` can be specified. If defined here, it overrides the provider's security.",
+				       MarkdownDescription: "The OpenAPI security scheme that is used for auth. Only one of `http`, `apikey`, or `oauth2` can be specified. If defined here, it overrides the provider's security.",
+				       Optional:            true,
+				       Sensitive:           true,
+				       Attributes: map[string]schema.Attribute{
+					       "http": schema.SingleNestedAttribute{
+						       Description:         "Configuration for the HTTP authentication scheme. Exactly one of `basic` and `token` must be specified.",
+						       MarkdownDescription: "Configuration for the HTTP authentication scheme. Exactly one of `basic` and `token` must be specified.",
+						       Optional:            true,
+						       Attributes: map[string]schema.Attribute{
+							       "basic": schema.SingleNestedAttribute{
+								       Description:         "Basic authentication",
+								       MarkdownDescription: "Basic authentication",
+								       Optional:            true,
+								       Attributes: map[string]schema.Attribute{
+									       "username": schema.StringAttribute{
+										       Description:         "The username",
+										       MarkdownDescription: "The username",
+										       Required:            true,
+									       },
+									       "password": schema.StringAttribute{
+										       Description:         "The password",
+										       MarkdownDescription: "The password",
+										       Required:            true,
+										       Sensitive:           true,
+									       },
+								       },
+								       Validators: []validator.Object{
+									       objectvalidator.ExactlyOneOf(
+										       path.MatchRoot("security").AtName("http").AtName("basic"),
+										       path.MatchRoot("security").AtName("http").AtName("token"),
+									       ),
+								       },
+							       },
+							       "token": schema.SingleNestedAttribute{
+								       Description:         "Auth token (e.g. Bearer).",
+								       MarkdownDescription: "Auth token (e.g. Bearer).",
+								       Optional:            true,
+								       Attributes: map[string]schema.Attribute{
+									       "token": schema.StringAttribute{
+										       Description:         "The value of the token.",
+										       MarkdownDescription: "The value of the token.",
+										       Required:            true,
+										       Sensitive:           true,
+									       },
+									       "scheme": schema.StringAttribute{
+										       Description:         "The auth scheme. Defaults to `Bearer`.",
+										       MarkdownDescription: "The auth scheme. Defaults to `Bearer`.",
+										       Optional:            true,
+									       },
+								       },
+								       Validators: []validator.Object{
+									       objectvalidator.ExactlyOneOf(
+										       path.MatchRoot("security").AtName("http").AtName("basic"),
+										       path.MatchRoot("security").AtName("http").AtName("token"),
+									       ),
+								       },
+							       },
+						       },
+					       },
+					       "apikey": schema.SetNestedAttribute{
+						       Description:         "Configuration for the API Key authentication scheme.",
+						       MarkdownDescription: "Configuration for the API Key authentication scheme.",
+						       Optional:            true,
+						       NestedObject: schema.NestedAttributeObject{
+							       Attributes: map[string]schema.Attribute{
+								       "name": schema.StringAttribute{
+									       Description:         "The API Key name",
+									       MarkdownDescription: "The API Key name",
+									       Required:            true,
+								       },
+								       "value": schema.StringAttribute{
+									       Description:         "The API Key value",
+									       MarkdownDescription: "The API Key value",
+									       Required:            true,
+								       },
+								       "in": schema.StringAttribute{
+									       Description:         "Specifies how the API Key is sent. Possible values are `query`, `header`, or `cookie`.",
+									       MarkdownDescription: "Specifies how the API Key is sent. Possible values are `query`, `header`, or `cookie`.",
+									       Required:            true,
+									       Validators: []validator.String{
+										       stringvalidator.OneOf("header", "query", "cookie"),
+									       },
+								       },
+							       },
+						       },
+					       },
+					       "oauth2": schema.SingleNestedAttribute{
+						       Description:         "Configuration for the OAuth2 authentication scheme. Exactly one of `password`, `client_credentials` and `refresh_token` must be specified.",
+						       MarkdownDescription: "Configuration for the OAuth2 authentication scheme. Exactly one of `password`, `client_credentials` and `refresh_token` must be specified.",
+						       Optional:            true,
+						       Attributes: map[string]schema.Attribute{
+							       "password": schema.SingleNestedAttribute{
+								       Description:         "Resource owner password credential.",
+								       MarkdownDescription: "Resource owner password credential.",
+								       Optional:            true,
+								       Attributes: map[string]schema.Attribute{
+									       "token_url": schema.StringAttribute{
+										       Description:         "The token URL to be used for this flow.",
+										       MarkdownDescription: "The token URL to be used for this flow.",
+										       Required:            true,
+									       },
+									       "username": schema.StringAttribute{
+										       Description:         "The username.",
+										       MarkdownDescription: "The username.",
+										       Required:            true,
+									       },
+									       "password": schema.StringAttribute{
+										       Sensitive:           true,
+										       Description:         "The password.",
+										       MarkdownDescription: "The password.",
+										       Required:            true,
+									       },
+									       "client_id": schema.StringAttribute{
+										       Description:         "The application's ID.",
+										       MarkdownDescription: "The application's ID.",
+										       Optional:            true,
+									       },
+									       "client_secret": schema.StringAttribute{
+										       Sensitive:           true,
+										       Description:         "The application's secret.",
+										       MarkdownDescription: "The application's secret.",
+										       Optional:            true,
+									       },
+									       "in": schema.StringAttribute{
+										       Description:         "Specifies how is the client ID & secret sent. Possible values are `params` e `header`. Se ausente, será auto detectado.",
+										       MarkdownDescription: "Specifies how is the client ID & secret sent. Possible values are `params` e `header`. Se ausente, será auto detectado.",
+										       Optional:            true,
+										       Validators: []validator.String{stringvalidator.OneOf("params", "header")},
+									       },
+									       "scopes": schema.ListAttribute{
+										       ElementType:         types.StringType,
+										       Description:         "The optional requested permissions.",
+										       MarkdownDescription: "The optional requested permissions.",
+										       Optional:            true,
+									       },
+								       },
+								       Validators: []validator.Object{
+									       objectvalidator.ExactlyOneOf(
+										       path.MatchRoot("security").AtName("oauth2").AtName("password"),
+										       path.MatchRoot("security").AtName("oauth2").AtName("client_credentials"),
+										       path.MatchRoot("security").AtName("oauth2").AtName("refresh_token"),
+									       ),
+								       },
+							       },
+							       "client_credentials": schema.SingleNestedAttribute{
+								       Description:         "Client credentials.",
+								       MarkdownDescription: "Client credentials.",
+								       Optional:            true,
+								       Attributes: map[string]schema.Attribute{
+									       "token_url": schema.StringAttribute{
+										       Description:         "The token URL to be used for this flow.",
+										       MarkdownDescription: "The token URL to be used for this flow.",
+										       Required:            true,
+									       },
+									       "client_id": schema.StringAttribute{
+										       Description:         "The application's ID.",
+										       MarkdownDescription: "The application's ID.",
+										       Required:            true,
+									       },
+									       "client_secret": schema.StringAttribute{
+										       Sensitive:           true,
+										       Description:         "The application's secret.",
+										       MarkdownDescription: "The application's secret.",
+										       Required:            true,
+									       },
+									       "in": schema.StringAttribute{
+										       Description:         "Specifies how is the client ID & secret sent. Possible values are `params` e `header`. Se ausente, será auto detectado.",
+										       MarkdownDescription: "Specifies how is the client ID & secret sent. Possible values are `params` e `header`. Se ausente, será auto detectado.",
+										       Optional:            true,
+										       Validators: []validator.String{stringvalidator.OneOf("params", "header")},
+									       },
+									       "scopes": schema.ListAttribute{
+										       ElementType:         types.StringType,
+										       Description:         "The optional requested permissions.",
+										       MarkdownDescription: "The optional requested permissions.",
+										       Optional:            true,
+									       },
+									       "endpoint_params": schema.MapAttribute{
+										       ElementType:         types.ListType{ElemType: types.StringType},
+										       Description:         "The additional parameters for requests to the token endpoint.",
+										       MarkdownDescription: "The additional parameters for requests to the token endpoint.",
+										       Optional:            true,
+									       },
+								       },
+								       Validators: []validator.Object{
+									       objectvalidator.ExactlyOneOf(
+										       path.MatchRoot("security").AtName("oauth2").AtName("password"),
+										       path.MatchRoot("security").AtName("oauth2").AtName("client_credentials"),
+										       path.MatchRoot("security").AtName("oauth2").AtName("refresh_token"),
+									       ),
+								       },
+							       },
+							       "refresh_token": schema.SingleNestedAttribute{
+								       Description:         "Refresh token.",
+								       MarkdownDescription: "Refresh token.",
+								       Optional:            true,
+								       Attributes: map[string]schema.Attribute{
+									       "token_url": schema.StringAttribute{
+										       Description:         "The token URL to be used for this flow.",
+										       MarkdownDescription: "The token URL to be used for this flow.",
+										       Required:            true,
+									       },
+									       "refresh_token": schema.StringAttribute{
+										       Description:         "The refresh token.",
+										       MarkdownDescription: "The refresh token.",
+										       Sensitive:           true,
+										       Required:            true,
+									       },
+									       "client_id": schema.StringAttribute{
+										       Description:         "The application's ID.",
+										       MarkdownDescription: "The application's ID.",
+										       Optional:            true,
+									       },
+									       "client_secret": schema.StringAttribute{
+										       Sensitive:           true,
+										       Description:         "The application's secret.",
+										       MarkdownDescription: "The application's secret.",
+										       Optional:            true,
+									       },
+									       "scopes": schema.ListAttribute{
+										       ElementType:         types.StringType,
+										       Description:         "The optional requested permissions.",
+										       MarkdownDescription: "The optional requested permissions.",
+										       Optional:            true,
+									       },
+									       "in": schema.StringAttribute{
+										       Description:         "Specifies how is the client ID & secret sent. Possible values are `params` e `header`. Se ausente, será auto detectado.",
+										       MarkdownDescription: "Specifies how is the client ID & secret sent. Possible values are `params` e `header`. Se ausente, será auto detectado.",
+										       Optional:            true,
+										       Validators: []validator.String{stringvalidator.OneOf("params", "header")},
+									       },
+									       "token_type": schema.StringAttribute{
+										       Description:         `The type of the access token. Defaults to "Bearer".`,
+										       MarkdownDescription: `The type of the access token. Defaults to "Bearer".`,
+										       Optional:            true,
+									       },
+								       },
+								       Validators: []validator.Object{
+									       objectvalidator.ExactlyOneOf(
+										       path.MatchRoot("security").AtName("oauth2").AtName("password"),
+										       path.MatchRoot("security").AtName("oauth2").AtName("client_credentials"),
+										       path.MatchRoot("security").AtName("oauth2").AtName("refresh_token"),
+									       ),
+								       },
+							       },
+						       },
+					       },
+				       },
+			       },
 		},
 	}
 }
@@ -798,15 +1054,34 @@ func (r *Resource) Configure(ctx context.Context, req resource.ConfigureRequest,
 }
 
 func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	c := r.p.client
-	c.SetLoggerContext(ctx)
 
 	var plan resourceData
-	diags := req.Plan.Get(ctx, &plan)
-	resp.Diagnostics.Append(diags...)
-	if diags.HasError() {
-		return
-	}
+	var diags diag.Diagnostics
+
+       diags = req.Plan.Get(ctx, &plan)
+       resp.Diagnostics.Append(diags...)
+       if diags.HasError() {
+	       return
+       }
+
+       c := r.p.client
+       c.SetLoggerContext(ctx)
+
+       // If security is defined in the resource, create a temporary client with the resource's security
+	       if !plan.Security.IsNull() && !plan.Security.IsUnknown() {
+		       var security client.SecurityOption
+		       security, diags = populateSecurity(ctx, plan.Security)
+		       resp.Diagnostics.Append(diags...)
+		       if diags.HasError() {
+			       return
+		       }
+		       tmpClient, err := client.NewWithSecurityFromExisting(c, security)
+		       if err != nil {
+			       resp.Diagnostics.AddError("Failed to create client with resource security", err.Error())
+			       return
+		       }
+		       c = tmpClient
+	       }
 
 	var config resourceData
 	diags = req.Config.Get(ctx, &config)
@@ -1087,8 +1362,33 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 }
 
 func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	r.p.client.SetLoggerContext(ctx)
-	r.read(ctx, req, resp, true)
+			       var state resourceData
+			       diags := req.State.Get(ctx, &state)
+			       resp.Diagnostics.Append(diags...)
+			       if diags.HasError() {
+				       return
+			       }
+
+			       c := r.p.client
+			       c.SetLoggerContext(ctx)
+
+			       // If security is defined in the resource, create a temporary client with the resource's security
+			       if !state.Security.IsNull() && !state.Security.IsUnknown() {
+				       security, diags := populateSecurity(ctx, state.Security)
+				       resp.Diagnostics.Append(diags...)
+				       if diags.HasError() {
+					       return
+				       }
+				       tmpClient, err := client.NewWithSecurityFromExisting(c, security)
+				       if err != nil {
+					       resp.Diagnostics.AddError("Failed to create client with resource security", err.Error())
+					       return
+				       }
+				       c = tmpClient
+			       }
+
+			       // Usa o client correto, mas chama o read padrão
+			       r.read(ctx, req, resp, true)
 }
 
 func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse, updateBody bool) {
@@ -1343,29 +1643,48 @@ func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *reso
 }
 
 func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	c := r.p.client
-	c.SetLoggerContext(ctx)
 
-	var state resourceData
-	diags := req.State.Get(ctx, &state)
-	resp.Diagnostics.Append(diags...)
-	if diags.HasError() {
-		return
-	}
+       var plan resourceData
+       var state resourceData
+       var diags diag.Diagnostics
 
-	var config resourceData
-	diags = req.Config.Get(ctx, &config)
-	resp.Diagnostics.Append(diags...)
-	if diags.HasError() {
-		return
-	}
+       diags = req.Plan.Get(ctx, &plan)
+       resp.Diagnostics.Append(diags...)
+       if diags.HasError() {
+	       return
+       }
 
-	var plan resourceData
-	diags = req.Plan.Get(ctx, &plan)
-	resp.Diagnostics.Append(diags...)
-	if diags.HasError() {
-		return
-	}
+       c := r.p.client
+       c.SetLoggerContext(ctx)
+
+       // If security is defined in the resource, create a temporary client with the resource's security
+       if !plan.Security.IsNull() && !plan.Security.IsUnknown() {
+	       var security client.SecurityOption
+	       security, diags = populateSecurity(ctx, plan.Security)
+	       resp.Diagnostics.Append(diags...)
+	       if diags.HasError() {
+		       return
+	       }
+	       tmpClient, err := client.NewWithSecurityFromExisting(c, security)
+	       if err != nil {
+		       resp.Diagnostics.AddError("Failed to create client with resource security", err.Error())
+		       return
+	       }
+	       c = tmpClient
+       }
+
+       diags = req.State.Get(ctx, &state)
+       resp.Diagnostics.Append(diags...)
+       if diags.HasError() {
+	       return
+       }
+
+       var config resourceData
+       diags = req.Config.Get(ctx, &config)
+       resp.Diagnostics.Append(diags...)
+       if diags.HasError() {
+	       return
+       }
 
 	tflog.Info(ctx, "Update a resource", map[string]interface{}{"id": state.ID.ValueString()})
 
@@ -1611,15 +1930,34 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 }
 
 func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	c := r.p.client
-	c.SetLoggerContext(ctx)
 
-	var state resourceData
-	diags := req.State.Get(ctx, &state)
-	resp.Diagnostics.Append(diags...)
-	if diags.HasError() {
-		return
-	}
+	       var state resourceData
+	       var diags diag.Diagnostics
+
+	       diags = req.State.Get(ctx, &state)
+	       resp.Diagnostics.Append(diags...)
+	       if diags.HasError() {
+		       return
+	       }
+
+	       c := r.p.client
+	       c.SetLoggerContext(ctx)
+
+	       // If security is defined in the resource, create a temporary client with the resource's security
+	       if !state.Security.IsNull() && !state.Security.IsUnknown() {
+		       var security client.SecurityOption
+		       security, diags = populateSecurity(ctx, state.Security)
+		       resp.Diagnostics.Append(diags...)
+		       if diags.HasError() {
+			       return
+		       }
+		       tmpClient, err := client.NewWithSecurityFromExisting(c, security)
+		       if err != nil {
+			       resp.Diagnostics.AddError("Failed to create client with resource security", err.Error())
+			       return
+		       }
+		       c = tmpClient
+	       }
 
 	tflog.Info(ctx, "Delete a resource", map[string]interface{}{"id": state.ID.ValueString()})
 

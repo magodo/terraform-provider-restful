@@ -11,6 +11,7 @@ The document of this provider is available on [Terraform Provider Registry](http
 ## Features
 
 - Different authentication choices: HTTP auth (basic, token), API Key auth and OAuth2 (client credential, password credential, refresh token).
+- Resource-level security configuration: Override provider-level authentication per resource for fine-grained control.
 - Customized CRUD methods and paths
 - Support precheck conditions
 - Support polling asynchronous operations

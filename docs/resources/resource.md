@@ -13,6 +13,22 @@ description: |-
 ## Example Usage
 
 ```terraform
+resource "restful_resource" "secret" {
+  path = "/api/secrets"
+  use_sensitive_output = true
+  body = {
+    key   = "api_key"
+    value = "secret_value"
+  }
+}
+
+output "secret_data" {
+  value     = restful_resource.secret.sensitive_output
+  sensitive = true
+}
+```
+
+```terraform
 resource "restful_resource" "rg" {
   path = format("/subscriptions/%s/resourceGroups/%s", var.subscription_id, "example")
   query = {
@@ -45,8 +61,6 @@ resource "restful_resource" "rg" {
 
 ### Optional
 
-> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
-
 - `check_existance` (Boolean) Whether to check resource already existed? Defaults to `false`.
 - `create_header` (Map of String) The header parameters that are applied to each create request. This overrides the `header` set in the resource block.
 - `create_method` (String) The method used to create the resource. Possible values are `PUT`, `POST` and `PATCH`. This overrides the `create_method` set in the provider block (defaults to POST).
@@ -58,7 +72,7 @@ resource "restful_resource" "rg" {
 - `delete_method` (String) The method used to delete the resource. Possible values are `DELETE`, `POST`, `PUT` and `PATCH`. This overrides the `delete_method` set in the provider block (defaults to DELETE).
 - `delete_path` (String) The API path used to delete the resource. The `id` is used instead if `delete_path` is absent. This can be a string literal, or combined by following params: path param: `$(path)` expanded to `path`, body param: `$(body.x.y.z)` expands to the `x.y.z` property of the API body. Especially for the body param, it can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `query_escape` (URL query escape), `query_unescape` (URL query unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`).
 - `delete_query` (Map of List of String) The query parameters that are applied to each delete request. This overrides the `query` set in the resource block. The query value can be a string literal, or combined by the body param: `$(body.x.y.z)` that expands to the `x.y.z` property of the API body. It can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `query_escape` (URL query escape), `query_unescape` (URL query unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`).
-- `ephemeral_body` (Dynamic, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) The ephemeral (write-only) properties of the resource. This will be merge-patched to the `body` to construct the actual request body.
+- `ephemeral_body` (Dynamic) The ephemeral (write-only) properties of the resource. This will be merge-patched to the `body` to construct the actual request body.
 - `force_new_attrs` (Set of String) A set of `body` attribute paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) whose value once changed, will trigger a replace of this resource. Note this only take effects when the `body` is a unknown before apply. Technically, we do a JSON merge patch and check whether the attribute path appear in the merge patch.
 - `header` (Map of String) The header parameters that are applied to each request. This overrides the `header` set in the provider block.
 - `merge_patch_disabled` (Boolean) Whether to use a JSON Merge Patch as the request body in the PATCH update? This is only effective when `update_method` is set to `PATCH`. This overrides the `merge_patch_disabled` set in the provider block (defaults to `false`).
@@ -76,6 +90,7 @@ resource "restful_resource" "rg" {
 - `read_query` (Map of List of String) The query parameters that are applied to each read request. This overrides the `query` set in the resource block. The query value can be a string literal, or combined by the body param: `$(body.x.y.z)` that expands to the `x.y.z` property of the API body. It can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `query_escape` (URL query escape), `query_unescape` (URL query unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`).
 - `read_response_template` (String) The raw template for transforming the response of reading (after selector). It can contain `$(body.x.y.z)` parameter that reference property from the response. This is only used to transform the read response to the same struct as the `body`.
 - `read_selector` (String) A selector expression in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries), that is used when read returns a collection of resources, to select exactly one member resource of from it. This can be a string literal, or combined by the body param: `$(body.x.y.z)` that expands to the `x.y.z` property of the API body. It can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `query_escape` (URL query escape), `query_unescape` (URL query unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`). By default, the whole response body is used as the body.
+- `security` (Attributes, Sensitive) The OpenAPI security scheme that is used for auth. Only one of `http`, `apikey`, or `oauth2` can be specified. If defined here, it overrides the provider's security. (see [below for nested schema](#nestedatt--security))
 - `update_body_patches` (Attributes List) The body patches for update only. Any change here won't cause a update API call by its own, only changes from `body` does. Note that this is almost only useful for APIs that require *after-create* attribute for an update (e.g. the resource ID). (see [below for nested schema](#nestedatt--update_body_patches))
 - `update_header` (Map of String) The header parameters that are applied to each update request. This overrides the `header` set in the resource block. The header value can be a string literal, or combined by the body param: `$(body.x.y.z)` that expands to the `x.y.z` property of the API body. It can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `query_escape` (URL query escape), `query_unescape` (URL query unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`).
 - `update_method` (String) The method used to update the resource. Possible values are `PUT`, `POST`, and `PATCH`. This overrides the `update_method` set in the provider block (defaults to PUT).
@@ -296,6 +311,116 @@ Optional:
 
 
 
+<a id="nestedatt--security"></a>
+### Nested Schema for `security`
+
+Optional:
+
+- `apikey` (Attributes Set) Configuration for the API Key authentication scheme. (see [below for nested schema](#nestedatt--security--apikey))
+- `http` (Attributes) Configuration for the HTTP authentication scheme. Exactly one of `basic` and `token` must be specified. (see [below for nested schema](#nestedatt--security--http))
+- `oauth2` (Attributes) Configuration for the OAuth2 authentication scheme. Exactly one of `password`, `client_credentials` and `refresh_token` must be specified. (see [below for nested schema](#nestedatt--security--oauth2))
+
+<a id="nestedatt--security--apikey"></a>
+### Nested Schema for `security.apikey`
+
+Required:
+
+- `in` (String) Specifies how the API Key is sent. Possible values are `query`, `header`, or `cookie`.
+- `name` (String) The API Key name
+- `value` (String) The API Key value
+
+
+<a id="nestedatt--security--http"></a>
+### Nested Schema for `security.http`
+
+Optional:
+
+- `basic` (Attributes) Basic authentication (see [below for nested schema](#nestedatt--security--http--basic))
+- `token` (Attributes) Auth token (e.g. Bearer). (see [below for nested schema](#nestedatt--security--http--token))
+
+<a id="nestedatt--security--http--basic"></a>
+### Nested Schema for `security.http.basic`
+
+Required:
+
+- `password` (String, Sensitive) The password
+- `username` (String) The username
+
+
+<a id="nestedatt--security--http--token"></a>
+### Nested Schema for `security.http.token`
+
+Required:
+
+- `token` (String, Sensitive) The value of the token.
+
+Optional:
+
+- `scheme` (String) The auth scheme. Defaults to `Bearer`.
+
+
+
+<a id="nestedatt--security--oauth2"></a>
+### Nested Schema for `security.oauth2`
+
+Optional:
+
+- `client_credentials` (Attributes) Client credentials. (see [below for nested schema](#nestedatt--security--oauth2--client_credentials))
+- `password` (Attributes) Resource owner password credential. (see [below for nested schema](#nestedatt--security--oauth2--password))
+- `refresh_token` (Attributes) Refresh token. (see [below for nested schema](#nestedatt--security--oauth2--refresh_token))
+
+<a id="nestedatt--security--oauth2--client_credentials"></a>
+### Nested Schema for `security.oauth2.client_credentials`
+
+Required:
+
+- `client_id` (String) The application's ID.
+- `client_secret` (String, Sensitive) The application's secret.
+- `token_url` (String) The token URL to be used for this flow.
+
+Optional:
+
+- `endpoint_params` (Map of List of String) The additional parameters for requests to the token endpoint.
+- `in` (String) Specifies how is the client ID & secret sent. Possible values are `params` e `header`. Se ausente, será auto detectado.
+- `scopes` (List of String) The optional requested permissions.
+
+
+<a id="nestedatt--security--oauth2--password"></a>
+### Nested Schema for `security.oauth2.password`
+
+Required:
+
+- `password` (String, Sensitive) The password.
+- `token_url` (String) The token URL to be used for this flow.
+- `username` (String) The username.
+
+Optional:
+
+- `client_id` (String) The application's ID.
+- `client_secret` (String, Sensitive) The application's secret.
+- `in` (String) Specifies how is the client ID & secret sent. Possible values are `params` e `header`. Se ausente, será auto detectado.
+- `scopes` (List of String) The optional requested permissions.
+
+
+<a id="nestedatt--security--oauth2--refresh_token"></a>
+### Nested Schema for `security.oauth2.refresh_token`
+
+Required:
+
+- `refresh_token` (String, Sensitive) The refresh token.
+- `token_url` (String) The token URL to be used for this flow.
+
+Optional:
+
+- `client_id` (String) The application's ID.
+- `client_secret` (String, Sensitive) The application's secret.
+- `in` (String) Specifies how is the client ID & secret sent. Possible values are `params` e `header`. Se ausente, será auto detectado.
+- `scopes` (List of String) The optional requested permissions.
+- `token_type` (String) The type of the access token. Defaults to "Bearer".
+
+
+
+
 <a id="nestedatt--update_body_patches"></a>
 ### Nested Schema for `update_body_patches`
 
@@ -311,36 +436,6 @@ Optional:
 ## Import
 
 Import is supported using the following syntax:
-
-In Terraform v1.12.0 and later, the [`import` block](https://developer.hashicorp.com/terraform/language/import) can be used with the `identity` attribute, for example:
-
-```terraform
-import {
-  to = restful_resource.test
-  identity = {
-    id = jsonencode({
-      id = "/posts/1"
-      path = "/posts"
-      body = {
-        foo = null
-      }
-      header = {
-        key = "val"
-      }
-      query = {
-        x = ["y"]
-      }
-    })
-  }
-}
-```
-
-<!-- schema generated by tfplugindocs -->
-### Identity Schema
-
-#### Required
-
-- `id` (String) The import spec described at: https://registry.terraform.io/providers/magodo/restful/latest/docs/resources/resource#import.
 
 In Terraform v1.5.0 and later, the [`import` block](https://developer.hashicorp.com/terraform/language/import) can be used with the `id` attribute, for example:
 
