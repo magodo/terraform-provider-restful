@@ -772,7 +772,7 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 
 // getOutput returns the appropriate output (sensitive or normal) based on use_sensitive_output
 func getOutput(data resourceData) types.Dynamic {
-	if !data.UseSensitiveOutput.IsNull() && data.UseSensitiveOutput.ValueBool() {
+	if data.UseSensitiveOutput.ValueBool() {
 		return data.SensitiveOutput
 	}
 	return data.Output
@@ -1380,7 +1380,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 
 	// Temporarily set the output here, so that the Read at the end can
 	// expand the `$(body)` parameters.
-	if !state.UseSensitiveOutput.IsNull() && state.UseSensitiveOutput.ValueBool() {
+	if state.UseSensitiveOutput.ValueBool() {
 		plan.SensitiveOutput = state.SensitiveOutput
 		plan.Output = types.DynamicNull()
 	} else {
