@@ -51,7 +51,8 @@ type resourceIdentityModel struct {
 type resourceData struct {
 	ID types.String `tfsdk:"id"`
 
-	Path types.String `tfsdk:"path"`
+	Path    types.String `tfsdk:"path"`
+	BaseURL types.String `tfsdk:"base_url"`
 
 	CreateSelector       types.String `tfsdk:"create_selector"`
 	ReadSelector         types.String `tfsdk:"read_selector"`
@@ -336,6 +337,17 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"base_url": schema.StringAttribute{
+				Description:         "The base URL of the API for this resource. If defined, overrides the provider's base_url.",
+				MarkdownDescription: "The base URL of the API for this resource. If defined, overrides the provider's base_url.",
+				Optional:            true,
+				Validators: []validator.String{
+					myvalidator.StringIsParsable("HTTP url", func(s string) error {
+						_, err := url.Parse(s)
+						return err
+					}),
 				},
 			},
 			"path": schema.StringAttribute{
@@ -1064,10 +1076,29 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 	       return
        }
 
-       c := r.p.client
-       c.SetLoggerContext(ctx)
+       // Determine baseURL: resource overrides provider
+       baseURL := plan.BaseURL
+       if baseURL.IsNull() {
+	       baseURL = r.p.config.BaseURL
+       }
+       if baseURL.IsNull() {
+	       resp.Diagnostics.AddError("base_url is required", "Either define base_url in the provider or in the resource.")
+	       return
+       }
 
-       // If security is defined in the resource, create a temporary client with the resource's security
+       var c *client.Client
+       var err error
+       if !plan.BaseURL.IsNull() || (!plan.Security.IsNull() && !plan.Security.IsUnknown()) {
+	       // Need to create a new client
+	       clientOpt := &client.BuildOption{}
+	       if r.p.client != nil {
+		       // Copy TLS and other configs from provider client
+		       clientOpt.CookieEnabled = r.p.client.Client.GetClient().Jar != nil
+		       if transport, ok := r.p.client.Client.GetClient().Transport.(*http.Transport); ok {
+			       clientOpt.TLSConfig = *transport.TLSClientConfig
+		       }
+		       // TODO: copy retry if needed
+	       }
 	       if !plan.Security.IsNull() && !plan.Security.IsUnknown() {
 		       var security client.SecurityOption
 		       security, diags = populateSecurity(ctx, plan.Security)
@@ -1075,13 +1106,18 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 		       if diags.HasError() {
 			       return
 		       }
-		       tmpClient, err := client.NewWithSecurityFromExisting(c, security)
-		       if err != nil {
-			       resp.Diagnostics.AddError("Failed to create client with resource security", err.Error())
-			       return
-		       }
-		       c = tmpClient
+		       clientOpt.Security = security
+	       } else if r.p.client != nil {
+		       clientOpt.Security = r.p.client.Security
 	       }
+	       c, err = client.New(ctx, baseURL.ValueString(), clientOpt)
+	       if err != nil {
+		       resp.Diagnostics.AddError("Failed to create client", err.Error())
+		       return
+	       }
+       } else {
+	       c = r.p.client
+       }
 
 	var config resourceData
 	diags = req.Config.Get(ctx, &config)
@@ -1392,13 +1428,54 @@ func (r Resource) Read(ctx context.Context, req resource.ReadRequest, resp *reso
 }
 
 func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse, updateBody bool) {
-	c := r.p.client
-
 	var state resourceData
 	diags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
+	}
+
+	// Determine baseURL: resource overrides provider
+	baseURL := state.BaseURL
+	if baseURL.IsNull() {
+		baseURL = r.p.config.BaseURL
+	}
+	if baseURL.IsNull() {
+		resp.Diagnostics.AddError("base_url is required", "Either define base_url in the provider or in the resource.")
+		return
+	}
+
+	var c *client.Client
+	var err error
+	if !state.BaseURL.IsNull() || (!state.Security.IsNull() && !state.Security.IsUnknown()) {
+		// Need to create a new client
+		clientOpt := &client.BuildOption{}
+		if r.p.client != nil {
+			// Copy TLS and other configs from provider client
+			clientOpt.CookieEnabled = r.p.client.Client.GetClient().Jar != nil
+			if transport, ok := r.p.client.Client.GetClient().Transport.(*http.Transport); ok {
+				clientOpt.TLSConfig = *transport.TLSClientConfig
+			}
+			// TODO: copy retry if needed
+		}
+		if !state.Security.IsNull() && !state.Security.IsUnknown() {
+			var security client.SecurityOption
+			security, diags = populateSecurity(ctx, state.Security)
+			resp.Diagnostics.Append(diags...)
+			if diags.HasError() {
+				return
+			}
+			clientOpt.Security = security
+		} else if r.p.client != nil {
+			clientOpt.Security = r.p.client.Security
+		}
+		c, err = client.New(ctx, baseURL.ValueString(), clientOpt)
+		if err != nil {
+			resp.Diagnostics.AddError("Failed to create client", err.Error())
+			return
+		}
+	} else {
+		c = r.p.client
 	}
 
 	if updateBody {
@@ -1654,24 +1731,49 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 	       return
        }
 
-       c := r.p.client
-       c.SetLoggerContext(ctx)
-
-       // If security is defined in the resource, create a temporary client with the resource's security
-       if !plan.Security.IsNull() && !plan.Security.IsUnknown() {
-	       var security client.SecurityOption
-	       security, diags = populateSecurity(ctx, plan.Security)
-	       resp.Diagnostics.Append(diags...)
-	       if diags.HasError() {
-		       return
-	       }
-	       tmpClient, err := client.NewWithSecurityFromExisting(c, security)
-	       if err != nil {
-		       resp.Diagnostics.AddError("Failed to create client with resource security", err.Error())
-		       return
-	       }
-	       c = tmpClient
+       // Determine baseURL: resource overrides provider
+       baseURL := plan.BaseURL
+       if baseURL.IsNull() {
+	       baseURL = r.p.config.BaseURL
        }
+       if baseURL.IsNull() {
+	       resp.Diagnostics.AddError("base_url is required", "Either define base_url in the provider or in the resource.")
+	       return
+       }
+
+       var c *client.Client
+       var err error
+       if !plan.BaseURL.IsNull() || (!plan.Security.IsNull() && !plan.Security.IsUnknown()) {
+	       // Need to create a new client
+	       clientOpt := &client.BuildOption{}
+	       if r.p.client != nil {
+		       // Copy TLS and other configs from provider client
+		       clientOpt.CookieEnabled = r.p.client.Client.GetClient().Jar != nil
+		       if transport, ok := r.p.client.Client.GetClient().Transport.(*http.Transport); ok {
+			       clientOpt.TLSConfig = *transport.TLSClientConfig
+		       }
+		       // TODO: copy retry if needed
+	       }
+	       if !plan.Security.IsNull() && !plan.Security.IsUnknown() {
+		       var security client.SecurityOption
+		       security, diags = populateSecurity(ctx, plan.Security)
+		       resp.Diagnostics.Append(diags...)
+		       if diags.HasError() {
+			       return
+		       }
+		       clientOpt.Security = security
+	       } else if r.p.client != nil {
+		       clientOpt.Security = r.p.client.Security
+	       }
+	       c, err = client.New(ctx, baseURL.ValueString(), clientOpt)
+	       if err != nil {
+		       resp.Diagnostics.AddError("Failed to create client", err.Error())
+		       return
+	       }
+       } else {
+	       c = r.p.client
+       }
+       c.SetLoggerContext(ctx)
 
        diags = req.State.Get(ctx, &state)
        resp.Diagnostics.Append(diags...)
@@ -1940,24 +2042,49 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 		       return
 	       }
 
-	       c := r.p.client
-	       c.SetLoggerContext(ctx)
-
-	       // If security is defined in the resource, create a temporary client with the resource's security
-	       if !state.Security.IsNull() && !state.Security.IsUnknown() {
-		       var security client.SecurityOption
-		       security, diags = populateSecurity(ctx, state.Security)
-		       resp.Diagnostics.Append(diags...)
-		       if diags.HasError() {
-			       return
-		       }
-		       tmpClient, err := client.NewWithSecurityFromExisting(c, security)
-		       if err != nil {
-			       resp.Diagnostics.AddError("Failed to create client with resource security", err.Error())
-			       return
-		       }
-		       c = tmpClient
+	       // Determine baseURL: resource overrides provider
+	       baseURL := state.BaseURL
+	       if baseURL.IsNull() {
+		       baseURL = r.p.config.BaseURL
 	       }
+	       if baseURL.IsNull() {
+		       resp.Diagnostics.AddError("base_url is required", "Either define base_url in the provider or in the resource.")
+		       return
+	       }
+
+	       var c *client.Client
+	       var err error
+	       if !state.BaseURL.IsNull() || (!state.Security.IsNull() && !state.Security.IsUnknown()) {
+		       // Need to create a new client
+		       clientOpt := &client.BuildOption{}
+		       if r.p.client != nil {
+			       // Copy TLS and other configs from provider client
+			       clientOpt.CookieEnabled = r.p.client.Client.GetClient().Jar != nil
+			       if transport, ok := r.p.client.Client.GetClient().Transport.(*http.Transport); ok {
+				       clientOpt.TLSConfig = *transport.TLSClientConfig
+			       }
+			       // TODO: copy retry if needed
+		       }
+		       if !state.Security.IsNull() && !state.Security.IsUnknown() {
+			       var security client.SecurityOption
+			       security, diags = populateSecurity(ctx, state.Security)
+			       resp.Diagnostics.Append(diags...)
+			       if diags.HasError() {
+				       return
+			       }
+			       clientOpt.Security = security
+		       } else if r.p.client != nil {
+			       clientOpt.Security = r.p.client.Security
+		       }
+		       c, err = client.New(ctx, baseURL.ValueString(), clientOpt)
+		       if err != nil {
+			       resp.Diagnostics.AddError("Failed to create client", err.Error())
+			       return
+		       }
+       } else {
+	       c = r.p.client
+       }
+       c.SetLoggerContext(ctx)
 
 	tflog.Info(ctx, "Delete a resource", map[string]interface{}{"id": state.ID.ValueString()})
 

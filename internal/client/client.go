@@ -117,6 +117,7 @@ func (h Header) ToTFValue() types.Map {
 
 type Client struct {
 	*resty.Client
+	Security SecurityOption
 }
 
 func New(ctx context.Context, baseURL string, opt *BuildOption) (*Client, error) {
@@ -149,7 +150,7 @@ func New(ctx context.Context, baseURL string, opt *BuildOption) (*Client, error)
 
 	client.SetBaseURL(baseURL)
 
-	return &Client{client}, nil
+	return &Client{Client: client, Security: opt.Security}, nil
 }
 
 type RetryOption struct {

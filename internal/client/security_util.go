@@ -17,3 +17,14 @@ func NewWithSecurityFromExisting(base *Client, security SecurityOption) (*Client
 	}
 	return New(context.Background(), baseURL, opt)
 }
+
+// NewWithBaseURLFromExisting creates a new client by copying the base client's configs, but with a new baseURL.
+func NewWithBaseURLFromExisting(base *Client, baseURL string) (*Client, error) {
+	opt := &BuildOption{
+		Security:      base.Security,
+		CookieEnabled: base.Client.GetClient().Jar != nil,
+		TLSConfig:     *base.Client.GetClient().Transport.(*http.Transport).TLSClientConfig,
+		// Retry pode ser nil ou copiado se necessário
+	}
+	return New(context.Background(), baseURL, opt)
+}

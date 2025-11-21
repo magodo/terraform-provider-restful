@@ -35,6 +35,7 @@ var _ provider.Provider = &Provider{}
 type Provider struct {
 	client *client.Client
 	apiOpt apiOption
+	config providerConfig
 	once   sync.Once
 }
 
@@ -194,7 +195,7 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 			"base_url": schema.StringAttribute{
 				Description:         "The base URL of the API provider.",
 				MarkdownDescription: "The base URL of the API provider.",
-				Required:            true,
+				Optional:            true,
 				Validators: []validator.String{
 					myvalidator.StringIsParsable("HTTP url", func(s string) error {
 						_, err := url.Parse(s)
@@ -710,14 +711,16 @@ func (p *Provider) Init(ctx context.Context, config providerConfig) diag.Diagnos
 			diags diag.Diagnostics
 			err   error
 		)
-		p.client, err = client.New(ctx, config.BaseURL.ValueString(), clientOpt)
-		if err != nil {
-			diags.AddError(
-				"Failed to configure provider",
-				fmt.Sprintf("Failed to new client: %v", err),
-			)
-			odiags = diags
-			return
+		if !config.BaseURL.IsNull() {
+			p.client, err = client.New(ctx, config.BaseURL.ValueString(), clientOpt)
+			if err != nil {
+				diags.AddError(
+					"Failed to configure provider",
+					fmt.Sprintf("Failed to new client: %v", err),
+				)
+				odiags = diags
+				return
+			}
 		}
 
 		uRL, err := url.Parse(config.BaseURL.ValueString())
@@ -779,6 +782,8 @@ func (p *Provider) Init(ctx context.Context, config providerConfig) diag.Diagnos
 			p.apiOpt.Header = headers
 		}
 	})
+
+	p.config = config
 
 	return odiags
 }
