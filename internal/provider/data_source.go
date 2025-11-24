@@ -11,8 +11,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
-	"github.com/magodo/terraform-provider-restful/internal/client"
 	"github.com/magodo/terraform-plugin-framework-helper/dynamic"
+	"github.com/magodo/terraform-provider-restful/internal/client"
 )
 
 type DataSource struct {
@@ -274,7 +274,7 @@ func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp 
 		return
 	}
 	// Populate the appropriate output based on use_sensitive_output
-	if state.UseSensitiveOutput.ValueBool() {
+	if config.UseSensitiveOutput.ValueBool() {
 		state.SensitiveOutput = output
 		state.Output = types.DynamicNull()
 	} else {

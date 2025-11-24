@@ -18,6 +18,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/identityschema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -610,9 +611,11 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				ElementType:         types.StringType,
 			},
 			"use_sensitive_output": schema.BoolAttribute{
-				Description:         "Whether to use `sensitive_output` instead of `output`. When true, the response will be stored in `sensitive_output` (which is marked as sensitive). Defaults to `false`.",
-				MarkdownDescription: "Whether to use `sensitive_output` instead of `output`. When true, the response will be stored in `sensitive_output` (which is marked as sensitive). Defaults to `false`.",
+				MarkdownDescription: "Whether to use `sensitive_output` instead of `output`. When true, the response will be stored in `sensitive_output` (which is marked as sensitive). Defaults to `false`. Changing this forces a new resource to be created.",
 				Optional:            true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.RequiresReplace(),
+				},
 			},
 			"output": schema.DynamicAttribute{
 				Description:         "The response body. If `ephemeral_body` get returned by API, it will be removed from `output`. This is only populated when `use_sensitive_output` is false.",
@@ -762,16 +765,12 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 	if diff {
 		tflog.Info(ctx, `"ephemeral_body" has changed`)
 		// Mark the appropriate output as unknown based on use_sensitive_output
-		if !plan.UseSensitiveOutput.IsNull() && plan.UseSensitiveOutput.ValueBool() {
-			plan.SensitiveOutput = types.DynamicUnknown()
-		} else {
-			plan.Output = types.DynamicUnknown()
-		}
+		plan.Output = types.DynamicUnknown()
 	}
 }
 
 // getOutput returns the appropriate output (sensitive or normal) based on use_sensitive_output
-func getOutput(data resourceData) types.Dynamic {
+func (r Resource) getOutput(data resourceData) types.Dynamic {
 	if data.UseSensitiveOutput.ValueBool() {
 		return data.SensitiveOutput
 	}
@@ -1105,7 +1104,7 @@ func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *reso
 		tflog.Info(ctx, "Read a resource", map[string]interface{}{"id": state.ID.ValueString()})
 	}
 
-	stateOutput, err := dynamic.ToJSON(getOutput(state))
+	stateOutput, err := dynamic.ToJSON(r.getOutput(state))
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Read failure",
@@ -1369,23 +1368,13 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 
 	tflog.Info(ctx, "Update a resource", map[string]interface{}{"id": state.ID.ValueString()})
 
-	stateOutput, err := dynamic.ToJSON(getOutput(state))
+	stateOutput, err := dynamic.ToJSON(r.getOutput(state))
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Read failure",
 			fmt.Sprintf("marshal state output: %v", err),
 		)
 		return
-	}
-
-	// Temporarily set the output here, so that the Read at the end can
-	// expand the `$(body)` parameters.
-	if state.UseSensitiveOutput.ValueBool() {
-		plan.SensitiveOutput = state.SensitiveOutput
-		plan.Output = types.DynamicNull()
-	} else {
-		plan.Output = state.Output
-		plan.SensitiveOutput = types.DynamicNull()
 	}
 
 	opt, diags := r.p.apiOpt.ForResourceUpdate(ctx, plan, stateOutput)
@@ -1485,7 +1474,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 	if string(stateBody) != string(planBody) || ephemeralDiff {
 		// Precheck
 		if !plan.PrecheckUpdate.IsNull() {
-			unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, state.ID.ValueString(), opt.Header, opt.Query, plan.PrecheckUpdate, state.Output)
+			unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, state.ID.ValueString(), opt.Header, opt.Query, plan.PrecheckUpdate, r.getOutput(state))
 			if diags.HasError() {
 				resp.Diagnostics.Append(diags...)
 				return
@@ -1515,7 +1504,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 
 		path := plan.ID.ValueString()
 		if !plan.UpdatePath.IsNull() {
-			output, err := dynamic.ToJSON(state.Output)
+			output, err := dynamic.ToJSON(r.getOutput(state))
 			if err != nil {
 				resp.Diagnostics.AddError(
 					"Failed to marshal json for `output`",
@@ -1557,7 +1546,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 				return
 			}
 
-			opt, diags := r.p.apiOpt.ForPoll(ctx, opt.Header, opt.Query, d, state.Output)
+			opt, diags := r.p.apiOpt.ForPoll(ctx, opt.Header, opt.Query, d, r.getOutput(state))
 			if diags.HasError() {
 				resp.Diagnostics.Append(diags...)
 				return
@@ -1578,6 +1567,16 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 				return
 			}
 		}
+	}
+
+	// Temporarily set the output here, so that the Read at the end can
+	// expand the `$(body)` parameters.
+	if plan.UseSensitiveOutput.ValueBool() {
+		plan.SensitiveOutput = state.SensitiveOutput
+		plan.Output = types.DynamicNull()
+	} else {
+		plan.Output = state.Output
+		plan.SensitiveOutput = types.DynamicNull()
 	}
 
 	diags = resp.State.Set(ctx, plan)
@@ -1623,7 +1622,7 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 
 	tflog.Info(ctx, "Delete a resource", map[string]interface{}{"id": state.ID.ValueString()})
 
-	stateOutput, err := dynamic.ToJSON(getOutput(state))
+	stateOutput, err := dynamic.ToJSON(r.getOutput(state))
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Failed to marshal json for `output`",
@@ -1640,7 +1639,7 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 
 	// Precheck
 	if !state.PrecheckDelete.IsNull() {
-		unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, state.ID.ValueString(), opt.Header, opt.Query, state.PrecheckDelete, getOutput(state))
+		unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, state.ID.ValueString(), opt.Header, opt.Query, state.PrecheckDelete, r.getOutput(state))
 		if diags.HasError() {
 			resp.Diagnostics.Append(diags...)
 			return
@@ -1713,7 +1712,7 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 			resp.Diagnostics.Append(diags...)
 			return
 		}
-		opt, diags := r.p.apiOpt.ForPoll(ctx, opt.Header, opt.Query, d, state.Output)
+		opt, diags := r.p.apiOpt.ForPoll(ctx, opt.Header, opt.Query, d, r.getOutput(state))
 		if diags.HasError() {
 			resp.Diagnostics.Append(diags...)
 			return

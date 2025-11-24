@@ -362,7 +362,6 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 			},
 		},
 	}
-	return
 }
 
 func (e *EphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequest, resp *ephemeral.OpenResponse) {
@@ -453,7 +452,7 @@ func (e *EphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequest,
 		return
 	}
 	// Populate the appropriate output based on use_sensitive_output
-	if !config.UseSensitiveOutput.IsNull() && config.UseSensitiveOutput.ValueBool() {
+	if config.UseSensitiveOutput.ValueBool() {
 		config.SensitiveOutput = output
 		config.Output = types.DynamicNull()
 	} else {

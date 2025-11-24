@@ -59,7 +59,7 @@ resource "restful_operation" "register_rp" {
 - `precheck` (Attributes List) An array of prechecks that need to pass prior to the "`Create`/`Update`" operation. Exactly one of `mutex` or `api` should be specified. (see [below for nested schema](#nestedatt--precheck))
 - `precheck_delete` (Attributes List) An array of prechecks that need to pass prior to the "`Delete`" operation. Exactly one of `mutex` or `api` should be specified. (see [below for nested schema](#nestedatt--precheck_delete))
 - `query` (Map of List of String) The query parameters that are applied to each request. This overrides the `query` set in the provider block.
-- `use_sensitive_output` (Boolean) Whether to use `sensitive_output` instead of `output`. When true, the response will be stored in `sensitive_output` (which is marked as sensitive). Defaults to `false`.
+- `use_sensitive_output` (Boolean) Whether to use `sensitive_output` instead of `output`. When true, the response will be stored in `sensitive_output` (which is marked as sensitive). Defaults to `false`. Changing this forces a new resource to be created.
 
 ### Read-Only
 
