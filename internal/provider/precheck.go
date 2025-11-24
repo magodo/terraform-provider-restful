@@ -37,7 +37,7 @@ func precheck(ctx context.Context, c *client.Client, apiOpt apiOption, defaultPa
 					),
 				}
 			}
-			if err := p.PollUntilDone(ctx, c); err != nil {
+			if err := p.PollUntilDone(ctx, c, nil); err != nil {
 				return nil, diag.Diagnostics{
 					diag.NewErrorDiagnostic(
 						fmt.Sprintf("Pre-checking %d-th check (api) failure", i),

@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/objectvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/action"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/ephemeral"
@@ -182,6 +183,14 @@ func (*Provider) ListResources(_ context.Context) []func() list.ListResource {
 	return []func() list.ListResource{
 		func() list.ListResource {
 			return &ListResource{}
+		},
+	}
+}
+
+func (*Provider) Actions(_ context.Context) []func() action.Action {
+	return []func() action.Action{
+		func() action.Action {
+			return &Action{}
 		},
 	}
 }
@@ -679,6 +688,7 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 	resp.DataSourceData = data
 	resp.EphemeralResourceData = data
 	resp.ListResourceData = data
+	resp.ActionData = data
 }
 
 func (p *Provider) Init(ctx context.Context, config providerConfig) diag.Diagnostics {

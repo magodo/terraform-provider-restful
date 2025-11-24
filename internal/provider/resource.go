@@ -971,7 +971,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 			)
 			return
 		}
-		if err := p.PollUntilDone(ctx, c); err != nil {
+		if err := p.PollUntilDone(ctx, c, nil); err != nil {
 			resp.Diagnostics.AddError(
 				"Create: Polling failure",
 				err.Error(),
@@ -1559,7 +1559,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 				)
 				return
 			}
-			if err := p.PollUntilDone(ctx, c); err != nil {
+			if err := p.PollUntilDone(ctx, c, nil); err != nil {
 				resp.Diagnostics.AddError(
 					"Update: Polling failure",
 					err.Error(),
@@ -1725,7 +1725,7 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 			)
 			return
 		}
-		if err := p.PollUntilDone(ctx, c); err != nil {
+		if err := p.PollUntilDone(ctx, c, nil); err != nil {
 			resp.Diagnostics.AddError(
 				"Delete: Polling failure",
 				err.Error(),

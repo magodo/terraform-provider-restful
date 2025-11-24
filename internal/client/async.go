@@ -182,7 +182,10 @@ type Pollable struct {
 	DefaultDelay  time.Duration
 }
 
-func (f *Pollable) PollUntilDone(ctx context.Context, client *Client) error {
+// pollCallback is a callback that will be called during PollUntilDone for every poll.
+type pollCallback func(ctx context.Context, resp *resty.Response)
+
+func (f *Pollable) PollUntilDone(ctx context.Context, client *Client, cb pollCallback) error {
 	time.Sleep(f.InitDelay)
 PollingLoop:
 	for {
@@ -191,6 +194,9 @@ PollingLoop:
 		resp, err := req.Get(f.URL)
 		if err != nil {
 			return fmt.Errorf("polling %s: %v", f.URL, err)
+		}
+		if cb != nil {
+			cb(ctx, resp)
 		}
 
 		// In case this is status_locator is not a code locator, then we shall firstly ensure the GET succeeded,
@@ -209,6 +215,7 @@ PollingLoop:
 		if strings.EqualFold(status, f.Status.Success) {
 			return nil
 		}
+
 		for _, ps := range f.Status.Pending {
 			if strings.EqualFold(status, ps) {
 				dur := resp.Header().Get("Retry-After")
