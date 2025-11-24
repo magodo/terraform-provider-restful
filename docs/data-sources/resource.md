@@ -35,10 +35,12 @@ data "restful_resource" "test" {
 - `precheck` (Attributes List) An array of prechecks that need to pass prior to the "Read" operation. Exactly one of `mutex` or `api` should be specified. (see [below for nested schema](#nestedatt--precheck))
 - `query` (Map of List of String) The query parameters that are applied to each request. This overrides the `query` set in the provider block.
 - `selector` (String) A selector in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries), that is used when `id` represents a collection of resources, to select exactly one member resource of from it
+- `use_sensitive_output` (Boolean) Whether to use `sensitive_output` instead of `output`. When true, the response will be stored in `sensitive_output` (which is marked as sensitive). Defaults to `false`.
 
 ### Read-Only
 
-- `output` (Dynamic) The response body after reading the resource.
+- `output` (Dynamic) The response body after reading the resource. This is only populated when `use_sensitive_output` is false.
+- `sensitive_output` (Dynamic, Sensitive) The response body after reading the resource (sensitive). This is only populated when `use_sensitive_output` is true.
 
 <a id="nestedatt--precheck"></a>
 ### Nested Schema for `precheck`

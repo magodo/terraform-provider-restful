@@ -81,12 +81,14 @@ resource "restful_resource" "rg" {
 - `update_method` (String) The method used to update the resource. Possible values are `PUT`, `POST`, and `PATCH`. This overrides the `update_method` set in the provider block (defaults to PUT).
 - `update_path` (String) The API path used to update the resource. The `id` is used instead if `update_path` is absent. This can be a string literal, or combined by following params: path param: `$(path)` expanded to `path`, body param: `$(body.x.y.z)` expands to the `x.y.z` property of the API body. Especially for the body param, it can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `query_escape` (URL query escape), `query_unescape` (URL query unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`).
 - `update_query` (Map of List of String) The query parameters that are applied to each update request. This overrides the `query` set in the resource block. The query value can be a string literal, or combined by the body param: `$(body.x.y.z)` that expands to the `x.y.z` property of the API body. It can add a chain of functions (applied from left to right), in the form of `$f1.f2(body)`. Supported functions include: `escape` (URL path escape, by default applied), `unescape` (URL path unescape), `query_escape` (URL query escape), `query_unescape` (URL query unescape), `base` (filepath base), `url_path` (path segment of a URL), `trim_path` (trim `path`).
+- `use_sensitive_output` (Boolean) Whether to use `sensitive_output` instead of `output`. When true, the response will be stored in `sensitive_output` (which is marked as sensitive). Defaults to `false`. Changing this forces a new resource to be created.
 - `write_only_attrs` (List of String) A list of paths (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attributes that are only settable, but won't be read in GET response. Prefer to use `ephemeral_body`.
 
 ### Read-Only
 
 - `id` (String) The ID of the Resource.
-- `output` (Dynamic) The response body. If `ephemeral_body` get returned by API, it will be removed from `output`.
+- `output` (Dynamic) The response body. If `ephemeral_body` get returned by API, it will be removed from `output`. This is only populated when `use_sensitive_output` is false.
+- `sensitive_output` (Dynamic, Sensitive) The response body (sensitive). If `ephemeral_body` get returned by API, it will be removed from `sensitive_output`. This is only populated when `use_sensitive_output` is true.
 
 <a id="nestedatt--poll_create"></a>
 ### Nested Schema for `poll_create`
