@@ -458,7 +458,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, reqConfig tfsdk.
 			)
 			return
 		}
-		if err := p.PollUntilDone(ctx, c); err != nil {
+		if err := p.PollUntilDone(ctx, c, nil); err != nil {
 			respDiags.AddError(
 				"Operation: Polling failure",
 				err.Error(),
@@ -642,7 +642,7 @@ func (r *OperationResource) Delete(ctx context.Context, req resource.DeleteReque
 			)
 			return
 		}
-		if err := p.PollUntilDone(ctx, c); err != nil {
+		if err := p.PollUntilDone(ctx, c, nil); err != nil {
 			resp.Diagnostics.AddError(
 				"Delete: Polling failure",
 				err.Error(),
