@@ -14,6 +14,8 @@ The document of this provider is available on [Terraform Provider Registry](http
 - `restful_operation` resource that supports arbitrary Restful API call (e.g. `POST`) on create/update
 - Ephemeral resource `restful_resource`
 - [Write-only attributes](https://developer.hashicorp.com/terraform/plugin/framework/resources/write-only-arguments) supported
+- Resource Identity supported
+- List Resource supported
 
 ## Why
 
