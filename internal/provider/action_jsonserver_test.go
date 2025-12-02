@@ -51,6 +51,9 @@ resource "restful_resource" "test" {
   body = {
   	foo = "bar"
   }
+  ephemeral_body = {
+	x = "y"
+  }
   read_path = "$(path)/$(body.id)"
 
   lifecycle {

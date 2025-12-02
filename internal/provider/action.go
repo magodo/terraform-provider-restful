@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/go-resty/resty/v2"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/action"
@@ -13,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/magodo/terraform-plugin-framework-helper/dynamic"
+	"github.com/magodo/terraform-plugin-framework-helper/ephemeral"
 	"github.com/magodo/terraform-provider-restful/internal/client"
 	"github.com/magodo/terraform-provider-restful/internal/exparam"
 )
@@ -24,11 +26,12 @@ type Action struct {
 var _ action.Action = &Action{}
 
 type actionData struct {
-	Path   types.String  `tfsdk:"path"`
-	Query  types.Map     `tfsdk:"query"`
-	Header types.Map     `tfsdk:"header"`
-	Method types.String  `tfsdk:"method"`
-	Body   types.Dynamic `tfsdk:"body"`
+	Path          types.String  `tfsdk:"path"`
+	Query         types.Map     `tfsdk:"query"`
+	Header        types.Map     `tfsdk:"header"`
+	Method        types.String  `tfsdk:"method"`
+	Body          types.Dynamic `tfsdk:"body"`
+	EphemeralBody types.Dynamic `tfsdk:"ephemeral_body"`
 
 	Precheck types.List   `tfsdk:"precheck"`
 	Poll     types.Object `tfsdk:"poll"`
@@ -85,6 +88,12 @@ func (a *Action) Schema(ctx context.Context, req action.SchemaRequest, resp *act
 				MarkdownDescription: "The payload for the `Invoke` call.",
 				Optional:            true,
 			},
+			"ephemeral_body": schema.DynamicAttribute{
+				Description:         "The ephemeral (write-only) properties of the resource. This will be merge-patched to the `body` to construct the actual request body.",
+				MarkdownDescription: "The ephemeral (write-only) properties of the resource. This will be merge-patched to the `body` to construct the actual request body.",
+				Optional:            true,
+				WriteOnly:           true,
+			},
 
 			"precheck": precheckAttribute("Invoke", true, "", false),
 			"poll":     pollSchema,
@@ -109,6 +118,32 @@ func (a *Action) Configure(ctx context.Context, req action.ConfigureRequest, res
 		return
 	}
 	a.p = providerData.provider
+}
+
+func (a *Action) ValidateConfig(ctx context.Context, req action.ValidateConfigRequest, resp *action.ValidateConfigResponse) {
+	var config actionData
+	diags := req.Config.Get(ctx, &config)
+	resp.Diagnostics.Append(diags...)
+	if diags.HasError() {
+		return
+	}
+
+	if !config.Body.IsUnknown() {
+		b, err := dynamic.ToJSON(config.Body)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Invalid configuration",
+				fmt.Sprintf("marshal body: %v", err),
+			)
+			return
+		}
+
+		_, diags := ephemeral.ValidateEphemeralBody(b, config.EphemeralBody)
+		resp.Diagnostics = append(resp.Diagnostics, diags...)
+		if diags.HasError() {
+			return
+		}
+	}
 }
 
 func (a *Action) Invoke(ctx context.Context, req action.InvokeRequest, resp *action.InvokeResponse) {
@@ -154,6 +189,24 @@ func (a *Action) Invoke(ctx context.Context, req action.InvokeRequest, resp *act
 				err.Error(),
 			)
 			return
+		}
+
+		if !config.EphemeralBody.IsNull() {
+			eb, diags := ephemeral.ValidateEphemeralBody(body, config.EphemeralBody)
+			resp.Diagnostics.Append(diags...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+
+			// Merge patch the ephemeral body to the body
+			body, err = jsonpatch.MergePatch(body, eb)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Merge patching `body` with `ephemeral_body`",
+					err.Error(),
+				)
+				return
+			}
 		}
 	}
 
