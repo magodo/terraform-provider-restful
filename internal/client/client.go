@@ -248,7 +248,9 @@ func (c *Client) Update(ctx context.Context, path string, body string, opt Updat
 	req := c.R().SetContext(ctx).SetBody(body)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 	req.SetHeaders(opt.Header)
-	req = req.SetHeader("Content-Type", "application/json")
+	if req.Header.Get("content-type") == "" {
+		req = req.SetHeader("Content-Type", "application/json")
+	}
 
 	switch opt.Method {
 	case "PATCH":
@@ -270,12 +272,14 @@ type DeleteOption struct {
 
 func (c *Client) Delete(ctx context.Context, path string, body string, opt DeleteOption) (*resty.Response, error) {
 	req := c.R().SetContext(ctx)
-	if body != "" {
-		req = req.SetHeader("Content-Type", "application/json")
-		req.SetBody(body)
-	}
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 	req.SetHeaders(opt.Header)
+	if body != "" {
+		req.SetBody(body)
+		if req.Header.Get("content-type") == "" {
+			req = req.SetHeader("Content-Type", "application/json")
+		}
+	}
 
 	switch opt.Method {
 	case "POST":
@@ -300,11 +304,10 @@ type OperationOption struct {
 func (c *Client) Operation(ctx context.Context, path string, body []byte, opt OperationOption) (*resty.Response, error) {
 	req := c.R().SetContext(ctx)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
-
-	// By default set the content-type to application/json
-	// This can be replaced by the opt.Header if defined.
-	req = req.SetHeader("Content-Type", "application/json")
 	req.SetHeaders(opt.Header)
+	if req.Header.Get("content-type") == "" {
+		req = req.SetHeader("Content-Type", "application/json")
+	}
 
 	if len(body) != 0 {
 		switch req.Header.Get("Content-Type") {
@@ -349,8 +352,10 @@ func (c *Client) ReadDS(ctx context.Context, path string, body []byte, opt ReadO
 
 	// Set the body for POST requests if provided
 	if len(body) != 0 && opt.Method == "POST" {
-		req = req.SetHeader("Content-Type", "application/json")
 		req = req.SetBody(body)
+		if req.Header.Get("content-type") == "" {
+			req = req.SetHeader("Content-Type", "application/json")
+		}
 	}
 
 	switch opt.Method {
@@ -379,8 +384,10 @@ func (c *Client) ReadLR(ctx context.Context, path string, body []byte, opt ReadO
 
 	// Set the body for POST requests if provided
 	if len(body) != 0 && opt.Method == "POST" {
-		req = req.SetHeader("Content-Type", "application/json")
 		req = req.SetBody(body)
+		if req.Header.Get("content-type") == "" {
+			req = req.SetHeader("Content-Type", "application/json")
+		}
 	}
 
 	switch opt.Method {
