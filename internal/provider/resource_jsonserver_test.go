@@ -307,6 +307,18 @@ func TestResource_JSONServer_UpdateBodyPatch(t *testing.T) {
 					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.MapSizeExact(2)),
 				},
 			},
+			{
+				Config: d.updateBodyPatchUpdate2(),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.MapExact(
+						map[string]knownvalue.Check{
+							"foo": knownvalue.StringExact("baz"),
+							"id":  knownvalue.NotNull(),
+						},
+					)),
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output"), knownvalue.MapSizeExact(2)),
+				},
+			},
 		},
 	})
 }
@@ -694,6 +706,33 @@ resource "restful_resource" "test" {
 	{
 	  path = "foo"
 	  removed = true
+	},
+  ]
+  lifecycle {
+	ignore_changes = [body.foo]
+  }
+}
+`, d.url)
+}
+
+func (d jsonServerData) updateBodyPatchUpdate2() string {
+	return fmt.Sprintf(`
+provider "restful" {
+  base_url = %q
+}
+
+resource "restful_resource" "test" {
+  path = "posts"
+  body = {
+    foo = "bar"
+  }
+  read_path = "$(path)/$(body.id)"
+  update_body_patches = [
+    {
+	  path = ""
+	  raw_json = jsonencode({
+		  foo = "baz"
+	  })
 	},
   ]
   lifecycle {

@@ -422,8 +422,7 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"path": schema.StringAttribute{
-							Description:         "The path (in gjson syntax) to the attribute to patch.",
-							MarkdownDescription: "The path (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attribute to [patch](https://github.com/tidwall/sjson?tab=readme-ov-file#set-a-value).",
+							MarkdownDescription: "The path (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attribute to [patch](https://github.com/tidwall/sjson?tab=readme-ov-file#set-a-value). Empty string means to patch (i.e. replace or remove) the whole update body.",
 							Required:            true,
 						},
 						"raw_json": schema.StringAttribute{
@@ -1411,13 +1410,17 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 		for i, patch := range patches {
 			switch {
 			case !patch.Removed.IsNull():
-				planBodyStr, err = sjson.Delete(planBodyStr, patch.Path.ValueString())
-				if err != nil {
-					resp.Diagnostics.AddError(
-						fmt.Sprintf("Failed to delete json for the %d-th patch at path %q", i, patch.Path.ValueString()),
-						err.Error(),
-					)
-					return
+				if path := patch.Path.ValueString(); path == "" {
+					planBodyStr = "{}"
+				} else {
+					planBodyStr, err = sjson.Delete(planBodyStr, patch.Path.ValueString())
+					if err != nil {
+						resp.Diagnostics.AddError(
+							fmt.Sprintf("Failed to delete json for the %d-th patch at path %q", i, patch.Path.ValueString()),
+							err.Error(),
+						)
+						return
+					}
 				}
 			case !patch.RawJSON.IsNull():
 				pv, err := exparam.ExpandBody(patch.RawJSON.ValueString(), stateOutput)
@@ -1429,13 +1432,17 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 					return
 				}
 
-				planBodyStr, err = sjson.SetRaw(planBodyStr, patch.Path.ValueString(), pv)
-				if err != nil {
-					resp.Diagnostics.AddError(
-						fmt.Sprintf("Failed to set json for the %d-th patch with %q", i, pv),
-						err.Error(),
-					)
-					return
+				if path := patch.Path.ValueString(); path == "" {
+					planBodyStr = pv
+				} else {
+					planBodyStr, err = sjson.SetRaw(planBodyStr, patch.Path.ValueString(), pv)
+					if err != nil {
+						resp.Diagnostics.AddError(
+							fmt.Sprintf("Failed to set json for the %d-th patch with %q", i, pv),
+							err.Error(),
+						)
+						return
+					}
 				}
 			}
 		}
