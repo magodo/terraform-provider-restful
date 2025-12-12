@@ -301,7 +301,7 @@ Optional:
 
 Required:
 
-- `path` (String) The path (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attribute to [patch](https://github.com/tidwall/sjson?tab=readme-ov-file#set-a-value).
+- `path` (String) The path (in [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)) to the attribute to [patch](https://github.com/tidwall/sjson?tab=readme-ov-file#set-a-value). Empty string means to patch (i.e. replace or remove) the whole update body.
 
 Optional:
 

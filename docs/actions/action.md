@@ -22,7 +22,10 @@ description: |-
 
 ### Optional
 
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
 - `body` (Dynamic) The payload for the `Invoke` call.
+- `ephemeral_body` (Dynamic, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) The ephemeral (write-only) properties of the resource. This will be merge-patched to the `body` to construct the actual request body.
 - `header` (Map of String) The header parameters for the `Invoke` call. This overrides the `header` set in the provider block.
 - `poll` (Attributes) The polling option for the "Invoke" operation (see [below for nested schema](#nestedatt--poll))
 - `precheck` (Attributes List) An array of prechecks that need to pass prior to the "Invoke" operation. Exactly one of `mutex` or `api` should be specified. (see [below for nested schema](#nestedatt--precheck))
