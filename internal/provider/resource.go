@@ -1299,7 +1299,7 @@ func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *reso
 	if !state.Body.IsNull() {
 		body, err := dynamic.ToJSON(state.Body)
 		if err != nil {
-			diags.AddError(
+			resp.Diagnostics.AddError(
 				"Failed to construct resource identity",
 				fmt.Sprintf("convert `body` to JSON: %v", err),
 			)
@@ -1307,7 +1307,7 @@ func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *reso
 		}
 		nullBody, err := jsonset.NullifyObject(body)
 		if err != nil {
-			diags.AddError(
+			resp.Diagnostics.AddError(
 				"Failed to construct resource identity",
 				fmt.Sprintf("nullify `body`: %v", err),
 			)
@@ -1326,7 +1326,7 @@ func (r Resource) read(ctx context.Context, req resource.ReadRequest, resp *reso
 
 	impspecJSON, err := json.Marshal(impspec)
 	if err != nil {
-		diags.AddError(
+		resp.Diagnostics.AddError(
 			"Failed to construct resource identity",
 			fmt.Sprintf("failed to marshal the import spec: %v", err),
 		)
