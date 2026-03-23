@@ -71,10 +71,10 @@ func (r *OperationResource) Metadata(ctx context.Context, req resource.MetadataR
 }
 
 func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
-	precheckDelete := precheckAttribute("`Delete`", false, "By default, the `path` of this resource is used.", true)
+	precheckDelete := resourcePrecheckAttribute("`Delete`", false, "By default, the `path` of this resource is used.", true)
 	precheckDelete.Validators = append(precheckDelete.Validators, listvalidator.AlsoRequires(path.MatchRelative().AtParent().AtName("delete_method")))
 
-	pollDelete := pollAttribute("`Delete`")
+	pollDelete := resourcePollAttribute("`Delete`")
 	pollDelete.Validators = append(pollDelete.Validators, objectvalidator.AlsoRequires(path.MatchRelative().AtParent().AtName("delete_method")))
 
 	resp.Schema = schema.Schema{
@@ -163,8 +163,8 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 				Optional:            true,
 			},
 
-			"precheck": precheckAttribute("`Create`/`Update`", true, "", false),
-			"poll":     pollAttribute("`Create`/`Update`"),
+			"precheck": resourcePrecheckAttribute("`Create`/`Update`", true, "", false),
+			"poll":     resourcePollAttribute("`Create`/`Update`"),
 
 			"delete_method": schema.StringAttribute{
 				Description:         "The method for the `Delete` call. Possible values are `POST`, `PUT`, `PATCH` and `DELETE`. If this is not specified, no `Delete` call will occur.",

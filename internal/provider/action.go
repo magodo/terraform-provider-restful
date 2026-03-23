@@ -6,9 +6,11 @@ import (
 
 	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/go-resty/resty/v2"
+	"github.com/hashicorp/terraform-plugin-framework-validators/objectvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/action"
 	"github.com/hashicorp/terraform-plugin-framework/action/schema"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
@@ -17,6 +19,7 @@ import (
 	"github.com/magodo/terraform-plugin-framework-helper/ephemeral"
 	"github.com/magodo/terraform-provider-restful/internal/client"
 	"github.com/magodo/terraform-provider-restful/internal/exparam"
+	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
 )
 
 type Action struct {
@@ -49,17 +52,102 @@ func (a *Action) Metadata(ctx context.Context, req action.MetadataRequest, resp 
 	resp.TypeName = req.ProviderTypeName + "_action"
 }
 
-func (a *Action) Schema(ctx context.Context, req action.SchemaRequest, resp *action.SchemaResponse) {
-	pollSchema := pollAttribute("Invoke")
-	pollSchema.Attributes["message_template"] = schema.StringAttribute{
-		MarkdownDescription: "The raw template for the progress message that will be displayed in the Terraform UI. This" + bodyParamDescription + " By default, it displays \"" + defaultActionProgressMessage + "\".",
-		Optional:            true,
-	}
-	pollSchema.Attributes["selector"] = schema.StringAttribute{
-		MarkdownDescription: "A selector expression in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries), that is used when read returns a collection of resources, to select exactly one member resource of from it. This" + bodyParamDescription + " By default, the whole response body is used as the body.",
-		Optional:            true,
+func actionPrecheckAttribute(s string, pathIsRequired bool, suffixDesc string, statusLocatorSupportParam bool) schema.ListNestedAttribute {
+	pathDesc := "The path used to query readiness, relative to the `base_url` of the provider."
+	if suffixDesc != "" {
+		pathDesc += " " + suffixDesc
 	}
 
+	var statusLocatorSuffixDesc string
+	if statusLocatorSupportParam {
+		statusLocatorSuffixDesc = " The `path` can contain `$(body.x.y.z)` parameter that reference property from the `state.output`."
+	}
+
+	return schema.ListNestedAttribute{
+		Description:         fmt.Sprintf("An array of prechecks that need to pass prior to the %q operation. Exactly one of `mutex` or `api` should be specified.", s),
+		MarkdownDescription: fmt.Sprintf("An array of prechecks that need to pass prior to the %q operation. Exactly one of `mutex` or `api` should be specified.", s),
+		Optional:            true,
+		NestedObject: schema.NestedAttributeObject{
+			Attributes: map[string]schema.Attribute{
+				"mutex": schema.StringAttribute{
+					Description:         "The name of the mutex, which implies the resource will keep waiting until this mutex is held",
+					MarkdownDescription: "The name of the mutex, which implies the resource will keep waiting until this mutex is held",
+					Optional:            true,
+					Validators: []validator.String{
+						stringvalidator.ExactlyOneOf(
+							path.MatchRelative().AtParent().AtName("api"),
+						),
+					},
+				},
+				"api": schema.SingleNestedAttribute{
+					Description:         "Keeps waiting until the specified API meets the success status",
+					MarkdownDescription: "Keeps waiting until the specified API meets the success status",
+					Optional:            true,
+					Attributes: map[string]schema.Attribute{
+						"status_locator": schema.StringAttribute{
+							Description:         "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the gjson syntax." + statusLocatorSuffixDesc,
+							MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)." + statusLocatorSuffixDesc,
+							Required:            true,
+							Validators: []validator.String{
+								myvalidator.StringIsParsable("status_locator", func(s string) error {
+									return validateLocator(s)
+								}),
+							},
+						},
+						"status": schema.SingleNestedAttribute{
+							Description:         "The expected status sentinels for each polling state.",
+							MarkdownDescription: "The expected status sentinels for each polling state.",
+							Required:            true,
+							Attributes: map[string]schema.Attribute{
+								"success": schema.StringAttribute{
+									Description:         "The expected status sentinel for suceess status.",
+									MarkdownDescription: "The expected status sentinel for suceess status.",
+									Required:            true,
+								},
+								"pending": schema.ListAttribute{
+									Description:         "The expected status sentinels for pending status.",
+									MarkdownDescription: "The expected status sentinels for pending status.",
+									Optional:            true,
+									ElementType:         types.StringType,
+								},
+							},
+						},
+						"path": schema.StringAttribute{
+							Description:         pathDesc,
+							MarkdownDescription: pathDesc,
+							Required:            pathIsRequired,
+							Optional:            !pathIsRequired,
+						},
+						"query": schema.MapAttribute{
+							Description:         "The query parameters. This overrides the `query` set in the resource block.",
+							MarkdownDescription: "The query parameters. This overrides the `query` set in the resource block.",
+							ElementType:         types.ListType{ElemType: types.StringType},
+							Optional:            true,
+						},
+						"header": schema.MapAttribute{
+							Description:         "The header parameters. This overrides the `header` set in the resource block.",
+							MarkdownDescription: "The header parameters. This overrides the `header` set in the resource block.",
+							ElementType:         types.StringType,
+							Optional:            true,
+						},
+						"default_delay_sec": schema.Int64Attribute{
+							Description:         fmt.Sprintf("The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `%d`.", PRECHECK_DEFAULT_DELAY_SEC),
+							MarkdownDescription: fmt.Sprintf("The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `%d`.", PRECHECK_DEFAULT_DELAY_SEC),
+							Optional:            true,
+						},
+					},
+					Validators: []validator.Object{
+						objectvalidator.ExactlyOneOf(
+							path.MatchRelative().AtParent().AtName("mutex"),
+						),
+					},
+				},
+			},
+		},
+	}
+}
+
+func (a *Action) Schema(ctx context.Context, req action.SchemaRequest, resp *action.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "`restful_action` represents an ad-hoc API call action.",
 		Attributes: map[string]schema.Attribute{
@@ -95,8 +183,72 @@ func (a *Action) Schema(ctx context.Context, req action.SchemaRequest, resp *act
 				WriteOnly:           true,
 			},
 
-			"precheck": precheckAttribute("Invoke", true, "", false),
-			"poll":     pollSchema,
+			"precheck": actionPrecheckAttribute("Invoke", true, "", false),
+
+			"poll": schema.SingleNestedAttribute{
+				Description:         "The polling option for this action",
+				MarkdownDescription: "The polling option for this action",
+				Optional:            true,
+				Attributes: map[string]schema.Attribute{
+					"status_locator": schema.StringAttribute{
+						Description:         "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the gjson syntax. The `path` can contain `$(body.x.y.z)` parameter that reference property from either the response body (for `Create`, after selector), or `state.output` (for `Read`/`Update`/`Delete`).",
+						MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md). The `path` can contain `$(body.x.y.z)` parameter that reference property from either the response body (for `Create`, after selector), or `state.output` (for `Read`/`Update`/`Delete`).",
+						Required:            true,
+						Validators: []validator.String{
+							myvalidator.StringIsParsable("status_locator", func(s string) error {
+								return validateLocator(s)
+							}),
+						},
+					},
+					"status": schema.SingleNestedAttribute{
+						Description:         "The expected status sentinels for each polling state.",
+						MarkdownDescription: "The expected status sentinels for each polling state.",
+						Required:            true,
+						Attributes: map[string]schema.Attribute{
+							"success": schema.StringAttribute{
+								Description:         "The expected status sentinel for suceess status.",
+								MarkdownDescription: "The expected status sentinel for suceess status.",
+								Required:            true,
+							},
+							"pending": schema.ListAttribute{
+								Description:         "The expected status sentinels for pending status.",
+								MarkdownDescription: "The expected status sentinels for pending status.",
+								Optional:            true,
+								ElementType:         types.StringType,
+							},
+						},
+					},
+					"url_locator": schema.StringAttribute{
+						Description:         "Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the current operation's URL is used for polling, execpt `Create` where it fallbacks to use the path constructed by the `read_path` as the polling URL.",
+						MarkdownDescription: "Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the current operation's URL is used for polling, execpt `Create` where it fallbacks to use the path constructed by the `read_path` as the polling URL.",
+						Optional:            true,
+						Validators: []validator.String{
+							myvalidator.StringIsParsable("url_locator", func(s string) error {
+								return validateLocator(s)
+							}),
+						},
+					},
+					"header": schema.MapAttribute{
+						Description:         "The header parameters. This overrides the `header` set in the resource block.",
+						MarkdownDescription: "The header parameters. This overrides the `header` set in the resource block.",
+						ElementType:         types.StringType,
+						Optional:            true,
+					},
+					"default_delay_sec": schema.Int64Attribute{
+						Description:         fmt.Sprintf("The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `%d`.", POLL_DEFAULT_DELAY_SEC),
+						MarkdownDescription: fmt.Sprintf("The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `%d`.", POLL_DEFAULT_DELAY_SEC),
+						Optional:            true,
+					},
+					"message_template": schema.StringAttribute{
+						MarkdownDescription: "The raw template for the progress message that will be displayed in the Terraform UI. This" + bodyParamDescription + " By default, it displays \"" + defaultActionProgressMessage + "\".",
+						Optional:            true,
+					},
+					"selector": schema.StringAttribute{
+						MarkdownDescription: "A selector expression in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries), that is used when read returns a collection of resources, to select exactly one member resource of from it. This" + bodyParamDescription + " By default, the whole response body is used as the body.",
+						Optional:            true,
+					},
+				},
+			},
 		},
 	}
 }

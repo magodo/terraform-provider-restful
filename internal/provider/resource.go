@@ -19,7 +19,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/identityschema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -164,7 +163,7 @@ func operationOverridableAttrDescription(attr string, opkind string) string {
 	return fmt.Sprintf("The %[1]s parameters that are applied to each %[2]s request. This overrides the `%[1]s` set in the resource block.", attr, opkind)
 }
 
-func precheckAttribute(s string, pathIsRequired bool, suffixDesc string, statusLocatorSupportParam bool) schema.ListNestedAttribute {
+func resourcePrecheckAttribute(s string, pathIsRequired bool, suffixDesc string, statusLocatorSupportParam bool) schema.ListNestedAttribute {
 	pathDesc := "The path used to query readiness, relative to the `base_url` of the provider."
 	if suffixDesc != "" {
 		pathDesc += " " + suffixDesc
@@ -243,11 +242,9 @@ func precheckAttribute(s string, pathIsRequired bool, suffixDesc string, statusL
 							Optional:            true,
 						},
 						"default_delay_sec": schema.Int64Attribute{
-							Description:         "The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `10`.",
-							MarkdownDescription: "The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `10`.",
+							Description:         fmt.Sprintf("The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `%d`.", PRECHECK_DEFAULT_DELAY_SEC),
+							MarkdownDescription: fmt.Sprintf("The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `%d`.", PRECHECK_DEFAULT_DELAY_SEC),
 							Optional:            true,
-							Computed:            true,
-							Default:             int64default.StaticInt64(10),
 						},
 					},
 					Validators: []validator.Object{
@@ -261,7 +258,7 @@ func precheckAttribute(s string, pathIsRequired bool, suffixDesc string, statusL
 	}
 }
 
-func pollAttribute(s string) schema.SingleNestedAttribute {
+func resourcePollAttribute(s string) schema.SingleNestedAttribute {
 	return schema.SingleNestedAttribute{
 		Description:         fmt.Sprintf("The polling option for the %q operation", s),
 		MarkdownDescription: fmt.Sprintf("The polling option for the %q operation", s),
@@ -312,11 +309,9 @@ func pollAttribute(s string) schema.SingleNestedAttribute {
 				Optional:            true,
 			},
 			"default_delay_sec": schema.Int64Attribute{
-				Description:         "The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `10`.",
-				MarkdownDescription: "The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `10`.",
+				Description:         fmt.Sprintf("The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `%d`.", POLL_DEFAULT_DELAY_SEC),
+				MarkdownDescription: fmt.Sprintf("The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `%d`.", POLL_DEFAULT_DELAY_SEC),
 				Optional:            true,
-				Computed:            true,
-				Default:             int64default.StaticInt64(10),
 			},
 		},
 	}
@@ -456,13 +451,13 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				Optional:            true,
 			},
 
-			"poll_create": pollAttribute("Create"),
-			"poll_update": pollAttribute("Update"),
-			"poll_delete": pollAttribute("Delete"),
+			"poll_create": resourcePollAttribute("Create"),
+			"poll_update": resourcePollAttribute("Update"),
+			"poll_delete": resourcePollAttribute("Delete"),
 
-			"precheck_create": precheckAttribute("Create", true, "", false),
-			"precheck_update": precheckAttribute("Update", false, "By default, the `id` of this resource is used.", true),
-			"precheck_delete": precheckAttribute("Delete", false, "By default, the `id` of this resource is used.", true),
+			"precheck_create": resourcePrecheckAttribute("Create", true, "", false),
+			"precheck_update": resourcePrecheckAttribute("Update", false, "By default, the `id` of this resource is used.", true),
+			"precheck_delete": resourcePrecheckAttribute("Delete", false, "By default, the `id` of this resource is used.", true),
 
 			"post_create_read": schema.SingleNestedAttribute{
 				Description:         "An additional read after creation (after polling, if any) for overriding the `$(body)` used for `read_path`, which was representing the response body of the initial create call. This is only meant to be used for APIs that only forms a resource id after the resource is completely created. One example is the AzureDevOps `project` API: A `project` is identified by a UUID, the user needs to create the project, polling the long running operation, then query the `project` by its (mutable) name, where it returns you the (immutable) UUID.",
