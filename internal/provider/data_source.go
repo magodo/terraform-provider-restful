@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/magodo/terraform-plugin-framework-helper/dynamic"
 	"github.com/magodo/terraform-provider-restful/internal/client"
+	"github.com/magodo/terraform-provider-restful/internal/defaults"
 	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
 )
 
@@ -122,8 +123,8 @@ func dataSourcePrecheckAttribute(s string, pathIsRequired bool, suffixDesc strin
 							Optional:            true,
 						},
 						"default_delay_sec": schema.Int64Attribute{
-							Description:         fmt.Sprintf("The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `%d`.", PRECHECK_DEFAULT_DELAY_SEC),
-							MarkdownDescription: fmt.Sprintf("The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `%d`.", PRECHECK_DEFAULT_DELAY_SEC),
+							Description:         fmt.Sprintf("The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `%d`.", defaults.PrecheckDefaultDelayInSec),
+							MarkdownDescription: fmt.Sprintf("The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `%d`.", defaults.PrecheckDefaultDelayInSec),
 							Optional:            true,
 						},
 					},

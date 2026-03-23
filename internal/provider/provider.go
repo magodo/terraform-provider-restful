@@ -205,15 +205,15 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 				MarkdownDescription: "The base URL of the API provider.",
 				Required:            true,
 				Validators: []validator.String{
-					myvalidator.StringIsParsable("HTTP url", func(s string) error {
+					myvalidator.StringIsParsable("Ensure this is a valid HTTP URL.", func(s string) error {
 						_, err := url.Parse(s)
 						return err
 					}),
 				},
 			},
 			"client": schema.SingleNestedAttribute{
-				Description:         "The client configuration",
-				MarkdownDescription: "The client configuration",
+				Description:         "The client configuration.",
+				MarkdownDescription: "The client configuration.",
 				Optional:            true,
 				Attributes: map[string]schema.Attribute{
 					"cookie_enabled": schema.BoolAttribute{
@@ -233,8 +233,8 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 						NestedObject: schema.NestedAttributeObject{
 							Attributes: map[string]schema.Attribute{
 								"certificate": schema.StringAttribute{
-									Description:         "The client certificate for mTLS. Conflicts with `certificate_file`. Requires `key_file` or `key`.",
-									MarkdownDescription: "The client certificate for mTLS. Conflicts with `certificate_file`. Requires `key_file` or `key`.",
+									Description:         "The client certificate for mTLS.",
+									MarkdownDescription: "The client certificate for mTLS.",
 									Optional:            true,
 									Validators: []validator.String{
 										stringvalidator.ConflictsWith(
@@ -247,8 +247,8 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 									},
 								},
 								"certificate_file": schema.StringAttribute{
-									Description:         "The path of the client certificate file for mTLS. Conflicts with `certificate`. Requires `key_file` or `key`.",
-									MarkdownDescription: "The path of the client certificate file for mTLS. Conflicts with `certificate`. Requires `key_file` or `key`.",
+									Description:         "The path of the client certificate file for mTLS.",
+									MarkdownDescription: "The path of the client certificate file for mTLS.",
 									Optional:            true,
 									Validators: []validator.String{
 										stringvalidator.ConflictsWith(
@@ -261,8 +261,8 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 									},
 								},
 								"key": schema.StringAttribute{
-									Description:         "The client private key for mTLS. Conflicts with `key_file`.",
-									MarkdownDescription: "The client private key for mTLS. Conflicts with `key_file`.",
+									Description:         "The client private key for mTLS.",
+									MarkdownDescription: "The client private key for mTLS.",
 									Optional:            true,
 									Validators: []validator.String{
 										stringvalidator.ConflictsWith(
@@ -275,8 +275,8 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 									},
 								},
 								"key_file": schema.StringAttribute{
-									Description:         "The path of the client private key file for mTLS. Conflicts with `key`. Requires `certificate_file` or `certificate`.",
-									MarkdownDescription: "The path of the client private key file for mTLS. Conflicts with `key`. Requires `certificate_file` or `certificate`.",
+									Description:         "The path of the client private key file for mTLS.",
+									MarkdownDescription: "The path of the client private key file for mTLS.",
 									Optional:            true,
 									Validators: []validator.String{
 										stringvalidator.ConflictsWith(
@@ -292,8 +292,8 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 						},
 					},
 					"root_ca_certificates": schema.ListAttribute{
-						Description:         "The list of certificates of root certificate authorities that clients use when verifying server certificates. If not specified, TLS uses the host's root CA set. Conflicts with `root_ca_certificate_files`.",
-						MarkdownDescription: "The list of certificates of root certificate authorities that clients use when verifying server certificates. If not specified, TLS uses the host's root CA set. Conflicts with `root_ca_certificate_files`.",
+						Description:         "The list of certificates of root certificate authorities that clients use when verifying server certificates. If not specified, TLS uses the host's root CA set.",
+						MarkdownDescription: "The list of certificates of root certificate authorities that clients use when verifying server certificates. If not specified, TLS uses the host's root CA set.",
 						Optional:            true,
 						ElementType:         types.StringType,
 						Validators: []validator.List{
@@ -306,8 +306,8 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 						},
 					},
 					"root_ca_certificate_files": schema.ListAttribute{
-						Description:         "The list of certificate file paths of root certificate authorities that clients use when verifying server certificates. If not specified, TLS uses the host's root CA set. Conflicts with `root_ca_certificate_files`.",
-						MarkdownDescription: "The list of certificate file paths of root certificate authorities that clients use when verifying server certificates. If not specified, TLS uses the host's root CA set. Conflicts with `root_ca_certificate_files`.",
+						Description:         "The list of certificate file paths of root certificate authorities that clients use when verifying server certificates. If not specified, TLS uses the host's root CA set.",
+						MarkdownDescription: "The list of certificate file paths of root certificate authorities that clients use when verifying server certificates. If not specified, TLS uses the host's root CA set.",
 						Optional:            true,
 						ElementType:         types.StringType,
 						Validators: []validator.List{
@@ -320,8 +320,8 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 						},
 					},
 					"retry": schema.SingleNestedAttribute{
-						Description:         "The retry option for the client",
-						MarkdownDescription: "The retry option for the client",
+						Description:         "The retry option for the client.",
+						MarkdownDescription: "The retry option for the client.",
 						Optional:            true,
 						Attributes: map[string]schema.Attribute{
 							"status_codes": schema.ListAttribute{
@@ -350,13 +350,13 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 				},
 			},
 			"security": schema.SingleNestedAttribute{
-				Description:         "The OpenAPI security scheme that is be used for auth. Only one of `http`, `apikey` and `oauth2` can be specified.",
-				MarkdownDescription: "The OpenAPI security scheme that is be used for auth. Only one of `http`, `apikey` and `oauth2` can be specified.",
+				Description:         "The OpenAPI security scheme that is be used for auth.",
+				MarkdownDescription: "The OpenAPI security scheme that is be used for auth.",
 				Optional:            true,
 				Attributes: map[string]schema.Attribute{
 					"http": schema.SingleNestedAttribute{
-						Description:         "Configuration for the HTTP authentication scheme. Exactly one of `basic` and `token` must be specified.",
-						MarkdownDescription: "Configuration for the HTTP authentication scheme. Exactly one of `basic` and `token` must be specified.",
+						Description:         "Configuration for the HTTP authentication scheme.",
+						MarkdownDescription: "Configuration for the HTTP authentication scheme.",
 						Optional:            true,
 						Attributes: map[string]schema.Attribute{
 							"basic": schema.SingleNestedAttribute{
@@ -365,13 +365,13 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 								Optional:            true,
 								Attributes: map[string]schema.Attribute{
 									"username": schema.StringAttribute{
-										Description:         "The username",
-										MarkdownDescription: "The username",
+										Description:         "The username.",
+										MarkdownDescription: "The username.",
 										Required:            true,
 									},
 									"password": schema.StringAttribute{
-										Description:         "The password",
-										MarkdownDescription: "The password",
+										Description:         "The password.",
+										MarkdownDescription: "The password.",
 										Required:            true,
 										Sensitive:           true,
 									},
@@ -432,11 +432,9 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 									Required:            true,
 								},
 								"in": schema.StringAttribute{
-									Description: fmt.Sprintf("Specifies how is the API Key is sent. Possible values are `%s`, `%s` and `%s`.",
-										client.APIKeyAuthInQuery, client.APIKeyAuthInHeader, client.APIKeyAuthInCookie),
-									MarkdownDescription: fmt.Sprintf("Specifies how is the API Key is sent. Possible values are `%s`, `%s` and `%s`.",
-										client.APIKeyAuthInQuery, client.APIKeyAuthInHeader, client.APIKeyAuthInCookie),
-									Required: true,
+									Description:         "Specifies how is the API Key is sent.",
+									MarkdownDescription: "Specifies how is the API Key is sent.",
+									Required:            true,
 									Validators: []validator.String{
 										stringvalidator.OneOf(
 											string(client.APIKeyAuthInHeader),
@@ -455,8 +453,8 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 						},
 					},
 					"oauth2": schema.SingleNestedAttribute{
-						Description:         "Configuration for the OAuth2 authentication scheme. Exactly one of `password`, `client_credentials` and `refresh_token` must be specified.",
-						MarkdownDescription: "Configuration for the OAuth2 authentication scheme. Exactly one of `password`, `client_credentials` and `refresh_token` must be specified.",
+						Description:         "Configuration for the OAuth2 authentication scheme.",
+						MarkdownDescription: "Configuration for the OAuth2 authentication scheme.",
 						Optional:            true,
 						Attributes: map[string]schema.Attribute{
 							"password": schema.SingleNestedAttribute{
@@ -492,12 +490,10 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 										Optional:            true,
 									},
 									"in": schema.StringAttribute{
-										Description: fmt.Sprintf("Specifies how is the client ID & secret sent. Possible values are `%s` and `%s`. If absent, the style used will be auto detected.",
-											client.OAuth2AuthStyleInParams, client.OAuth2AuthStyleInHeader),
-										MarkdownDescription: fmt.Sprintf("Specifies how is th client ID & secret sent. Possible values are `%s` and `%s`. If absent, the style used will be auto detected.",
-											client.OAuth2AuthStyleInParams, client.OAuth2AuthStyleInHeader),
-										Optional:   true,
-										Validators: []validator.String{stringvalidator.OneOf(string(client.OAuth2AuthStyleInParams), string(client.OAuth2AuthStyleInHeader))},
+										Description:         "Specifies how is the client ID & secret sent. If absent, the style used will be auto detected.",
+										MarkdownDescription: "Specifies how is the client ID & secret sent. If absent, the style used will be auto detected.",
+										Optional:            true,
+										Validators:          []validator.String{stringvalidator.OneOf(string(client.OAuth2AuthStyleInParams), string(client.OAuth2AuthStyleInHeader))},
 									},
 									"scopes": schema.ListAttribute{
 										ElementType:         types.StringType,
@@ -536,12 +532,10 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 										Required:            true,
 									},
 									"in": schema.StringAttribute{
-										Description: fmt.Sprintf("Specifies how is the client ID & secret sent. Possible values are `%s` and `%s`. If absent, the style used will be auto detected.",
-											client.OAuth2AuthStyleInParams, client.OAuth2AuthStyleInHeader),
-										MarkdownDescription: fmt.Sprintf("Specifies how is th client ID & secret sent. Possible values are `%s` and `%s`. If absent, the style used will be auto detected.",
-											client.OAuth2AuthStyleInParams, client.OAuth2AuthStyleInHeader),
-										Optional:   true,
-										Validators: []validator.String{stringvalidator.OneOf(string(client.OAuth2AuthStyleInParams), string(client.OAuth2AuthStyleInHeader))},
+										Description:         "Specifies how is the client ID & secret sent. If absent, the style used will be auto detected.",
+										MarkdownDescription: "Specifies how is the client ID & secret sent. If absent, the style used will be auto detected.",
+										Optional:            true,
+										Validators:          []validator.String{stringvalidator.OneOf(string(client.OAuth2AuthStyleInParams), string(client.OAuth2AuthStyleInHeader))},
 									},
 									"scopes": schema.ListAttribute{
 										ElementType:         types.StringType,
@@ -598,12 +592,10 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 										Optional:            true,
 									},
 									"in": schema.StringAttribute{
-										Description: fmt.Sprintf("Specifies how is the client ID & secret sent. Possible values are `%s` and `%s`. If absent, the style used will be auto detected.",
-											client.OAuth2AuthStyleInParams, client.OAuth2AuthStyleInHeader),
-										MarkdownDescription: fmt.Sprintf("Specifies how is th client ID & secret sent. Possible values are `%s` and `%s`. If absent, the style used will be auto detected.",
-											client.OAuth2AuthStyleInParams, client.OAuth2AuthStyleInHeader),
-										Optional:   true,
-										Validators: []validator.String{stringvalidator.OneOf(string(client.OAuth2AuthStyleInParams), string(client.OAuth2AuthStyleInHeader))},
+										Description:         "Specifies how is the client ID & secret sent. If absent, the style used will be auto detected.",
+										MarkdownDescription: "Specifies how is the client ID & secret sent. If absent, the style used will be auto detected.",
+										Optional:            true,
+										Validators:          []validator.String{stringvalidator.OneOf(string(client.OAuth2AuthStyleInParams), string(client.OAuth2AuthStyleInHeader))},
 									},
 									"token_type": schema.StringAttribute{
 										Description:         `The type of the access token. Defaults to "Bearer".`,
@@ -630,24 +622,24 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 				},
 			},
 			"create_method": schema.StringAttribute{
-				Description:         "The method used to create the resource. Possible values are `PUT` and `POST`. Defaults to `POST`.",
-				MarkdownDescription: "The method used to create the resource. Possible values are `PUT` and `POST`. Defaults to `POST`.",
+				Description:         "The method used to create the resource. Defaults to `POST`.",
+				MarkdownDescription: "The method used to create the resource. Defaults to `POST`.",
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.OneOf("PUT", "POST"),
 				},
 			},
 			"update_method": schema.StringAttribute{
-				Description:         "The method used to update the resource. Possible values are `PUT` and `PATCH`. Defaults to `PUT`.",
-				MarkdownDescription: "The method used to update the resource. Possible values are `PUT` and `PATCH`. Defaults to `PUT`.",
+				Description:         "The method used to update the resource. Defaults to `PUT`.",
+				MarkdownDescription: "The method used to update the resource. Defaults to `PUT`.",
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.OneOf("PUT", "PATCH"),
 				},
 			},
 			"delete_method": schema.StringAttribute{
-				Description:         "The method used to delete the resource. Possible values are `DELETE` and `POST`. Defaults to `DELETE`.",
-				MarkdownDescription: "The method used to delete the resource. Possible values are `DELETE` and `POST`. Defaults to `DELETE`.",
+				Description:         "The method used to delete the resource. Defaults to `DELETE`.",
+				MarkdownDescription: "The method used to delete the resource. Defaults to `DELETE`.",
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.OneOf("DELETE", "POST"),

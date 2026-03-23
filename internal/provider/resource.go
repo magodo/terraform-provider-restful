@@ -29,6 +29,7 @@ import (
 	"github.com/magodo/terraform-plugin-framework-helper/ephemeral"
 	"github.com/magodo/terraform-plugin-framework-helper/jsonset"
 	"github.com/magodo/terraform-provider-restful/internal/client"
+	"github.com/magodo/terraform-provider-restful/internal/defaults"
 	"github.com/magodo/terraform-provider-restful/internal/exparam"
 	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
 	"github.com/tidwall/gjson"
@@ -242,8 +243,8 @@ func resourcePrecheckAttribute(s string, pathIsRequired bool, suffixDesc string,
 							Optional:            true,
 						},
 						"default_delay_sec": schema.Int64Attribute{
-							Description:         fmt.Sprintf("The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `%d`.", PRECHECK_DEFAULT_DELAY_SEC),
-							MarkdownDescription: fmt.Sprintf("The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `%d`.", PRECHECK_DEFAULT_DELAY_SEC),
+							Description:         fmt.Sprintf("The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `%d`.", defaults.PrecheckDefaultDelayInSec),
+							MarkdownDescription: fmt.Sprintf("The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `%d`.", defaults.PrecheckDefaultDelayInSec),
 							Optional:            true,
 						},
 					},
@@ -309,8 +310,8 @@ func resourcePollAttribute(s string) schema.SingleNestedAttribute {
 				Optional:            true,
 			},
 			"default_delay_sec": schema.Int64Attribute{
-				Description:         fmt.Sprintf("The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `%d`.", POLL_DEFAULT_DELAY_SEC),
-				MarkdownDescription: fmt.Sprintf("The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `%d`.", POLL_DEFAULT_DELAY_SEC),
+				Description:         fmt.Sprintf("The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `%d`.", defaults.PollDefaultDelayInSec),
+				MarkdownDescription: fmt.Sprintf("The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `%d`.", defaults.PollDefaultDelayInSec),
 				Optional:            true,
 			},
 		},

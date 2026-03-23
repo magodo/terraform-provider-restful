@@ -10,8 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 )
 
-// Generate the provider document.
-//go:generate go tool tfplugindocs generate
+//go:generate go run ./internal/tools/gendoc
 
 func main() {
 	var debug bool
