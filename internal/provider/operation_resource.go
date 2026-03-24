@@ -108,8 +108,8 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 				},
 			},
 			"method": schema.StringAttribute{
-				Description:         "The HTTP method for the `Create`/`Update` call. Possible values are `GET`, `PUT`, `POST`, `PATCH` and `DELETE`.",
-				MarkdownDescription: "The HTTP method for the `Create`/`Update` call. Possible values are `GET`, `PUT`, `POST`, `PATCH` and `DELETE`.",
+				Description:         "The HTTP method for the `Create`/`Update` call.",
+				MarkdownDescription: "The HTTP method for the `Create`/`Update` call.",
 				Required:            true,
 				Validators: []validator.String{
 					stringvalidator.OneOf("GET", "PUT", "POST", "PATCH", "DELETE"),
@@ -167,8 +167,8 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 			"poll":     resourcePollAttribute("`Create`/`Update`"),
 
 			"delete_method": schema.StringAttribute{
-				Description:         "The method for the `Delete` call. Possible values are `POST`, `PUT`, `PATCH` and `DELETE`. If this is not specified, no `Delete` call will occur.",
-				MarkdownDescription: "The method for the `Delete` call. Possible values are `POST`, `PUT`, `PATCH` and `DELETE`. If this is not specified, no `Delete` call will occur.",
+				Description:         "The method for the `Delete` call. If this is not specified, no `Delete` call will occur.",
+				MarkdownDescription: "The method for the `Delete` call. If this is not specified, no `Delete` call will occur.",
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.OneOf("POST", "PUT", "PATCH", "DELETE"),
@@ -201,7 +201,7 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 				ElementType:         types.StringType,
 			},
 			"use_sensitive_output": schema.BoolAttribute{
-				MarkdownDescription: "Whether to use `sensitive_output` instead of `output`. When true, the response will be stored in `sensitive_output` (which is marked as sensitive). Defaults to `false`. Changing this forces a new resource to be created.",
+				MarkdownDescription: "Whether to use `sensitive_output` instead of `output`. When true, the response will be stored in `sensitive_output` (which is marked as sensitive). Defaults to `false`.",
 				Optional:            true,
 				PlanModifiers: []planmodifier.Bool{
 					boolplanmodifier.RequiresReplace(),
