@@ -64,7 +64,7 @@ func (l *ListResource) ListResourceConfigSchema(ctx context.Context, req list.Li
 				Optional:            true,
 			},
 			"method": schema.StringAttribute{
-				MarkdownDescription: "The HTTP Method for the request. Allowed methods are a subset of methods defined in [RFC7231](https://datatracker.ietf.org/doc/html/rfc7231#section-4.3) namely, `GET`, `HEAD`, and `POST`. `POST` support is only intended for read-only URLs, such as submitting a search. Defaults to `GET`.",
+				MarkdownDescription: "The HTTP Method for the request. `POST` support is only intended for read-only URLs, such as submitting a search. Defaults to `GET`.",
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.OneOf("GET", "POST", "HEAD"),
