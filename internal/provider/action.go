@@ -65,8 +65,8 @@ func actionPrecheckAttribute(s string, pathIsRequired bool, suffixDesc string, s
 	}
 
 	return schema.ListNestedAttribute{
-		Description:         fmt.Sprintf("An array of prechecks that need to pass prior to the %q operation. Exactly one of `mutex` or `api` should be specified.", s),
-		MarkdownDescription: fmt.Sprintf("An array of prechecks that need to pass prior to the %q operation. Exactly one of `mutex` or `api` should be specified.", s),
+		Description:         fmt.Sprintf("An array of prechecks that need to pass prior to the %q operation.", s),
+		MarkdownDescription: fmt.Sprintf("An array of prechecks that need to pass prior to the %q operation.", s),
 		Optional:            true,
 		NestedObject: schema.NestedAttributeObject{
 			Attributes: map[string]schema.Attribute{
@@ -77,6 +77,7 @@ func actionPrecheckAttribute(s string, pathIsRequired bool, suffixDesc string, s
 					Validators: []validator.String{
 						stringvalidator.ExactlyOneOf(
 							path.MatchRelative().AtParent().AtName("api"),
+							path.MatchRelative().AtParent().AtName("mutex"),
 						),
 					},
 				},
@@ -90,7 +91,7 @@ func actionPrecheckAttribute(s string, pathIsRequired bool, suffixDesc string, s
 							MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)." + statusLocatorSuffixDesc,
 							Required:            true,
 							Validators: []validator.String{
-								myvalidator.StringIsParsable("status_locator", func(s string) error {
+								myvalidator.StringIsParsable("", func(s string) error {
 									return validateLocator(s)
 								}),
 							},
@@ -139,6 +140,7 @@ func actionPrecheckAttribute(s string, pathIsRequired bool, suffixDesc string, s
 					},
 					Validators: []validator.Object{
 						objectvalidator.ExactlyOneOf(
+							path.MatchRelative().AtParent().AtName("api"),
 							path.MatchRelative().AtParent().AtName("mutex"),
 						),
 					},
@@ -167,7 +169,7 @@ func (a *Action) Schema(ctx context.Context, req action.SchemaRequest, resp *act
 				Optional:            true,
 			},
 			"method": schema.StringAttribute{
-				MarkdownDescription: "The HTTP method for the `Invoke` call. Possible values are `HEAD`, `GET`, `PUT`, `POST`, `PATCH` and `DELETE`.",
+				MarkdownDescription: "The HTTP method for the `Invoke` call.",
 				Required:            true,
 				Validators: []validator.String{
 					stringvalidator.OneOf("HEAD", "GET", "PUT", "POST", "PATCH", "DELETE"),
@@ -178,8 +180,8 @@ func (a *Action) Schema(ctx context.Context, req action.SchemaRequest, resp *act
 				Optional:            true,
 			},
 			"ephemeral_body": schema.DynamicAttribute{
-				Description:         "The ephemeral (write-only) properties of the resource. This will be merge-patched to the `body` to construct the actual request body.",
-				MarkdownDescription: "The ephemeral (write-only) properties of the resource. This will be merge-patched to the `body` to construct the actual request body.",
+				Description:         "The ephemeral properties of the resource. This will be merge-patched to the `body` to construct the actual request body.",
+				MarkdownDescription: "The ephemeral properties of the resource. This will be merge-patched to the `body` to construct the actual request body.",
 				Optional:            true,
 				WriteOnly:           true,
 			},
@@ -196,7 +198,7 @@ func (a *Action) Schema(ctx context.Context, req action.SchemaRequest, resp *act
 						MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md). The `path` can contain `$(body.x.y.z)` parameter that reference property from either the response body (for `Create`, after selector), or `state.output` (for `Read`/`Update`/`Delete`).",
 						Required:            true,
 						Validators: []validator.String{
-							myvalidator.StringIsParsable("status_locator", func(s string) error {
+							myvalidator.StringIsParsable("", func(s string) error {
 								return validateLocator(s)
 							}),
 						},
@@ -224,7 +226,7 @@ func (a *Action) Schema(ctx context.Context, req action.SchemaRequest, resp *act
 						MarkdownDescription: "Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the current operation's URL is used for polling, execpt `Create` where it fallbacks to use the path constructed by the `read_path` as the polling URL.",
 						Optional:            true,
 						Validators: []validator.String{
-							myvalidator.StringIsParsable("url_locator", func(s string) error {
+							myvalidator.StringIsParsable("", func(s string) error {
 								return validateLocator(s)
 							}),
 						},
