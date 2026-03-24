@@ -10,6 +10,14 @@ description: |-
 
 `restful_resource` data source can be used to retrieve the model of a restful resource by ID.
 
+## Example Usage
+
+```terraform
+data "restful_resource" "test" {
+  id = "/posts/1"
+}
+```
+
 ## Schema
 
 ### Required

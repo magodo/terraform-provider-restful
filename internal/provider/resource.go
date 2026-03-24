@@ -1769,7 +1769,7 @@ func (r *Resource) IdentitySchema(ctx context.Context, req resource.IdentitySche
 	resp.IdentitySchema = identityschema.Schema{
 		Attributes: map[string]identityschema.Attribute{
 			"id": identityschema.StringAttribute{
-				Description:       "The import spec described at: https://registry.terraform.io/providers/magodo/restful/latest/docs/resources/resource#import.",
+				Description:       "The import format described above.",
 				RequiredForImport: true,
 			},
 		},
