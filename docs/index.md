@@ -125,32 +125,24 @@ provider "restful" {
 
 - `base_url` (String) The base URL of the API provider.
 
-	Validators:
-
-	- Ensure this is a valid HTTP URL.
+	-> Ensure this is a valid HTTP URL.
 
 ### Optional
 
 - `client` (Object) The client configuration. See [below for nested schema](#nested--client).
 - `create_method` (String) The method used to create the resource. Defaults to `POST`.
 
-	Validators:
-
-	- Value must be one of: ["PUT" "POST"].
+	-> Value must be one of: ["PUT" "POST"].
 - `delete_method` (String) The method used to delete the resource. Defaults to `DELETE`.
 
-	Validators:
-
-	- Value must be one of: ["DELETE" "POST"].
+	-> Value must be one of: ["DELETE" "POST"].
 - `header` (Map of Strings) The header parameters that are applied to each request.
 - `merge_patch_disabled` (Boolean) Whether to use a JSON Merge Patch as the request body in the PATCH update? Defaults to `false`. This is only effective when `update_method` is set to `PATCH`.
 - `query` (Map of Lists of Strings) The query parameters that are applied to each request.
 - `security` (Object) The OpenAPI security scheme that is be used for auth. See [below for nested schema](#nested--security).
 - `update_method` (String) The method used to update the resource. Defaults to `PUT`.
 
-	Validators:
-
-	- Value must be one of: ["PUT" "PATCH"].
+	-> Value must be one of: ["PUT" "PATCH"].
 
 <a id="nested--client"></a>
 ### Nested Schema for `client`
@@ -162,16 +154,14 @@ Optional:
 - `retry` (Object) The retry option for the client. See [below for nested schema](#nested--client.retry).
 - `root_ca_certificate_files` (List of Strings) The list of certificate file paths of root certificate authorities that clients use when verifying server certificates. If not specified, TLS uses the host's root CA set.
 
-	Validators:
+	-> Ensure that if an attribute is set, these are not set: "[client.root_ca_certificate_files]".
 
-	- Ensure that if an attribute is set, these are not set: "[client.root_ca_certificate_files]".
-	- Ensure that if an attribute is set, also these are set: "[client.certificates]".
+	-> Ensure that if an attribute is set, also these are set: "[client.certificates]".
 - `root_ca_certificates` (List of Strings) The list of certificates of root certificate authorities that clients use when verifying server certificates. If not specified, TLS uses the host's root CA set.
 
-	Validators:
+	-> Ensure that if an attribute is set, these are not set: "[client.root_ca_certificate_files]".
 
-	- Ensure that if an attribute is set, these are not set: "[client.root_ca_certificate_files]".
-	- Ensure that if an attribute is set, also these are set: "[client.certificates]".
+	-> Ensure that if an attribute is set, also these are set: "[client.certificates]".
 - `tls_insecure_skip_verify` (Boolean) Whether a client verifies the server's certificate chain and host name. Defaults to `false`.
 <a id="nested--client.certificates"></a>
 ### Nested Schema for `client.certificates`
@@ -180,28 +170,24 @@ Optional:
 
 - `certificate` (String) The client certificate for mTLS.
 
-	Validators:
+	-> Ensure that if an attribute is set, these are not set: "[<.certificate_file]".
 
-	- Ensure that if an attribute is set, these are not set: "[<.certificate_file]".
-	- Ensure that at least one attribute from this collection is set: [<.key,<.key_file].
+	-> Ensure that at least one attribute from this collection is set: [<.key,<.key_file].
 - `certificate_file` (String) The path of the client certificate file for mTLS.
 
-	Validators:
+	-> Ensure that if an attribute is set, these are not set: "[<.certificate]".
 
-	- Ensure that if an attribute is set, these are not set: "[<.certificate]".
-	- Ensure that at least one attribute from this collection is set: [<.key,<.key_file].
+	-> Ensure that at least one attribute from this collection is set: [<.key,<.key_file].
 - `key` (String) The client private key for mTLS.
 
-	Validators:
+	-> Ensure that if an attribute is set, these are not set: "[<.key_file]".
 
-	- Ensure that if an attribute is set, these are not set: "[<.key_file]".
-	- Ensure that at least one attribute from this collection is set: [<.certificate,<.certificate_file].
+	-> Ensure that at least one attribute from this collection is set: [<.certificate,<.certificate_file].
 - `key_file` (String) The path of the client private key file for mTLS.
 
-	Validators:
+	-> Ensure that if an attribute is set, these are not set: "[<.key]".
 
-	- Ensure that if an attribute is set, these are not set: "[<.key]".
-	- Ensure that at least one attribute from this collection is set: [<.certificate,<.certificate_file].
+	-> Ensure that at least one attribute from this collection is set: [<.certificate,<.certificate_file].
 <a id="nested--client.retry"></a>
 ### Nested Schema for `client.retry`
 
@@ -221,19 +207,13 @@ Optional:
 
 - `apikey` (Set of Objects) Configuration for the API Key authentication scheme. See [below for nested schema](#nested--security.apikey).
 
-	Validators:
-
-	- Ensure that if an attribute is set, these are not set: "[security.http,security.oauth2]".
+	-> Ensure that if an attribute is set, these are not set: "[security.http,security.oauth2]".
 - `http` (Object) Configuration for the HTTP authentication scheme. See [below for nested schema](#nested--security.http).
 
-	Validators:
-
-	- Ensure that if an attribute is set, these are not set: "[security.apikey,security.oauth2]".
+	-> Ensure that if an attribute is set, these are not set: "[security.apikey,security.oauth2]".
 - `oauth2` (Object) Configuration for the OAuth2 authentication scheme. See [below for nested schema](#nested--security.oauth2).
 
-	Validators:
-
-	- Ensure that if an attribute is set, these are not set: "[security.http,security.apikey]".
+	-> Ensure that if an attribute is set, these are not set: "[security.http,security.apikey]".
 <a id="nested--security.apikey"></a>
 ### Nested Schema for `security.apikey`
 
@@ -241,9 +221,7 @@ Required:
 
 - `in` (String) Specifies how is the API Key is sent.
 
-	Validators:
-
-	- Value must be one of: ["header" "query" "cookie"].
+	-> Value must be one of: ["header" "query" "cookie"].
 - `name` (String) The API Key name
 - `value` (String) The API Key value
 <a id="nested--security.http"></a>
@@ -253,14 +231,10 @@ Optional:
 
 - `basic` (Object) Basic authentication See [below for nested schema](#nested--security.http.basic).
 
-	Validators:
-
-	- Ensure that one and only one attribute from this collection is set: "[security.http.basic,security.http.token]".
+	-> Ensure that one and only one attribute from this collection is set: "[security.http.basic,security.http.token]".
 - `token` (Object) Auth token (e.g. Bearer). See [below for nested schema](#nested--security.http.token).
 
-	Validators:
-
-	- Ensure that one and only one attribute from this collection is set: "[security.http.basic,security.http.token]".
+	-> Ensure that one and only one attribute from this collection is set: "[security.http.basic,security.http.token]".
 <a id="nested--security.http.basic"></a>
 ### Nested Schema for `security.http.basic`
 
@@ -285,19 +259,13 @@ Optional:
 
 - `client_credentials` (Object) [Client credentials](https://www.rfc-editor.org/rfc/rfc6749#section-4.4). See [below for nested schema](#nested--security.oauth2.client_credentials).
 
-	Validators:
-
-	- Ensure that one and only one attribute from this collection is set: "[security.oauth2.password,security.oauth2.client_credentials,security.oauth2.refresh_token]".
+	-> Ensure that one and only one attribute from this collection is set: "[security.oauth2.password,security.oauth2.client_credentials,security.oauth2.refresh_token]".
 - `password` (Object) [Resource owner password credential](https://www.rfc-editor.org/rfc/rfc6749#section-4.3). See [below for nested schema](#nested--security.oauth2.password).
 
-	Validators:
-
-	- Ensure that one and only one attribute from this collection is set: "[security.oauth2.password,security.oauth2.client_credentials,security.oauth2.refresh_token]".
+	-> Ensure that one and only one attribute from this collection is set: "[security.oauth2.password,security.oauth2.client_credentials,security.oauth2.refresh_token]".
 - `refresh_token` (Object) [Refresh token](https://www.rfc-editor.org/rfc/rfc6749#section-6). See [below for nested schema](#nested--security.oauth2.refresh_token).
 
-	Validators:
-
-	- Ensure that one and only one attribute from this collection is set: "[security.oauth2.password,security.oauth2.client_credentials,security.oauth2.refresh_token]".
+	-> Ensure that one and only one attribute from this collection is set: "[security.oauth2.password,security.oauth2.client_credentials,security.oauth2.refresh_token]".
 <a id="nested--security.oauth2.client_credentials"></a>
 ### Nested Schema for `security.oauth2.client_credentials`
 
@@ -312,9 +280,7 @@ Optional:
 - `endpoint_params` (Map of Lists of Strings) The additional parameters for requests to the token endpoint.
 - `in` (String) Specifies how is the client ID & secret sent. If absent, the style used will be auto detected.
 
-	Validators:
-
-	- Value must be one of: ["params" "header"].
+	-> Value must be one of: ["params" "header"].
 - `scopes` (List of Strings) The optional requested permissions.
 <a id="nested--security.oauth2.password"></a>
 ### Nested Schema for `security.oauth2.password`
@@ -331,9 +297,7 @@ Optional:
 - `client_secret` (String, Sensitive) The application's secret.
 - `in` (String) Specifies how is the client ID & secret sent. If absent, the style used will be auto detected.
 
-	Validators:
-
-	- Value must be one of: ["params" "header"].
+	-> Value must be one of: ["params" "header"].
 - `scopes` (List of Strings) The optional requested permissions.
 <a id="nested--security.oauth2.refresh_token"></a>
 ### Nested Schema for `security.oauth2.refresh_token`
@@ -349,8 +313,6 @@ Optional:
 - `client_secret` (String, Sensitive) The application's secret.
 - `in` (String) Specifies how is the client ID & secret sent. If absent, the style used will be auto detected.
 
-	Validators:
-
-	- Value must be one of: ["params" "header"].
+	-> Value must be one of: ["params" "header"].
 - `scopes` (List of Strings) The optional requested permissions.
 - `token_type` (String) The type of the access token. Defaults to "Bearer".
