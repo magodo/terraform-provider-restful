@@ -176,8 +176,8 @@ func resourcePrecheckAttribute(s string, pathIsRequired bool, suffixDesc string,
 	}
 
 	return schema.ListNestedAttribute{
-		Description:         fmt.Sprintf("An array of prechecks that need to pass prior to the %q operation. Exactly one of `mutex` or `api` should be specified.", s),
-		MarkdownDescription: fmt.Sprintf("An array of prechecks that need to pass prior to the %q operation. Exactly one of `mutex` or `api` should be specified.", s),
+		Description:         fmt.Sprintf("An array of prechecks that need to pass prior to the %q operation.", s),
+		MarkdownDescription: fmt.Sprintf("An array of prechecks that need to pass prior to the %q operation.", s),
 		Optional:            true,
 		NestedObject: schema.NestedAttributeObject{
 			Attributes: map[string]schema.Attribute{
@@ -187,6 +187,7 @@ func resourcePrecheckAttribute(s string, pathIsRequired bool, suffixDesc string,
 					Optional:            true,
 					Validators: []validator.String{
 						stringvalidator.ExactlyOneOf(
+							path.MatchRelative().AtParent().AtName("mutex"),
 							path.MatchRelative().AtParent().AtName("api"),
 						),
 					},
@@ -201,7 +202,7 @@ func resourcePrecheckAttribute(s string, pathIsRequired bool, suffixDesc string,
 							MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)." + statusLocatorSuffixDesc,
 							Required:            true,
 							Validators: []validator.String{
-								myvalidator.StringIsParsable("status_locator", func(s string) error {
+								myvalidator.StringIsParsable("", func(s string) error {
 									return validateLocator(s)
 								}),
 							},
@@ -250,6 +251,7 @@ func resourcePrecheckAttribute(s string, pathIsRequired bool, suffixDesc string,
 					},
 					Validators: []validator.Object{
 						objectvalidator.ExactlyOneOf(
+							path.MatchRelative().AtParent().AtName("api"),
 							path.MatchRelative().AtParent().AtName("mutex"),
 						),
 					},
@@ -270,7 +272,7 @@ func resourcePollAttribute(s string) schema.SingleNestedAttribute {
 				MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md). The `path` can contain `$(body.x.y.z)` parameter that reference property from either the response body (for `Create`, after selector), or `state.output` (for `Read`/`Update`/`Delete`).",
 				Required:            true,
 				Validators: []validator.String{
-					myvalidator.StringIsParsable("status_locator", func(s string) error {
+					myvalidator.StringIsParsable("", func(s string) error {
 						return validateLocator(s)
 					}),
 				},
@@ -298,7 +300,7 @@ func resourcePollAttribute(s string) schema.SingleNestedAttribute {
 				MarkdownDescription: "Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the current operation's URL is used for polling, execpt `Create` where it fallbacks to use the path constructed by the `read_path` as the polling URL.",
 				Optional:            true,
 				Validators: []validator.String{
-					myvalidator.StringIsParsable("url_locator", func(s string) error {
+					myvalidator.StringIsParsable("", func(s string) error {
 						return validateLocator(s)
 					}),
 				},
@@ -384,15 +386,15 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 			},
 
 			"ephemeral_body": schema.DynamicAttribute{
-				Description:         "The ephemeral (write-only) properties of the resource. This will be merge-patched to the `body` to construct the actual request body.",
-				MarkdownDescription: "The ephemeral (write-only) properties of the resource. This will be merge-patched to the `body` to construct the actual request body.",
+				Description:         "The ephemeral properties of the resource. This will be merge-patched to the `body` to construct the actual request body.",
+				MarkdownDescription: "The ephemeral properties of the resource. This will be merge-patched to the `body` to construct the actual request body.",
 				Optional:            true,
 				WriteOnly:           true,
 			},
 
 			"delete_body": schema.DynamicAttribute{
-				Description:         "The payload for the `Delete` call. Conflicts with `delete_body_raw`.",
-				MarkdownDescription: "The payload for the `Delete` call. Conflicts with `delete_body_raw`.",
+				Description:         "The payload for the `Delete` call.",
+				MarkdownDescription: "The payload for the `Delete` call.",
 				Optional:            true,
 				Validators: []validator.Dynamic{
 					dynamicvalidator.ConflictsWith(
@@ -401,8 +403,8 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				},
 			},
 			"delete_body_raw": schema.StringAttribute{
-				Description:         "The raw payload for the `Delete` call. It can contain `$(body.x.y.z)` parameter that reference property from the `state.output`. Conflicts with `delete_body`.",
-				MarkdownDescription: "The raw payload for the `Delete` call. It can contain `$(body.x.y.z)` parameter that reference property from the `state.output`. Conflicts with `delete_body`.",
+				Description:         "The raw payload for the `Delete` call. It can contain `$(body.x.y.z)` parameter that reference property from the `state.output`.",
+				MarkdownDescription: "The raw payload for the `Delete` call. It can contain `$(body.x.y.z)` parameter that reference property from the `state.output`.",
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.ConflictsWith(
@@ -422,7 +424,7 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 							Required:            true,
 						},
 						"raw_json": schema.StringAttribute{
-							MarkdownDescription: "The raw json used as the patch value. It can contain `$(body.x.y.z)` parameter that reference property from the `state.output`. Exactly one of `raw_json` and `removed` shall be specified.",
+							MarkdownDescription: "The raw json used as the patch value. It can contain `$(body.x.y.z)` parameter that reference property from the `state.output`.",
 							Optional:            true,
 							Validators: []validator.String{
 								stringvalidator.ExactlyOneOf(
@@ -432,7 +434,7 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 							},
 						},
 						"removed": schema.BoolAttribute{
-							MarkdownDescription: "Remove the value specified by `path` from the update body. Exactly one of `raw_json` and `removed` shall be specified",
+							MarkdownDescription: "Remove the value specified by `path` from the update body.",
 							Optional:            true,
 							Validators: []validator.Bool{
 								boolvalidator.Equals(true),
@@ -486,7 +488,7 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 						Optional:            true,
 					},
 					"selector": schema.StringAttribute{
-						Description:         "A selector expression in gjson query syntax, that is used when read returns a collection of resources, to select exactly one member resource of from it. This" + bodyParamDescription + " By default, the whole response body is used as the body.",
+						Description:         "A selector expression in gjson query syntax, that is used when read returns a collection of resources, to select exactly one member resource of from it. This" + bodyParamDescription + " By default, the whole response body is used as; the body.",
 						MarkdownDescription: "A selector expression in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries), that is used when read returns a collection of resources, to select exactly one member resource of from it. This" + bodyParamDescription + " By default, the whole response body is used as the body.",
 						Optional:            true,
 					},
@@ -494,24 +496,24 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 			},
 
 			"create_method": schema.StringAttribute{
-				Description:         "The method used to create the resource. Possible values are `PUT`, `POST` and `PATCH`. This overrides the `create_method` set in the provider block (defaults to POST).",
-				MarkdownDescription: "The method used to create the resource. Possible values are `PUT`, `POST` and `PATCH`. This overrides the `create_method` set in the provider block (defaults to POST).",
+				Description:         "The method used to create the resource. This overrides the `create_method` set in the provider block (defaults to POST).",
+				MarkdownDescription: "The method used to create the resource. This overrides the `create_method` set in the provider block (defaults to POST).",
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.OneOf("PUT", "POST", "PATCH"),
 				},
 			},
 			"update_method": schema.StringAttribute{
-				Description:         "The method used to update the resource. Possible values are `PUT`, `POST` and `PATCH`. This overrides the `update_method` set in the provider block (defaults to PUT).",
-				MarkdownDescription: "The method used to update the resource. Possible values are `PUT`, `POST`, and `PATCH`. This overrides the `update_method` set in the provider block (defaults to PUT).",
+				Description:         "The method used to update the resource. This overrides the `update_method` set in the provider block (defaults to PUT).",
+				MarkdownDescription: "The method used to update the resource. This overrides the `update_method` set in the provider block (defaults to PUT).",
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.OneOf("PUT", "PATCH", "POST"),
 				},
 			},
 			"delete_method": schema.StringAttribute{
-				Description:         "The method used to delete the resource. Possible values are `DELETE`, `POST`, `PUT` and `PATCH`. This overrides the `delete_method` set in the provider block (defaults to DELETE).",
-				MarkdownDescription: "The method used to delete the resource. Possible values are `DELETE`, `POST`, `PUT` and `PATCH`. This overrides the `delete_method` set in the provider block (defaults to DELETE).",
+				Description:         "The method used to delete the resource. This overrides the `delete_method` set in the provider block (defaults to DELETE).",
+				MarkdownDescription: "The method used to delete the resource. This overrides the `delete_method` set in the provider block (defaults to DELETE).",
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.OneOf("DELETE", "POST", "PUT", "PATCH"),
@@ -606,7 +608,7 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				ElementType:         types.StringType,
 			},
 			"use_sensitive_output": schema.BoolAttribute{
-				MarkdownDescription: "Whether to use `sensitive_output` instead of `output`. When true, the response will be stored in `sensitive_output` (which is marked as sensitive). Defaults to `false`. Changing this forces a new resource to be created.",
+				MarkdownDescription: "Whether to use `sensitive_output` instead of `output`. When true, the response will be stored in `sensitive_output` (which is marked as sensitive). Defaults to `false`.",
 				Optional:            true,
 				PlanModifiers: []planmodifier.Bool{
 					boolplanmodifier.RequiresReplace(),
@@ -618,8 +620,8 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				Computed:            true,
 			},
 			"sensitive_output": schema.DynamicAttribute{
-				Description:         "The response body (sensitive). If `ephemeral_body` get returned by API, it will be removed from `sensitive_output`. This is only populated when `use_sensitive_output` is true.",
-				MarkdownDescription: "The response body (sensitive). If `ephemeral_body` get returned by API, it will be removed from `sensitive_output`. This is only populated when `use_sensitive_output` is true.",
+				Description:         "The response body. If `ephemeral_body` get returned by API, it will be removed from `sensitive_output`. This is only populated when `use_sensitive_output` is true.",
+				MarkdownDescription: "The response body. If `ephemeral_body` get returned by API, it will be removed from `sensitive_output`. This is only populated when `use_sensitive_output` is true.",
 				Computed:            true,
 				Sensitive:           true,
 			},
