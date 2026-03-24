@@ -203,8 +203,8 @@ func (d *DataSource) Schema(ctx context.Context, req datasource.SchemaRequest, r
 				Computed:            true,
 			},
 			"sensitive_output": schema.DynamicAttribute{
-				Description:         "The response body after reading the resource (sensitive). This is only populated when `use_sensitive_output` is true.",
-				MarkdownDescription: "The response body after reading the resource (sensitive). This is only populated when `use_sensitive_output` is true.",
+				Description:         "The response body after reading the resource. This is only populated when `use_sensitive_output` is true.",
+				MarkdownDescription: "The response body after reading the resource. This is only populated when `use_sensitive_output` is true.",
 				Computed:            true,
 				Sensitive:           true,
 			},

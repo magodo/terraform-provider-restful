@@ -33,7 +33,7 @@ description: |-
 ### Read-Only
 
 - `output` (Dynamic) The response body after reading the resource. This is only populated when `use_sensitive_output` is false.
-- `sensitive_output` (Dynamic, Sensitive) The response body after reading the resource (sensitive). This is only populated when `use_sensitive_output` is true.
+- `sensitive_output` (Dynamic, Sensitive) The response body after reading the resource. This is only populated when `use_sensitive_output` is true.
 
 <a id="nested--precheck"></a>
 ### Nested Schema for `precheck`
