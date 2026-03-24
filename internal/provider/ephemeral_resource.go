@@ -98,8 +98,8 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 		MarkdownDescription: "`restful_resource` manages an ephemeral resource.",
 		Attributes: map[string]schema.Attribute{
 			"method": schema.StringAttribute{
-				Description:         "The HTTP method to open the ephemeral resource. Possible values are `GET`, `PUT`, `POST`, `PATCH`.",
-				MarkdownDescription: "The HTTP method to open the ephemeral resource. Possible values are `GET`, `PUT`, `POST`, `PATCH`.",
+				Description:         "The HTTP method to open the ephemeral resource.",
+				MarkdownDescription: "The HTTP method to open the ephemeral resource.",
 				Required:            true,
 				Validators: []validator.String{
 					stringvalidator.OneOf("GET", "PUT", "POST", "PATCH"),
@@ -141,8 +141,8 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 			},
 
 			"renew_method": schema.StringAttribute{
-				Description:         "The HTTP method to renew the ephemeral resource. Possible values are `GET`, `PUT`, `POST`, `PATCH`.",
-				MarkdownDescription: "The HTTP method to renew the ephemeral resource. Possible values are `GET`, `PUT`, `POST`, `PATCH`.",
+				Description:         "The HTTP method to renew the ephemeral resource.",
+				MarkdownDescription: "The HTTP method to renew the ephemeral resource.",
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.OneOf("GET", "PUT", "POST", "PATCH"),
@@ -162,8 +162,8 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 				},
 			},
 			"renew_body": schema.DynamicAttribute{
-				Description:         "The payload to renew the ephemeral resource. Conflicts with `renew_body_raw`.",
-				MarkdownDescription: "The payload to renew the ephemeral resource. Conflicts with `renew_body_raw`.",
+				Description:         "The payload to renew the ephemeral resource.",
+				MarkdownDescription: "The payload to renew the ephemeral resource.",
 				Optional:            true,
 				Validators: []validator.Dynamic{
 					dynamicvalidator.AlsoRequires(
@@ -175,8 +175,8 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 				},
 			},
 			"renew_body_raw": schema.StringAttribute{
-				Description:         "The raw payload for the `Renew` call. It can contain `$(body.x.y.z)` parameter that reference property from the `Open` response. Conflicts with `renew_body`.",
-				MarkdownDescription: "The raw payload for the `Renew` call. It can contain `$(body.x.y.z)` parameter that reference property from the `Open` response. Conflicts with `renew_body`.",
+				Description:         "The raw payload for the `Renew` call. It can contain `$(body.x.y.z)` parameter that reference property from the `Open` response.",
+				MarkdownDescription: "The raw payload for the `Renew` call. It can contain `$(body.x.y.z)` parameter that reference property from the `Open` response.",
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.AlsoRequires(
@@ -219,7 +219,7 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 						path.MatchRoot("renew_method"),
 						path.MatchRoot("expiry_locator"),
 					),
-					myvalidator.StringIsParsable("expiry_type", func(s string) error {
+					myvalidator.StringIsParsable("", func(s string) error {
 						return validateExpiryType(s)
 					}),
 				},
@@ -234,7 +234,7 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 						path.MatchRoot("renew_method"),
 						path.MatchRoot("expiry_type"),
 					),
-					myvalidator.StringIsParsable("expiry_locator", func(s string) error {
+					myvalidator.StringIsParsable("", func(s string) error {
 						return validateLocator(s)
 					}),
 				},
@@ -260,7 +260,7 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 					stringvalidator.AlsoRequires(
 						path.MatchRoot("renew_method"),
 					),
-					myvalidator.StringIsParsable("expiry_ahead", func(s string) error {
+					myvalidator.StringIsParsable("", func(s string) error {
 						_, err := time.ParseDuration(s)
 						return err
 					}),
@@ -268,8 +268,8 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 			},
 
 			"close_method": schema.StringAttribute{
-				Description:         "The HTTP method to close the ephemeral resource. Possible values are `PUT`, `POST`, `PATCH`, `DELETE`.",
-				MarkdownDescription: "The HTTP method to close the ephemeral resource. Possible values are `PUT`, `POST`, `PATCH`, `DELETE`.",
+				Description:         "The HTTP method to close the ephemeral resource.",
+				MarkdownDescription: "The HTTP method to close the ephemeral resource.",
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.OneOf("PUT", "POST", "PATCH", "DELETE"),
@@ -289,8 +289,8 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 				},
 			},
 			"close_body": schema.DynamicAttribute{
-				Description:         "The payload to close the ephemeral resource. Conflicts with `close_body_raw`.",
-				MarkdownDescription: "The payload to close the ephemeral resource. Conflicts with `close_body_raw`.",
+				Description:         "The payload to close the ephemeral resource.",
+				MarkdownDescription: "The payload to close the ephemeral resource.",
 				Optional:            true,
 				Validators: []validator.Dynamic{
 					dynamicvalidator.AlsoRequires(
@@ -302,8 +302,8 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 				},
 			},
 			"close_body_raw": schema.StringAttribute{
-				Description:         "The raw payload for the `Close` call. It can contain `$(body.x.y.z)` parameter that reference property from the `Open` response. Conflicts with `close_body`.",
-				MarkdownDescription: "The raw payload for the `Close` call. It can contain `$(body.x.y.z)` parameter that reference property from the `Open` response. Conflicts with `close_body`.",
+				Description:         "The raw payload for the `Close` call. It can contain `$(body.x.y.z)` parameter that reference property from the `Open` response.",
+				MarkdownDescription: "The raw payload for the `Close` call. It can contain `$(body.x.y.z)` parameter that reference property from the `Open` response.",
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.AlsoRequires(
@@ -355,8 +355,8 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 				Computed:            true,
 			},
 			"sensitive_output": schema.DynamicAttribute{
-				Description:         "The response body (sensitive). This is only populated when `use_sensitive_output` is true.",
-				MarkdownDescription: "The response body (sensitive). This is only populated when `use_sensitive_output` is true.",
+				Description:         "The response body. This is only populated when `use_sensitive_output` is true.",
+				MarkdownDescription: "The response body. This is only populated when `use_sensitive_output` is true.",
 				Computed:            true,
 				Sensitive:           true,
 			},
