@@ -56,8 +56,8 @@ func dataSourcePrecheckAttribute(s string, pathIsRequired bool, suffixDesc strin
 	}
 
 	return schema.ListNestedAttribute{
-		Description:         fmt.Sprintf("An array of prechecks that need to pass prior to the %q operation. Exactly one of `mutex` or `api` should be specified.", s),
-		MarkdownDescription: fmt.Sprintf("An array of prechecks that need to pass prior to the %q operation. Exactly one of `mutex` or `api` should be specified.", s),
+		Description:         fmt.Sprintf("An array of prechecks that need to pass prior to the %q operation.", s),
+		MarkdownDescription: fmt.Sprintf("An array of prechecks that need to pass prior to the %q operation.", s),
 		Optional:            true,
 		NestedObject: schema.NestedAttributeObject{
 			Attributes: map[string]schema.Attribute{
@@ -68,6 +68,7 @@ func dataSourcePrecheckAttribute(s string, pathIsRequired bool, suffixDesc strin
 					Validators: []validator.String{
 						stringvalidator.ExactlyOneOf(
 							path.MatchRelative().AtParent().AtName("api"),
+							path.MatchRelative().AtParent().AtName("mutex"),
 						),
 					},
 				},
@@ -81,7 +82,7 @@ func dataSourcePrecheckAttribute(s string, pathIsRequired bool, suffixDesc strin
 							MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)." + statusLocatorSuffixDesc,
 							Required:            true,
 							Validators: []validator.String{
-								myvalidator.StringIsParsable("status_locator", func(s string) error {
+								myvalidator.StringIsParsable("", func(s string) error {
 									return validateLocator(s)
 								}),
 							},
@@ -131,6 +132,7 @@ func dataSourcePrecheckAttribute(s string, pathIsRequired bool, suffixDesc strin
 					Validators: []validator.Object{
 						objectvalidator.ExactlyOneOf(
 							path.MatchRelative().AtParent().AtName("mutex"),
+							path.MatchRelative().AtParent().AtName("api"),
 						),
 					},
 				},
@@ -150,8 +152,7 @@ func (d *DataSource) Schema(ctx context.Context, req datasource.SchemaRequest, r
 				Required:            true,
 			},
 			"method": schema.StringAttribute{
-				Description:         "The HTTP Method for the request. Allowed methods are a subset of methods defined in RFC7231 namely, GET, HEAD, and POST. POST support is only intended for read-only URLs, such as submitting a search. Defaults to `GET`.",
-				MarkdownDescription: "The HTTP Method for the request. Allowed methods are a subset of methods defined in [RFC7231](https://datatracker.ietf.org/doc/html/rfc7231#section-4.3) namely, `GET`, `HEAD`, and `POST`. `POST` support is only intended for read-only URLs, such as submitting a search. Defaults to `GET`.",
+				MarkdownDescription: "The HTTP Method for the request. `POST` support is only intended for read-only URLs, such as submitting a search. Defaults to `GET`.",
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.OneOf("GET", "POST", "HEAD"),
