@@ -25,6 +25,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	tffwdocs "github.com/magodo/terraform-plugin-framework-docs"
 	"github.com/magodo/terraform-plugin-framework-helper/dynamic"
 	"github.com/magodo/terraform-plugin-framework-helper/ephemeral"
 	"github.com/magodo/terraform-plugin-framework-helper/jsonset"
@@ -43,6 +44,7 @@ type Resource struct {
 var _ resource.Resource = &Resource{}
 var _ resource.ResourceWithUpgradeState = &Resource{}
 var _ resource.ResourceWithIdentity = &Resource{}
+var _ tffwdocs.ResourceWithRenderOption = &Resource{}
 
 type resourceIdentityModel struct {
 	ID types.String `tfsdk:"id"`
@@ -1845,4 +1847,99 @@ func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, headerPath, imp.Header)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, readSelector, imp.ReadSelector)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, readResponseTemplate, imp.ReadResponseTemplate)...)
+}
+
+func (r *Resource) RenderOption() tffwdocs.ResourceRenderOption {
+	return tffwdocs.ResourceRenderOption{
+		Examples: []tffwdocs.Example{
+			{
+				Header: "Azure Resource Group",
+				HCL: `
+resource "restful_resource" "rg" {
+  path = format("/subscriptions/%s/resourceGroups/%s", var.subscription_id, "example")
+  query = {
+    api-version = ["2020-06-01"]
+  }
+  create_method = "PUT"
+  poll_delete = {
+    status_locator = "code"
+    status = {
+      success = "404"
+      pending = ["202", "200"]
+    }
+  }
+  body = {
+    location = "westus"
+    tags = {
+      foo = "bar"
+    }
+  }
+}
+					`,
+			},
+		},
+		ImportId: &tffwdocs.ImportId{
+			Format: `
+- id (Required)                        : The resource id.
+- path (Required)                      : The path used to create the resource (as this is force new)
+- query (Optional)                     : The query parameters.
+- header (Optional)                    : The header.
+- body (Optional)                      : The interested properties in the response body that you want to manage via this resource.
+                                         If you omit this, then all the properties will be keeping track, which in most cases is 
+                                         not what you want (e.g. the read only attributes shouldn't be managed).
+                                         The value of each property is not important here, hence leave them as "null".
+- read_selector (Optional)             : The read_selector used to specify the resource from a collection of resources.
+- read_response_template (Optional)    : The read_response_template used to transform the structure of the read response.
+`,
+			ExampleCmdArg: `{
+  "id": "/subscriptions/0-0-0-0/resourceGroups/example",
+  "path": "/subscriptions/0-0-0-0/resourceGroups/example",
+  "query": {"api-version": ["2020-06-01"]},
+  "body": {
+    "location": null,
+    "tags": null
+  }
+}`,
+			ExampleBlk: `import {
+  to = restful_resource.test
+  id = jsonencode({
+    id = "/posts/1"
+    path = "/posts"
+    body = {
+      foo = null
+    }
+    header = {
+      key = "val"
+    }
+    query = {
+      x = ["y"]
+    }
+  })
+}`,
+		},
+		IdentityExamples: []tffwdocs.Example{
+			{
+				HCL: `
+import {
+  to = restful_resource.test
+  identity = {
+    id = jsonencode({
+      id = "/posts/1"
+      path = "/posts"
+      body = {
+        foo = null
+      }
+      header = {
+        key = "val"
+      }
+      query = {
+        x = ["y"]
+      }
+    })
+  }
+}
+`,
+			},
+		},
+	}
 }

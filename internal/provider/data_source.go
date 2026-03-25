@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+	tffwdocs "github.com/magodo/terraform-plugin-framework-docs"
 	"github.com/magodo/terraform-plugin-framework-helper/dynamic"
 	"github.com/magodo/terraform-provider-restful/internal/client"
 	"github.com/magodo/terraform-provider-restful/internal/defaults"
@@ -24,6 +25,7 @@ type DataSource struct {
 }
 
 var _ datasource.DataSource = &DataSource{}
+var _ tffwdocs.DataSourceWithRenderOption = &DataSource{}
 
 type dataSourceData struct {
 	ID                 types.String  `tfsdk:"id"`
@@ -386,5 +388,19 @@ func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp 
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
+	}
+}
+
+func (d *DataSource) RenderOption() tffwdocs.DataSourceRenderOption {
+	return tffwdocs.DataSourceRenderOption{
+		Examples: []tffwdocs.Example{
+			{
+				HCL: `
+data "restful_resource" "test" {
+  id = "/posts/1"
+}
+`,
+			},
+		},
 	}
 }

@@ -26,12 +26,14 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+	tffwdocs "github.com/magodo/terraform-plugin-framework-docs"
 	"github.com/magodo/terraform-provider-restful/internal/client"
 	"github.com/magodo/terraform-provider-restful/internal/defaults"
 	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
 )
 
 var _ provider.Provider = &Provider{}
+var _ tffwdocs.ProviderWithRenderOption = &Provider{}
 
 type Provider struct {
 	client *client.Client
@@ -1074,4 +1076,119 @@ func populateSecurity(ctx context.Context, secRaw basetypes.ObjectValue) (client
 		}
 	}
 	return nil, nil
+}
+
+func (p *Provider) RenderOption() tffwdocs.ProviderRenderOption {
+	return tffwdocs.ProviderRenderOption{
+		Examples: []tffwdocs.Example{
+			{
+				Header: "No Authentication",
+				HCL: `
+provider "restful" {
+  base_url = "http://localhost:3000"
+  securty  = {} # optional
+}
+`,
+			},
+			{
+				Header: "HTTP Basic",
+				HCL: `
+provider "restful" {
+  base_url = "http://localhost:3000"
+  security = {
+    http = {
+      basic = {
+        username = "foo"
+        password = "bar"
+      }
+    }
+  }
+}
+`,
+			},
+			{
+				Header: "HTTP Token",
+				HCL: `
+provider "restful" {
+  base_url = "http://localhost:3000"
+  security = {
+    http = {
+      token = {
+        token = "MYTOKEN"
+      }
+    }
+  }
+}
+`,
+			},
+			{
+				Header: "API Key",
+				HCL: `
+provider "restful" {
+  base_url = "http://localhost:3000"
+  security = {
+    apikey = [
+      {
+        in    = "header"
+        name  = "Fastly-Key"
+        value = "AAAAAAABBBBBBCCCCCC"
+      },
+    ]
+  }
+}
+`,
+			},
+			{
+				Header: "OAuth2 Client Credential",
+				HCL: `
+provider "restful" {
+  base_url = "https://management.azure.com"
+  security = {
+    oauth2 = {
+      client_credentials = {
+        client_id     = var.client_id
+        client_secret = var.client_secret
+        token_url     = format("https://login.microsoftonline.com/%s/oauth2/v2.0/token", var.tenant_id)
+        scopes        = ["https://management.azure.com/.default"]
+      }
+    }
+  }	
+}
+`,
+			},
+			{
+				Header: "OAuth2 Password",
+				HCL: `
+provider "restful" {
+  base_url = var.base_url
+  security = {
+    oauth2 = {
+      password = {
+        token_url = format("%s/auth/login", var.base_url)
+        username  = var.username
+        password  = var.password
+      }
+    }
+  }
+}
+`,
+			},
+			{
+				Header: "OAuth2 Refresh Token",
+				HCL: `
+provider "restful" {
+  base_url = "https://management.azure.com"
+  security = {
+    oauth2 = {
+      refresh_token = {
+        token_url     = format("https://login.microsoftonline.com/%s/oauth2/v2.0/token", var.tenant_id)
+        refresh_token = var.refresh_token
+      }
+    }
+  }
+}
+`,
+			},
+		},
+	}
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	tffwdocs "github.com/magodo/terraform-plugin-framework-docs"
 	"github.com/magodo/terraform-plugin-framework-helper/dynamic"
 	"github.com/magodo/terraform-provider-restful/internal/exparam"
 	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
@@ -28,6 +29,7 @@ type EphemeralResource struct {
 var _ ephemeral.EphemeralResourceWithConfigure = &EphemeralResource{}
 var _ ephemeral.EphemeralResourceWithClose = &EphemeralResource{}
 var _ ephemeral.EphemeralResourceWithRenew = &EphemeralResource{}
+var _ tffwdocs.EphemeralResourceWithRenderOption = &EphemeralResource{}
 
 const (
 	pkRenew = "renew"
@@ -712,5 +714,30 @@ func (e *EphemeralResource) Close(ctx context.Context, req ephemeral.CloseReques
 			string(response.Body()),
 		)
 		return
+	}
+}
+
+func (e *EphemeralResource) RenderOption() tffwdocs.EphemeralResourceRenderOption {
+	return tffwdocs.EphemeralResourceRenderOption{
+		Examples: []tffwdocs.Example{
+			{
+				HCL: `
+ephemeral "restful_resource" "test" {
+  path = "/lease"
+  method = "POST"
+
+  renew_path = "/updateLease"
+  renew_method = "POST"
+
+  expiry_ahead = "0.5s"
+  expiry_type = "duration"
+  expiry_locator = "header.expiry"
+
+  close_path = "/unlease"
+  close_method = "POST"
+}
+`,
+			},
+		},
 	}
 }

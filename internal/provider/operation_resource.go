@@ -20,6 +20,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	tffwdocs "github.com/magodo/terraform-plugin-framework-docs"
 	"github.com/magodo/terraform-plugin-framework-helper/dynamic"
 	"github.com/magodo/terraform-plugin-framework-helper/ephemeral"
 	"github.com/magodo/terraform-plugin-framework-helper/jsonset"
@@ -34,6 +35,7 @@ type OperationResource struct {
 
 var _ resource.Resource = &OperationResource{}
 var _ resource.ResourceWithUpgradeState = &OperationResource{}
+var _ tffwdocs.ResourceWithRenderOption = &OperationResource{}
 
 type operationResourceData struct {
 	ID        types.String `tfsdk:"id"`
@@ -649,5 +651,32 @@ func (r *OperationResource) Delete(ctx context.Context, req resource.DeleteReque
 			)
 			return
 		}
+	}
+}
+
+func (r *OperationResource) RenderOption() tffwdocs.ResourceRenderOption {
+	return tffwdocs.ResourceRenderOption{
+		Examples: []tffwdocs.Example{
+			{
+				Header: "Azure Register RP",
+				HCL: `
+				resource "restful_operation" "register_rp" {
+					path = format("/subscriptions/%s/providers/Microsoft.ProviderHub/register", var.subscription_id)
+					query = {
+						api-version = ["2014-04-01-preview"]
+					}
+					method = "POST"
+					poll = {
+						url_locator    = format("exact./subscriptions/%s/providers/Microsoft.ProviderHub?api-version=2014-04-01-preview", var.subscription_id)
+						status_locator = "body.registrationState"
+						status = {
+							success = "Registered"
+							pending = ["Registering"]
+						}
+					}
+				}
+				`,
+			},
+		},
 	}
 }
