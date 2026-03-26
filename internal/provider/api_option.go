@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/magodo/terraform-plugin-framework-helper/dynamic"
 	"github.com/magodo/terraform-provider-restful/internal/client"
+	"github.com/magodo/terraform-provider-restful/internal/defaults"
 )
 
 type apiOption struct {
@@ -150,6 +151,11 @@ func (opt apiOption) ForPoll(ctx context.Context, defaultHeader client.Header, d
 		header = header.Clone().TakeOrSelf(ctx, d.Header)
 	}
 
+	defaultSec := defaults.PollDefaultDelayInSec
+	if !d.DefaultDelay.IsNull() && !d.DefaultDelay.IsUnknown() {
+		defaultSec = int(d.DefaultDelay.ValueInt64())
+	}
+
 	return &client.PollOption{
 		StatusLocator: statusLocator,
 		Status: client.PollingStatus{
@@ -162,7 +168,7 @@ func (opt apiOption) ForPoll(ctx context.Context, defaultHeader client.Header, d
 		// The poll option always use the default query, which is typically is from the original request
 		Query: defaultQuery,
 
-		DefaultDelay: time.Duration(d.DefaultDelay.ValueInt64()) * time.Second,
+		DefaultDelay: time.Duration(defaultSec) * time.Second,
 	}, nil
 }
 
@@ -218,6 +224,11 @@ func (opt apiOption) ForPrecheck(ctx context.Context, defaultPath string, defaul
 	uRL.RawQuery = query.Encode()
 	urlLocator := client.ExactLocator(uRL.String())
 
+	defaultSec := defaults.PrecheckDefaultDelayInSec
+	if !d.DefaultDelay.IsNull() && !d.DefaultDelay.IsUnknown() {
+		defaultSec = int(d.DefaultDelay.ValueInt64())
+	}
+
 	return &client.PollOption{
 		StatusLocator: statusLocator,
 		Status: client.PollingStatus{
@@ -226,6 +237,6 @@ func (opt apiOption) ForPrecheck(ctx context.Context, defaultPath string, defaul
 		},
 		UrlLocator:   urlLocator,
 		Header:       header,
-		DefaultDelay: time.Duration(d.DefaultDelay.ValueInt64()) * time.Second,
+		DefaultDelay: time.Duration(defaultSec) * time.Second,
 	}, nil
 }

@@ -13,11 +13,11 @@ import (
 type stringsIsPathBuilder struct{}
 
 func (v stringsIsPathBuilder) Description(ctx context.Context) string {
-	return "validate this is a path builder expression"
+	return "Ensure this is a path builder expression."
 }
 
 func (v stringsIsPathBuilder) MarkdownDescription(ctx context.Context) string {
-	return "validate this is a path builder expression"
+	return "Ensure this is a path builder expression."
 }
 
 func (_ stringsIsPathBuilder) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {

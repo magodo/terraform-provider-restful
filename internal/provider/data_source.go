@@ -5,14 +5,19 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/objectvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+	tffwdocs "github.com/magodo/terraform-plugin-framework-docs"
 	"github.com/magodo/terraform-plugin-framework-helper/dynamic"
 	"github.com/magodo/terraform-provider-restful/internal/client"
+	"github.com/magodo/terraform-provider-restful/internal/defaults"
+	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
 )
 
 type DataSource struct {
@@ -20,6 +25,7 @@ type DataSource struct {
 }
 
 var _ datasource.DataSource = &DataSource{}
+var _ tffwdocs.DataSourceWithRenderOption = &DataSource{}
 
 type dataSourceData struct {
 	ID                 types.String  `tfsdk:"id"`
@@ -40,6 +46,103 @@ func (d *DataSource) Metadata(ctx context.Context, req datasource.MetadataReques
 	resp.TypeName = req.ProviderTypeName + "_resource"
 }
 
+func dataSourcePrecheckAttribute(s string, pathIsRequired bool, suffixDesc string, statusLocatorSupportParam bool) schema.ListNestedAttribute {
+	pathDesc := "The path used to query readiness, relative to the `base_url` of the provider."
+	if suffixDesc != "" {
+		pathDesc += " " + suffixDesc
+	}
+
+	var statusLocatorSuffixDesc string
+	if statusLocatorSupportParam {
+		statusLocatorSuffixDesc = " The `path` can contain `$(body.x.y.z)` parameter that reference property from the `state.output`."
+	}
+
+	return schema.ListNestedAttribute{
+		Description:         fmt.Sprintf("An array of prechecks that need to pass prior to the %q operation.", s),
+		MarkdownDescription: fmt.Sprintf("An array of prechecks that need to pass prior to the %q operation.", s),
+		Optional:            true,
+		NestedObject: schema.NestedAttributeObject{
+			Attributes: map[string]schema.Attribute{
+				"mutex": schema.StringAttribute{
+					Description:         "The name of the mutex, which implies the resource will keep waiting until this mutex is held",
+					MarkdownDescription: "The name of the mutex, which implies the resource will keep waiting until this mutex is held",
+					Optional:            true,
+					Validators: []validator.String{
+						stringvalidator.ExactlyOneOf(
+							path.MatchRelative().AtParent().AtName("api"),
+							path.MatchRelative().AtParent().AtName("mutex"),
+						),
+					},
+				},
+				"api": schema.SingleNestedAttribute{
+					Description:         "Keeps waiting until the specified API meets the success status",
+					MarkdownDescription: "Keeps waiting until the specified API meets the success status",
+					Optional:            true,
+					Attributes: map[string]schema.Attribute{
+						"status_locator": schema.StringAttribute{
+							Description:         "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the gjson syntax." + statusLocatorSuffixDesc,
+							MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)." + statusLocatorSuffixDesc,
+							Required:            true,
+							Validators: []validator.String{
+								myvalidator.StringIsParsable("", func(s string) error {
+									return validateLocator(s)
+								}),
+							},
+						},
+						"status": schema.SingleNestedAttribute{
+							Description:         "The expected status sentinels for each polling state.",
+							MarkdownDescription: "The expected status sentinels for each polling state.",
+							Required:            true,
+							Attributes: map[string]schema.Attribute{
+								"success": schema.StringAttribute{
+									Description:         "The expected status sentinel for suceess status.",
+									MarkdownDescription: "The expected status sentinel for suceess status.",
+									Required:            true,
+								},
+								"pending": schema.ListAttribute{
+									Description:         "The expected status sentinels for pending status.",
+									MarkdownDescription: "The expected status sentinels for pending status.",
+									Optional:            true,
+									ElementType:         types.StringType,
+								},
+							},
+						},
+						"path": schema.StringAttribute{
+							Description:         pathDesc,
+							MarkdownDescription: pathDesc,
+							Required:            pathIsRequired,
+							Optional:            !pathIsRequired,
+						},
+						"query": schema.MapAttribute{
+							Description:         "The query parameters. This overrides the `query` set in the resource block.",
+							MarkdownDescription: "The query parameters. This overrides the `query` set in the resource block.",
+							ElementType:         types.ListType{ElemType: types.StringType},
+							Optional:            true,
+						},
+						"header": schema.MapAttribute{
+							Description:         "The header parameters. This overrides the `header` set in the resource block.",
+							MarkdownDescription: "The header parameters. This overrides the `header` set in the resource block.",
+							ElementType:         types.StringType,
+							Optional:            true,
+						},
+						"default_delay_sec": schema.Int64Attribute{
+							Description:         fmt.Sprintf("The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `%d`.", defaults.PrecheckDefaultDelayInSec),
+							MarkdownDescription: fmt.Sprintf("The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `%d`.", defaults.PrecheckDefaultDelayInSec),
+							Optional:            true,
+						},
+					},
+					Validators: []validator.Object{
+						objectvalidator.ExactlyOneOf(
+							path.MatchRelative().AtParent().AtName("mutex"),
+							path.MatchRelative().AtParent().AtName("api"),
+						),
+					},
+				},
+			},
+		},
+	}
+}
+
 func (d *DataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description:         "`restful_resource` data source can be used to retrieve the model of a restful resource by ID.",
@@ -51,8 +154,7 @@ func (d *DataSource) Schema(ctx context.Context, req datasource.SchemaRequest, r
 				Required:            true,
 			},
 			"method": schema.StringAttribute{
-				Description:         "The HTTP Method for the request. Allowed methods are a subset of methods defined in RFC7231 namely, GET, HEAD, and POST. POST support is only intended for read-only URLs, such as submitting a search. Defaults to `GET`.",
-				MarkdownDescription: "The HTTP Method for the request. Allowed methods are a subset of methods defined in [RFC7231](https://datatracker.ietf.org/doc/html/rfc7231#section-4.3) namely, `GET`, `HEAD`, and `POST`. `POST` support is only intended for read-only URLs, such as submitting a search. Defaults to `GET`.",
+				MarkdownDescription: "The HTTP Method for the request. `POST` support is only intended for read-only URLs, such as submitting a search. Defaults to `GET`.",
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.OneOf("GET", "POST", "HEAD"),
@@ -91,7 +193,7 @@ func (d *DataSource) Schema(ctx context.Context, req datasource.SchemaRequest, r
 				MarkdownDescription: "Whether to throw error if the data source being queried doesn't exist (i.e. status code is 404). Defaults to `false`.",
 				Optional:            true,
 			},
-			"precheck": precheckAttribute("Read", true, "", false),
+			"precheck": dataSourcePrecheckAttribute("Read", true, "", false),
 			"use_sensitive_output": schema.BoolAttribute{
 				Description:         "Whether to use `sensitive_output` instead of `output`. When true, the response will be stored in `sensitive_output` (which is marked as sensitive). Defaults to `false`.",
 				MarkdownDescription: "Whether to use `sensitive_output` instead of `output`. When true, the response will be stored in `sensitive_output` (which is marked as sensitive). Defaults to `false`.",
@@ -103,8 +205,8 @@ func (d *DataSource) Schema(ctx context.Context, req datasource.SchemaRequest, r
 				Computed:            true,
 			},
 			"sensitive_output": schema.DynamicAttribute{
-				Description:         "The response body after reading the resource (sensitive). This is only populated when `use_sensitive_output` is true.",
-				MarkdownDescription: "The response body after reading the resource (sensitive). This is only populated when `use_sensitive_output` is true.",
+				Description:         "The response body after reading the resource. This is only populated when `use_sensitive_output` is true.",
+				MarkdownDescription: "The response body after reading the resource. This is only populated when `use_sensitive_output` is true.",
 				Computed:            true,
 				Sensitive:           true,
 			},
@@ -286,5 +388,19 @@ func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp 
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
+	}
+}
+
+func (d *DataSource) RenderOption() tffwdocs.DataSourceRenderOption {
+	return tffwdocs.DataSourceRenderOption{
+		Examples: []tffwdocs.Example{
+			{
+				HCL: `
+data "restful_resource" "test" {
+  id = "/posts/1"
+}
+`,
+			},
+		},
 	}
 }

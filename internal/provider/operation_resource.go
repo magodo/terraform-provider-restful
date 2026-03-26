@@ -20,6 +20,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	tffwdocs "github.com/magodo/terraform-plugin-framework-docs"
 	"github.com/magodo/terraform-plugin-framework-helper/dynamic"
 	"github.com/magodo/terraform-plugin-framework-helper/ephemeral"
 	"github.com/magodo/terraform-plugin-framework-helper/jsonset"
@@ -34,6 +35,7 @@ type OperationResource struct {
 
 var _ resource.Resource = &OperationResource{}
 var _ resource.ResourceWithUpgradeState = &OperationResource{}
+var _ tffwdocs.ResourceWithRenderOption = &OperationResource{}
 
 type operationResourceData struct {
 	ID        types.String `tfsdk:"id"`
@@ -71,10 +73,10 @@ func (r *OperationResource) Metadata(ctx context.Context, req resource.MetadataR
 }
 
 func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
-	precheckDelete := precheckAttribute("`Delete`", false, "By default, the `path` of this resource is used.", true)
+	precheckDelete := resourcePrecheckAttribute("`Delete`", false, "By default, the `path` of this resource is used.", true)
 	precheckDelete.Validators = append(precheckDelete.Validators, listvalidator.AlsoRequires(path.MatchRelative().AtParent().AtName("delete_method")))
 
-	pollDelete := pollAttribute("`Delete`")
+	pollDelete := resourcePollAttribute("`Delete`")
 	pollDelete.Validators = append(pollDelete.Validators, objectvalidator.AlsoRequires(path.MatchRelative().AtParent().AtName("delete_method")))
 
 	resp.Schema = schema.Schema{
@@ -108,8 +110,8 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 				},
 			},
 			"method": schema.StringAttribute{
-				Description:         "The HTTP method for the `Create`/`Update` call. Possible values are `GET`, `PUT`, `POST`, `PATCH` and `DELETE`.",
-				MarkdownDescription: "The HTTP method for the `Create`/`Update` call. Possible values are `GET`, `PUT`, `POST`, `PATCH` and `DELETE`.",
+				Description:         "The HTTP method for the `Create`/`Update` call.",
+				MarkdownDescription: "The HTTP method for the `Create`/`Update` call.",
 				Required:            true,
 				Validators: []validator.String{
 					stringvalidator.OneOf("GET", "PUT", "POST", "PATCH", "DELETE"),
@@ -163,12 +165,12 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 				Optional:            true,
 			},
 
-			"precheck": precheckAttribute("`Create`/`Update`", true, "", false),
-			"poll":     pollAttribute("`Create`/`Update`"),
+			"precheck": resourcePrecheckAttribute("`Create`/`Update`", true, "", false),
+			"poll":     resourcePollAttribute("`Create`/`Update`"),
 
 			"delete_method": schema.StringAttribute{
-				Description:         "The method for the `Delete` call. Possible values are `POST`, `PUT`, `PATCH` and `DELETE`. If this is not specified, no `Delete` call will occur.",
-				MarkdownDescription: "The method for the `Delete` call. Possible values are `POST`, `PUT`, `PATCH` and `DELETE`. If this is not specified, no `Delete` call will occur.",
+				Description:         "The method for the `Delete` call. If this is not specified, no `Delete` call will occur.",
+				MarkdownDescription: "The method for the `Delete` call. If this is not specified, no `Delete` call will occur.",
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.OneOf("POST", "PUT", "PATCH", "DELETE"),
@@ -201,7 +203,7 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 				ElementType:         types.StringType,
 			},
 			"use_sensitive_output": schema.BoolAttribute{
-				MarkdownDescription: "Whether to use `sensitive_output` instead of `output`. When true, the response will be stored in `sensitive_output` (which is marked as sensitive). Defaults to `false`. Changing this forces a new resource to be created.",
+				MarkdownDescription: "Whether to use `sensitive_output` instead of `output`. When true, the response will be stored in `sensitive_output` (which is marked as sensitive). Defaults to `false`.",
 				Optional:            true,
 				PlanModifiers: []planmodifier.Bool{
 					boolplanmodifier.RequiresReplace(),
@@ -649,5 +651,32 @@ func (r *OperationResource) Delete(ctx context.Context, req resource.DeleteReque
 			)
 			return
 		}
+	}
+}
+
+func (r *OperationResource) RenderOption() tffwdocs.ResourceRenderOption {
+	return tffwdocs.ResourceRenderOption{
+		Examples: []tffwdocs.Example{
+			{
+				Header: "Azure Register RP",
+				HCL: `
+				resource "restful_operation" "register_rp" {
+					path = format("/subscriptions/%s/providers/Microsoft.ProviderHub/register", var.subscription_id)
+					query = {
+						api-version = ["2014-04-01-preview"]
+					}
+					method = "POST"
+					poll = {
+						url_locator    = format("exact./subscriptions/%s/providers/Microsoft.ProviderHub?api-version=2014-04-01-preview", var.subscription_id)
+						status_locator = "body.registrationState"
+						status = {
+							success = "Registered"
+							pending = ["Registering"]
+						}
+					}
+				}
+				`,
+			},
+		},
 	}
 }

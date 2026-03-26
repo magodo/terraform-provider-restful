@@ -19,17 +19,18 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/identityschema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	tffwdocs "github.com/magodo/terraform-plugin-framework-docs"
 	"github.com/magodo/terraform-plugin-framework-helper/dynamic"
 	"github.com/magodo/terraform-plugin-framework-helper/ephemeral"
 	"github.com/magodo/terraform-plugin-framework-helper/jsonset"
 	"github.com/magodo/terraform-provider-restful/internal/client"
+	"github.com/magodo/terraform-provider-restful/internal/defaults"
 	"github.com/magodo/terraform-provider-restful/internal/exparam"
 	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
 	"github.com/tidwall/gjson"
@@ -43,6 +44,7 @@ type Resource struct {
 var _ resource.Resource = &Resource{}
 var _ resource.ResourceWithUpgradeState = &Resource{}
 var _ resource.ResourceWithIdentity = &Resource{}
+var _ tffwdocs.ResourceWithRenderOption = &Resource{}
 
 type resourceIdentityModel struct {
 	ID types.String `tfsdk:"id"`
@@ -164,7 +166,7 @@ func operationOverridableAttrDescription(attr string, opkind string) string {
 	return fmt.Sprintf("The %[1]s parameters that are applied to each %[2]s request. This overrides the `%[1]s` set in the resource block.", attr, opkind)
 }
 
-func precheckAttribute(s string, pathIsRequired bool, suffixDesc string, statusLocatorSupportParam bool) schema.ListNestedAttribute {
+func resourcePrecheckAttribute(s string, pathIsRequired bool, suffixDesc string, statusLocatorSupportParam bool) schema.ListNestedAttribute {
 	pathDesc := "The path used to query readiness, relative to the `base_url` of the provider."
 	if suffixDesc != "" {
 		pathDesc += " " + suffixDesc
@@ -176,8 +178,8 @@ func precheckAttribute(s string, pathIsRequired bool, suffixDesc string, statusL
 	}
 
 	return schema.ListNestedAttribute{
-		Description:         fmt.Sprintf("An array of prechecks that need to pass prior to the %q operation. Exactly one of `mutex` or `api` should be specified.", s),
-		MarkdownDescription: fmt.Sprintf("An array of prechecks that need to pass prior to the %q operation. Exactly one of `mutex` or `api` should be specified.", s),
+		Description:         fmt.Sprintf("An array of prechecks that need to pass prior to the %q operation.", s),
+		MarkdownDescription: fmt.Sprintf("An array of prechecks that need to pass prior to the %q operation.", s),
 		Optional:            true,
 		NestedObject: schema.NestedAttributeObject{
 			Attributes: map[string]schema.Attribute{
@@ -187,6 +189,7 @@ func precheckAttribute(s string, pathIsRequired bool, suffixDesc string, statusL
 					Optional:            true,
 					Validators: []validator.String{
 						stringvalidator.ExactlyOneOf(
+							path.MatchRelative().AtParent().AtName("mutex"),
 							path.MatchRelative().AtParent().AtName("api"),
 						),
 					},
@@ -201,7 +204,7 @@ func precheckAttribute(s string, pathIsRequired bool, suffixDesc string, statusL
 							MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md)." + statusLocatorSuffixDesc,
 							Required:            true,
 							Validators: []validator.String{
-								myvalidator.StringIsParsable("status_locator", func(s string) error {
+								myvalidator.StringIsParsable("", func(s string) error {
 									return validateLocator(s)
 								}),
 							},
@@ -243,15 +246,14 @@ func precheckAttribute(s string, pathIsRequired bool, suffixDesc string, statusL
 							Optional:            true,
 						},
 						"default_delay_sec": schema.Int64Attribute{
-							Description:         "The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `10`.",
-							MarkdownDescription: "The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `10`.",
+							Description:         fmt.Sprintf("The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `%d`.", defaults.PrecheckDefaultDelayInSec),
+							MarkdownDescription: fmt.Sprintf("The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `%d`.", defaults.PrecheckDefaultDelayInSec),
 							Optional:            true,
-							Computed:            true,
-							Default:             int64default.StaticInt64(10),
 						},
 					},
 					Validators: []validator.Object{
 						objectvalidator.ExactlyOneOf(
+							path.MatchRelative().AtParent().AtName("api"),
 							path.MatchRelative().AtParent().AtName("mutex"),
 						),
 					},
@@ -261,7 +263,7 @@ func precheckAttribute(s string, pathIsRequired bool, suffixDesc string, statusL
 	}
 }
 
-func pollAttribute(s string) schema.SingleNestedAttribute {
+func resourcePollAttribute(s string) schema.SingleNestedAttribute {
 	return schema.SingleNestedAttribute{
 		Description:         fmt.Sprintf("The polling option for the %q operation", s),
 		MarkdownDescription: fmt.Sprintf("The polling option for the %q operation", s),
@@ -272,7 +274,7 @@ func pollAttribute(s string) schema.SingleNestedAttribute {
 				MarkdownDescription: "Specifies how to discover the status property. The format is either `code` or `scope.path`, where `scope` can be either `header` or `body`, and the `path` is using the [gjson syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md). The `path` can contain `$(body.x.y.z)` parameter that reference property from either the response body (for `Create`, after selector), or `state.output` (for `Read`/`Update`/`Delete`).",
 				Required:            true,
 				Validators: []validator.String{
-					myvalidator.StringIsParsable("status_locator", func(s string) error {
+					myvalidator.StringIsParsable("", func(s string) error {
 						return validateLocator(s)
 					}),
 				},
@@ -300,7 +302,7 @@ func pollAttribute(s string) schema.SingleNestedAttribute {
 				MarkdownDescription: "Specifies how to discover the polling url. The format can be one of `header.path` (use the property at `path` in response header), `body.path` (use the property at `path` in response body) or `exact.value` (use the exact `value`). When absent, the current operation's URL is used for polling, execpt `Create` where it fallbacks to use the path constructed by the `read_path` as the polling URL.",
 				Optional:            true,
 				Validators: []validator.String{
-					myvalidator.StringIsParsable("url_locator", func(s string) error {
+					myvalidator.StringIsParsable("", func(s string) error {
 						return validateLocator(s)
 					}),
 				},
@@ -312,11 +314,9 @@ func pollAttribute(s string) schema.SingleNestedAttribute {
 				Optional:            true,
 			},
 			"default_delay_sec": schema.Int64Attribute{
-				Description:         "The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `10`.",
-				MarkdownDescription: "The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `10`.",
+				Description:         fmt.Sprintf("The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `%d`.", defaults.PollDefaultDelayInSec),
+				MarkdownDescription: fmt.Sprintf("The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `%d`.", defaults.PollDefaultDelayInSec),
 				Optional:            true,
-				Computed:            true,
-				Default:             int64default.StaticInt64(10),
 			},
 		},
 	}
@@ -388,15 +388,15 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 			},
 
 			"ephemeral_body": schema.DynamicAttribute{
-				Description:         "The ephemeral (write-only) properties of the resource. This will be merge-patched to the `body` to construct the actual request body.",
-				MarkdownDescription: "The ephemeral (write-only) properties of the resource. This will be merge-patched to the `body` to construct the actual request body.",
+				Description:         "The ephemeral properties of the resource. This will be merge-patched to the `body` to construct the actual request body.",
+				MarkdownDescription: "The ephemeral properties of the resource. This will be merge-patched to the `body` to construct the actual request body.",
 				Optional:            true,
 				WriteOnly:           true,
 			},
 
 			"delete_body": schema.DynamicAttribute{
-				Description:         "The payload for the `Delete` call. Conflicts with `delete_body_raw`.",
-				MarkdownDescription: "The payload for the `Delete` call. Conflicts with `delete_body_raw`.",
+				Description:         "The payload for the `Delete` call.",
+				MarkdownDescription: "The payload for the `Delete` call.",
 				Optional:            true,
 				Validators: []validator.Dynamic{
 					dynamicvalidator.ConflictsWith(
@@ -405,8 +405,8 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				},
 			},
 			"delete_body_raw": schema.StringAttribute{
-				Description:         "The raw payload for the `Delete` call. It can contain `$(body.x.y.z)` parameter that reference property from the `state.output`. Conflicts with `delete_body`.",
-				MarkdownDescription: "The raw payload for the `Delete` call. It can contain `$(body.x.y.z)` parameter that reference property from the `state.output`. Conflicts with `delete_body`.",
+				Description:         "The raw payload for the `Delete` call. It can contain `$(body.x.y.z)` parameter that reference property from the `state.output`.",
+				MarkdownDescription: "The raw payload for the `Delete` call. It can contain `$(body.x.y.z)` parameter that reference property from the `state.output`.",
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.ConflictsWith(
@@ -426,7 +426,7 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 							Required:            true,
 						},
 						"raw_json": schema.StringAttribute{
-							MarkdownDescription: "The raw json used as the patch value. It can contain `$(body.x.y.z)` parameter that reference property from the `state.output`. Exactly one of `raw_json` and `removed` shall be specified.",
+							MarkdownDescription: "The raw json used as the patch value. It can contain `$(body.x.y.z)` parameter that reference property from the `state.output`.",
 							Optional:            true,
 							Validators: []validator.String{
 								stringvalidator.ExactlyOneOf(
@@ -436,7 +436,7 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 							},
 						},
 						"removed": schema.BoolAttribute{
-							MarkdownDescription: "Remove the value specified by `path` from the update body. Exactly one of `raw_json` and `removed` shall be specified",
+							MarkdownDescription: "Remove the value specified by `path` from the update body.",
 							Optional:            true,
 							Validators: []validator.Bool{
 								boolvalidator.Equals(true),
@@ -456,13 +456,13 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				Optional:            true,
 			},
 
-			"poll_create": pollAttribute("Create"),
-			"poll_update": pollAttribute("Update"),
-			"poll_delete": pollAttribute("Delete"),
+			"poll_create": resourcePollAttribute("Create"),
+			"poll_update": resourcePollAttribute("Update"),
+			"poll_delete": resourcePollAttribute("Delete"),
 
-			"precheck_create": precheckAttribute("Create", true, "", false),
-			"precheck_update": precheckAttribute("Update", false, "By default, the `id` of this resource is used.", true),
-			"precheck_delete": precheckAttribute("Delete", false, "By default, the `id` of this resource is used.", true),
+			"precheck_create": resourcePrecheckAttribute("Create", true, "", false),
+			"precheck_update": resourcePrecheckAttribute("Update", false, "By default, the `id` of this resource is used.", true),
+			"precheck_delete": resourcePrecheckAttribute("Delete", false, "By default, the `id` of this resource is used.", true),
 
 			"post_create_read": schema.SingleNestedAttribute{
 				Description:         "An additional read after creation (after polling, if any) for overriding the `$(body)` used for `read_path`, which was representing the response body of the initial create call. This is only meant to be used for APIs that only forms a resource id after the resource is completely created. One example is the AzureDevOps `project` API: A `project` is identified by a UUID, the user needs to create the project, polling the long running operation, then query the `project` by its (mutable) name, where it returns you the (immutable) UUID.",
@@ -490,7 +490,7 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 						Optional:            true,
 					},
 					"selector": schema.StringAttribute{
-						Description:         "A selector expression in gjson query syntax, that is used when read returns a collection of resources, to select exactly one member resource of from it. This" + bodyParamDescription + " By default, the whole response body is used as the body.",
+						Description:         "A selector expression in gjson query syntax, that is used when read returns a collection of resources, to select exactly one member resource of from it. This" + bodyParamDescription + " By default, the whole response body is used as; the body.",
 						MarkdownDescription: "A selector expression in [gjson query syntax](https://github.com/tidwall/gjson/blob/master/SYNTAX.md#queries), that is used when read returns a collection of resources, to select exactly one member resource of from it. This" + bodyParamDescription + " By default, the whole response body is used as the body.",
 						Optional:            true,
 					},
@@ -498,24 +498,24 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 			},
 
 			"create_method": schema.StringAttribute{
-				Description:         "The method used to create the resource. Possible values are `PUT`, `POST` and `PATCH`. This overrides the `create_method` set in the provider block (defaults to POST).",
-				MarkdownDescription: "The method used to create the resource. Possible values are `PUT`, `POST` and `PATCH`. This overrides the `create_method` set in the provider block (defaults to POST).",
+				Description:         "The method used to create the resource. This overrides the `create_method` set in the provider block (defaults to POST).",
+				MarkdownDescription: "The method used to create the resource. This overrides the `create_method` set in the provider block (defaults to POST).",
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.OneOf("PUT", "POST", "PATCH"),
 				},
 			},
 			"update_method": schema.StringAttribute{
-				Description:         "The method used to update the resource. Possible values are `PUT`, `POST` and `PATCH`. This overrides the `update_method` set in the provider block (defaults to PUT).",
-				MarkdownDescription: "The method used to update the resource. Possible values are `PUT`, `POST`, and `PATCH`. This overrides the `update_method` set in the provider block (defaults to PUT).",
+				Description:         "The method used to update the resource. This overrides the `update_method` set in the provider block (defaults to PUT).",
+				MarkdownDescription: "The method used to update the resource. This overrides the `update_method` set in the provider block (defaults to PUT).",
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.OneOf("PUT", "PATCH", "POST"),
 				},
 			},
 			"delete_method": schema.StringAttribute{
-				Description:         "The method used to delete the resource. Possible values are `DELETE`, `POST`, `PUT` and `PATCH`. This overrides the `delete_method` set in the provider block (defaults to DELETE).",
-				MarkdownDescription: "The method used to delete the resource. Possible values are `DELETE`, `POST`, `PUT` and `PATCH`. This overrides the `delete_method` set in the provider block (defaults to DELETE).",
+				Description:         "The method used to delete the resource. This overrides the `delete_method` set in the provider block (defaults to DELETE).",
+				MarkdownDescription: "The method used to delete the resource. This overrides the `delete_method` set in the provider block (defaults to DELETE).",
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.OneOf("DELETE", "POST", "PUT", "PATCH"),
@@ -610,7 +610,7 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				ElementType:         types.StringType,
 			},
 			"use_sensitive_output": schema.BoolAttribute{
-				MarkdownDescription: "Whether to use `sensitive_output` instead of `output`. When true, the response will be stored in `sensitive_output` (which is marked as sensitive). Defaults to `false`. Changing this forces a new resource to be created.",
+				MarkdownDescription: "Whether to use `sensitive_output` instead of `output`. When true, the response will be stored in `sensitive_output` (which is marked as sensitive). Defaults to `false`.",
 				Optional:            true,
 				PlanModifiers: []planmodifier.Bool{
 					boolplanmodifier.RequiresReplace(),
@@ -622,8 +622,8 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				Computed:            true,
 			},
 			"sensitive_output": schema.DynamicAttribute{
-				Description:         "The response body (sensitive). If `ephemeral_body` get returned by API, it will be removed from `sensitive_output`. This is only populated when `use_sensitive_output` is true.",
-				MarkdownDescription: "The response body (sensitive). If `ephemeral_body` get returned by API, it will be removed from `sensitive_output`. This is only populated when `use_sensitive_output` is true.",
+				Description:         "The response body. If `ephemeral_body` get returned by API, it will be removed from `sensitive_output`. This is only populated when `use_sensitive_output` is true.",
+				MarkdownDescription: "The response body. If `ephemeral_body` get returned by API, it will be removed from `sensitive_output`. This is only populated when `use_sensitive_output` is true.",
 				Computed:            true,
 				Sensitive:           true,
 			},
@@ -1771,7 +1771,7 @@ func (r *Resource) IdentitySchema(ctx context.Context, req resource.IdentitySche
 	resp.IdentitySchema = identityschema.Schema{
 		Attributes: map[string]identityschema.Attribute{
 			"id": identityschema.StringAttribute{
-				Description:       "The import spec described at: https://registry.terraform.io/providers/magodo/restful/latest/docs/resources/resource#import.",
+				Description:       "The import format described above.",
 				RequiredForImport: true,
 			},
 		},
@@ -1847,4 +1847,99 @@ func (Resource) ImportState(ctx context.Context, req resource.ImportStateRequest
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, headerPath, imp.Header)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, readSelector, imp.ReadSelector)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, readResponseTemplate, imp.ReadResponseTemplate)...)
+}
+
+func (r *Resource) RenderOption() tffwdocs.ResourceRenderOption {
+	return tffwdocs.ResourceRenderOption{
+		Examples: []tffwdocs.Example{
+			{
+				Header: "Azure Resource Group",
+				HCL: `
+resource "restful_resource" "rg" {
+  path = format("/subscriptions/%s/resourceGroups/%s", var.subscription_id, "example")
+  query = {
+    api-version = ["2020-06-01"]
+  }
+  create_method = "PUT"
+  poll_delete = {
+    status_locator = "code"
+    status = {
+      success = "404"
+      pending = ["202", "200"]
+    }
+  }
+  body = {
+    location = "westus"
+    tags = {
+      foo = "bar"
+    }
+  }
+}
+					`,
+			},
+		},
+		ImportId: &tffwdocs.ImportId{
+			Format: `
+- id (Required)                        : The resource id.
+- path (Required)                      : The path used to create the resource (as this is force new)
+- query (Optional)                     : The query parameters.
+- header (Optional)                    : The header.
+- body (Optional)                      : The interested properties in the response body that you want to manage via this resource.
+                                         If you omit this, then all the properties will be keeping track, which in most cases is 
+                                         not what you want (e.g. the read only attributes shouldn't be managed).
+                                         The value of each property is not important here, hence leave them as "null".
+- read_selector (Optional)             : The read_selector used to specify the resource from a collection of resources.
+- read_response_template (Optional)    : The read_response_template used to transform the structure of the read response.
+`,
+			ExampleCmdArg: `{
+  "id": "/subscriptions/0-0-0-0/resourceGroups/example",
+  "path": "/subscriptions/0-0-0-0/resourceGroups/example",
+  "query": {"api-version": ["2020-06-01"]},
+  "body": {
+    "location": null,
+    "tags": null
+  }
+}`,
+			ExampleBlk: `import {
+  to = restful_resource.test
+  id = jsonencode({
+    id = "/posts/1"
+    path = "/posts"
+    body = {
+      foo = null
+    }
+    header = {
+      key = "val"
+    }
+    query = {
+      x = ["y"]
+    }
+  })
+}`,
+		},
+		IdentityExamples: []tffwdocs.Example{
+			{
+				HCL: `
+import {
+  to = restful_resource.test
+  identity = {
+    id = jsonencode({
+      id = "/posts/1"
+      path = "/posts"
+      body = {
+        foo = null
+      }
+      header = {
+        key = "val"
+      }
+      query = {
+        x = ["y"]
+      }
+    })
+  }
+}
+`,
+			},
+		},
+	}
 }

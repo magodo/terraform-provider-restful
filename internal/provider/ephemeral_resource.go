@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	tffwdocs "github.com/magodo/terraform-plugin-framework-docs"
 	"github.com/magodo/terraform-plugin-framework-helper/dynamic"
 	"github.com/magodo/terraform-provider-restful/internal/exparam"
 	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
@@ -28,6 +29,7 @@ type EphemeralResource struct {
 var _ ephemeral.EphemeralResourceWithConfigure = &EphemeralResource{}
 var _ ephemeral.EphemeralResourceWithClose = &EphemeralResource{}
 var _ ephemeral.EphemeralResourceWithRenew = &EphemeralResource{}
+var _ tffwdocs.EphemeralResourceWithRenderOption = &EphemeralResource{}
 
 const (
 	pkRenew = "renew"
@@ -98,8 +100,8 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 		MarkdownDescription: "`restful_resource` manages an ephemeral resource.",
 		Attributes: map[string]schema.Attribute{
 			"method": schema.StringAttribute{
-				Description:         "The HTTP method to open the ephemeral resource. Possible values are `GET`, `PUT`, `POST`, `PATCH`.",
-				MarkdownDescription: "The HTTP method to open the ephemeral resource. Possible values are `GET`, `PUT`, `POST`, `PATCH`.",
+				Description:         "The HTTP method to open the ephemeral resource.",
+				MarkdownDescription: "The HTTP method to open the ephemeral resource.",
 				Required:            true,
 				Validators: []validator.String{
 					stringvalidator.OneOf("GET", "PUT", "POST", "PATCH"),
@@ -141,8 +143,8 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 			},
 
 			"renew_method": schema.StringAttribute{
-				Description:         "The HTTP method to renew the ephemeral resource. Possible values are `GET`, `PUT`, `POST`, `PATCH`.",
-				MarkdownDescription: "The HTTP method to renew the ephemeral resource. Possible values are `GET`, `PUT`, `POST`, `PATCH`.",
+				Description:         "The HTTP method to renew the ephemeral resource.",
+				MarkdownDescription: "The HTTP method to renew the ephemeral resource.",
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.OneOf("GET", "PUT", "POST", "PATCH"),
@@ -162,8 +164,8 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 				},
 			},
 			"renew_body": schema.DynamicAttribute{
-				Description:         "The payload to renew the ephemeral resource. Conflicts with `renew_body_raw`.",
-				MarkdownDescription: "The payload to renew the ephemeral resource. Conflicts with `renew_body_raw`.",
+				Description:         "The payload to renew the ephemeral resource.",
+				MarkdownDescription: "The payload to renew the ephemeral resource.",
 				Optional:            true,
 				Validators: []validator.Dynamic{
 					dynamicvalidator.AlsoRequires(
@@ -175,8 +177,8 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 				},
 			},
 			"renew_body_raw": schema.StringAttribute{
-				Description:         "The raw payload for the `Renew` call. It can contain `$(body.x.y.z)` parameter that reference property from the `Open` response. Conflicts with `renew_body`.",
-				MarkdownDescription: "The raw payload for the `Renew` call. It can contain `$(body.x.y.z)` parameter that reference property from the `Open` response. Conflicts with `renew_body`.",
+				Description:         "The raw payload for the `Renew` call. It can contain `$(body.x.y.z)` parameter that reference property from the `Open` response.",
+				MarkdownDescription: "The raw payload for the `Renew` call. It can contain `$(body.x.y.z)` parameter that reference property from the `Open` response.",
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.AlsoRequires(
@@ -219,7 +221,7 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 						path.MatchRoot("renew_method"),
 						path.MatchRoot("expiry_locator"),
 					),
-					myvalidator.StringIsParsable("expiry_type", func(s string) error {
+					myvalidator.StringIsParsable("", func(s string) error {
 						return validateExpiryType(s)
 					}),
 				},
@@ -234,7 +236,7 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 						path.MatchRoot("renew_method"),
 						path.MatchRoot("expiry_type"),
 					),
-					myvalidator.StringIsParsable("expiry_locator", func(s string) error {
+					myvalidator.StringIsParsable("", func(s string) error {
 						return validateLocator(s)
 					}),
 				},
@@ -260,7 +262,7 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 					stringvalidator.AlsoRequires(
 						path.MatchRoot("renew_method"),
 					),
-					myvalidator.StringIsParsable("expiry_ahead", func(s string) error {
+					myvalidator.StringIsParsable("", func(s string) error {
 						_, err := time.ParseDuration(s)
 						return err
 					}),
@@ -268,8 +270,8 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 			},
 
 			"close_method": schema.StringAttribute{
-				Description:         "The HTTP method to close the ephemeral resource. Possible values are `PUT`, `POST`, `PATCH`, `DELETE`.",
-				MarkdownDescription: "The HTTP method to close the ephemeral resource. Possible values are `PUT`, `POST`, `PATCH`, `DELETE`.",
+				Description:         "The HTTP method to close the ephemeral resource.",
+				MarkdownDescription: "The HTTP method to close the ephemeral resource.",
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.OneOf("PUT", "POST", "PATCH", "DELETE"),
@@ -289,8 +291,8 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 				},
 			},
 			"close_body": schema.DynamicAttribute{
-				Description:         "The payload to close the ephemeral resource. Conflicts with `close_body_raw`.",
-				MarkdownDescription: "The payload to close the ephemeral resource. Conflicts with `close_body_raw`.",
+				Description:         "The payload to close the ephemeral resource.",
+				MarkdownDescription: "The payload to close the ephemeral resource.",
 				Optional:            true,
 				Validators: []validator.Dynamic{
 					dynamicvalidator.AlsoRequires(
@@ -302,8 +304,8 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 				},
 			},
 			"close_body_raw": schema.StringAttribute{
-				Description:         "The raw payload for the `Close` call. It can contain `$(body.x.y.z)` parameter that reference property from the `Open` response. Conflicts with `close_body`.",
-				MarkdownDescription: "The raw payload for the `Close` call. It can contain `$(body.x.y.z)` parameter that reference property from the `Open` response. Conflicts with `close_body`.",
+				Description:         "The raw payload for the `Close` call. It can contain `$(body.x.y.z)` parameter that reference property from the `Open` response.",
+				MarkdownDescription: "The raw payload for the `Close` call. It can contain `$(body.x.y.z)` parameter that reference property from the `Open` response.",
 				Optional:            true,
 				Validators: []validator.String{
 					stringvalidator.AlsoRequires(
@@ -355,8 +357,8 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 				Computed:            true,
 			},
 			"sensitive_output": schema.DynamicAttribute{
-				Description:         "The response body (sensitive). This is only populated when `use_sensitive_output` is true.",
-				MarkdownDescription: "The response body (sensitive). This is only populated when `use_sensitive_output` is true.",
+				Description:         "The response body. This is only populated when `use_sensitive_output` is true.",
+				MarkdownDescription: "The response body. This is only populated when `use_sensitive_output` is true.",
 				Computed:            true,
 				Sensitive:           true,
 			},
@@ -712,5 +714,30 @@ func (e *EphemeralResource) Close(ctx context.Context, req ephemeral.CloseReques
 			string(response.Body()),
 		)
 		return
+	}
+}
+
+func (e *EphemeralResource) RenderOption() tffwdocs.EphemeralResourceRenderOption {
+	return tffwdocs.EphemeralResourceRenderOption{
+		Examples: []tffwdocs.Example{
+			{
+				HCL: `
+ephemeral "restful_resource" "test" {
+  path = "/lease"
+  method = "POST"
+
+  renew_path = "/updateLease"
+  renew_method = "POST"
+
+  expiry_ahead = "0.5s"
+  expiry_type = "duration"
+  expiry_locator = "header.expiry"
+
+  close_path = "/unlease"
+  close_method = "POST"
+}
+`,
+			},
+		},
 	}
 }
