@@ -1891,16 +1891,17 @@ resource "restful_resource" "rg" {
 - read_selector (Optional)             : The read_selector used to specify the resource from a collection of resources.
 - read_response_template (Optional)    : The read_response_template used to transform the structure of the read response.
 `,
-			ExampleCmdArg: `{
-  "id": "/subscriptions/0-0-0-0/resourceGroups/example",
-  "path": "/subscriptions/0-0-0-0/resourceGroups/example",
-  "query": {"api-version": ["2020-06-01"]},
-  "body": {
-    "location": null,
-    "tags": null
+			ExampleId: `{
+  \"id\": \"/subscriptions/0-0-0-0/resourceGroups/example\",
+  \"path\": \"/subscriptions/0-0-0-0/resourceGroups/example\",
+  \"query\": {\"api-version\": [\"2020-06-01\"]},
+  \"body\": {
+    \"location\": null,
+    \"tags\": null
   }
 }`,
-			ExampleBlk: `import {
+			ExampleBlk: `
+import {
   to = restful_resource.test
   id = jsonencode({
     id = "/posts/1"
@@ -1920,24 +1921,19 @@ resource "restful_resource" "rg" {
 		IdentityExamples: []tffwdocs.Example{
 			{
 				HCL: `
-import {
-  to = restful_resource.test
-  identity = {
-    id = jsonencode({
-      id = "/posts/1"
-      path = "/posts"
-      body = {
-        foo = null
-      }
-      header = {
-        key = "val"
-      }
-      query = {
-        x = ["y"]
-      }
-    })
+id = jsonencode({
+  id = "/posts/1"
+  path = "/posts"
+  body = {
+	foo = null
   }
-}
+  header = {
+	key = "val"
+  }
+  query = {
+	x = ["y"]
+  }
+})
 `,
 			},
 		},

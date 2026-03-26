@@ -341,15 +341,15 @@ The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/c
 For example:
 
 ```shell
-$ terraform import restful_resource.example '{
-  "id": "/subscriptions/0-0-0-0/resourceGroups/example",
-  "path": "/subscriptions/0-0-0-0/resourceGroups/example",
-  "query": {"api-version": ["2020-06-01"]},
-  "body": {
-    "location": null,
-    "tags": null
+$ terraform import restful_resource.example "{
+  \"id\": \"/subscriptions/0-0-0-0/resourceGroups/example\",
+  \"path\": \"/subscriptions/0-0-0-0/resourceGroups/example\",
+  \"query\": {\"api-version\": [\"2020-06-01\"]},
+  \"body\": {
+    \"location\": null,
+    \"tags\": null
   }
-}'
+}"
 ```
 
 In Terraform v1.5.0 and later, the [`import` block](https://developer.hashicorp.com/terraform/language/block/import) can be used with the `id` attribute, for example:
@@ -379,7 +379,7 @@ In Terraform v1.12.0 and later, the [`import` block](https://developer.hashicorp
 
 ```terraform
 import {
-  to = restful_resource.test
+  to = restful_resource.example
   identity = {
     id = jsonencode({
       id   = "/posts/1"
