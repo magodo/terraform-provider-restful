@@ -51,6 +51,7 @@ func (l *ListResource) Metadata(ctx context.Context, req resource.MetadataReques
 
 func (l *ListResource) ListResourceConfigSchema(ctx context.Context, req list.ListResourceSchemaRequest, resp *list.ListResourceSchemaResponse) {
 	resp.Schema = schema.Schema{
+		MarkdownDescription: "List restful resources.",
 		Attributes: map[string]schema.Attribute{
 			//////////////////////////
 			// List related attributes

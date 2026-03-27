@@ -3,12 +3,12 @@
 page_title: "restful_resource List Resource - terraform-provider-restful"
 subcategory: ""
 description: |-
-  
+  List restful resources.
 ---
 
 # restful_resource (List Resource)
 
-
+List restful resources.
 
 ## Schema
 

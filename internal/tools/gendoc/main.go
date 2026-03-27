@@ -15,6 +15,10 @@ func main() {
 		log.Fatal(err)
 	}
 
+	if err := gen.Lint(nil); err != nil {
+		log.Fatal(err)
+	}
+
 	if err := gen.WriteAll(ctx, "./docs", nil); err != nil {
 		log.Fatal(err)
 	}
