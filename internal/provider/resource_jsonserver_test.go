@@ -447,7 +447,7 @@ func TestResource_JSONServer_MigrateV0ToV1(t *testing.T) {
 func (d jsonServerData) CheckDestroy(addr string) func(*terraform.State) error {
 	return func(s *terraform.State) error {
 		ctx := context.TODO()
-		c, err := client.New(ctx, d.url, nil)
+		c, err := client.New(ctx, nil)
 		if err != nil {
 			return err
 		}
@@ -456,7 +456,7 @@ func (d jsonServerData) CheckDestroy(addr string) func(*terraform.State) error {
 			if key != addr {
 				continue
 			}
-			resp, err := c.Read(ctx, resource.Primary.ID, client.ReadOption{})
+			resp, err := c.Read(ctx, resource.Primary.ID, client.ReadOption{BaseURL: d.url})
 			if err != nil {
 				return fmt.Errorf("reading %s: %v", addr, err)
 			}
@@ -472,7 +472,7 @@ func (d jsonServerData) CheckDestroy(addr string) func(*terraform.State) error {
 func (d jsonServerData) CheckDestroyWithReadSelector(addr string) func(*terraform.State) error {
 	return func(s *terraform.State) error {
 		ctx := context.TODO()
-		c, err := client.New(ctx, d.url, nil)
+		c, err := client.New(ctx, nil)
 		if err != nil {
 			return err
 		}
@@ -482,7 +482,7 @@ func (d jsonServerData) CheckDestroyWithReadSelector(addr string) func(*terrafor
 			if key != addr {
 				continue
 			}
-			resp, err := c.Read(ctx, fmt.Sprintf("%s/%s", resource.Primary.ID, resource.Primary.Attributes["output.id"]), client.ReadOption{})
+			resp, err := c.Read(ctx, fmt.Sprintf("%s/%s", resource.Primary.ID, resource.Primary.Attributes["output.id"]), client.ReadOption{BaseURL: d.url})
 			if err != nil {
 				return fmt.Errorf("reading %s: %v", addr, err)
 			}
@@ -843,6 +843,41 @@ resource "restful_resource" "test" {
   body = {
   	foo = %q
   }
+}
+`, d.url, v)
+}
+
+func TestResource_JSONServer_ResourceBaseURL(t *testing.T) {
+	addr := "restful_resource.test"
+	d := newJsonServerData()
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { d.precheck(t) },
+		CheckDestroy:             d.CheckDestroy(addr),
+		ProtoV6ProviderFactories: acceptance.ProviderFactory(),
+		Steps: []resource.TestStep{
+			{
+				// Provider-level base_url is unset; resource-level base_url drives the request.
+				Config: d.resourceBaseURL("foo"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("id"), knownvalue.NotNull()),
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("output").AtMapKey("foo"), knownvalue.StringExact("foo")),
+				},
+			},
+		},
+	})
+}
+
+func (d jsonServerData) resourceBaseURL(v string) string {
+	return fmt.Sprintf(`
+provider "restful" {}
+
+resource "restful_resource" "test" {
+  base_url  = %q
+  path      = "posts"
+  body      = {
+    foo = %q
+  }
+  read_path = "$(path)/$(body.id)"
 }
 `, d.url, v)
 }

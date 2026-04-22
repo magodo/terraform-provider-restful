@@ -110,7 +110,7 @@ func TestResource_MsGraph_User(t *testing.T) {
 func (d msgraphData) CheckDestroy(addr string) func(*terraform.State) error {
 	return func(s *terraform.State) error {
 		ctx := context.TODO()
-		c, err := client.New(ctx, d.url, &client.BuildOption{
+		c, err := client.New(ctx, &client.BuildOption{
 			Security: client.OAuth2ClientCredentialOption{
 				ClientId:     d.clientId,
 				ClientSecret: d.clientSecret,
@@ -126,7 +126,7 @@ func (d msgraphData) CheckDestroy(addr string) func(*terraform.State) error {
 		c.SetLoggerContext(ctx)
 		resource := s.RootModule().Resources[addr]
 		if resource != nil {
-			resp, err := c.Read(ctx, resource.Primary.ID, client.ReadOption{})
+			resp, err := c.Read(ctx, resource.Primary.ID, client.ReadOption{BaseURL: d.url})
 			if err != nil {
 				return fmt.Errorf("reading %s: %v", addr, err)
 			}

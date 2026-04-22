@@ -53,6 +53,8 @@ type resourceIdentityModel struct {
 type resourceData struct {
 	ID types.String `tfsdk:"id"`
 
+	BaseURL types.String `tfsdk:"base_url"`
+
 	Path types.String `tfsdk:"path"`
 
 	CreateSelector       types.String `tfsdk:"create_selector"`
@@ -130,6 +132,7 @@ type precheckData struct {
 type precheckDataApi struct {
 	StatusLocator types.String `tfsdk:"status_locator"`
 	Status        types.Object `tfsdk:"status"`
+	BaseURL       types.String `tfsdk:"base_url"`
 	Path          types.String `tfsdk:"path"`
 	Query         types.Map    `tfsdk:"query"`
 	Header        types.Map    `tfsdk:"header"`
@@ -232,6 +235,17 @@ func resourcePrecheckAttribute(s string, pathIsRequired bool, suffixDesc string,
 							MarkdownDescription: pathDesc,
 							Required:            pathIsRequired,
 							Optional:            !pathIsRequired,
+						},
+						"base_url": schema.StringAttribute{
+							Description:         "Overrides the resource-level or provider-level `base_url` for this precheck request.",
+							MarkdownDescription: "Overrides the resource-level or provider-level `base_url` for this precheck request.",
+							Optional:            true,
+							Validators: []validator.String{
+								myvalidator.StringIsParsable("Ensure this is a valid HTTP URL.", func(s string) error {
+									_, err := url.Parse(s)
+									return err
+								}),
+							},
 						},
 						"query": schema.MapAttribute{
 							Description:         "The query parameters. This overrides the `query` set in the resource block.",
@@ -337,11 +351,22 @@ func (r *Resource) Schema(ctx context.Context, req resource.SchemaRequest, resp 
 				},
 			},
 			"path": schema.StringAttribute{
-				Description:         "The path used to create the resource, relative to the `base_url` of the provider.",
-				MarkdownDescription: "The path used to create the resource, relative to the `base_url` of the provider.",
+				Description:         "The path used to create the resource, relative to the `base_url` of the provider (or the resource-level `base_url`, if set).",
+				MarkdownDescription: "The path used to create the resource, relative to the `base_url` of the provider (or the resource-level `base_url`, if set).",
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"base_url": schema.StringAttribute{
+				Description:         "Overrides the provider-level `base_url` for this resource. When both are unset, this is required.",
+				MarkdownDescription: "Overrides the provider-level `base_url` for this resource. When both are unset, this is required.",
+				Optional:            true,
+				Validators: []validator.String{
+					myvalidator.StringIsParsable("Ensure this is a valid HTTP URL.", func(s string) error {
+						_, err := url.Parse(s)
+						return err
+					}),
 				},
 			},
 
@@ -846,7 +871,7 @@ func (r Resource) Create(ctx context.Context, req resource.CreateRequest, resp *
 
 	// Precheck
 	if !plan.PrecheckCreate.IsNull() {
-		unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, "", opt.Header, opt.Query, plan.PrecheckCreate, basetypes.NewDynamicNull())
+		unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, opt.BaseURL, "", opt.Header, opt.Query, plan.PrecheckCreate, basetypes.NewDynamicNull())
 		if diags.HasError() {
 			resp.Diagnostics.Append(diags...)
 			return
@@ -1481,7 +1506,7 @@ func (r Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *
 	if string(stateBody) != string(planBody) || ephemeralDiff {
 		// Precheck
 		if !plan.PrecheckUpdate.IsNull() {
-			unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, state.ID.ValueString(), opt.Header, opt.Query, plan.PrecheckUpdate, r.getOutput(state))
+			unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, opt.BaseURL, state.ID.ValueString(), opt.Header, opt.Query, plan.PrecheckUpdate, r.getOutput(state))
 			if diags.HasError() {
 				resp.Diagnostics.Append(diags...)
 				return
@@ -1646,7 +1671,7 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 
 	// Precheck
 	if !state.PrecheckDelete.IsNull() {
-		unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, state.ID.ValueString(), opt.Header, opt.Query, state.PrecheckDelete, r.getOutput(state))
+		unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, opt.BaseURL, state.ID.ValueString(), opt.Header, opt.Query, state.PrecheckDelete, r.getOutput(state))
 		if diags.HasError() {
 			resp.Diagnostics.Append(diags...)
 			return

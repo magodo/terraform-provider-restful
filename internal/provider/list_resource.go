@@ -18,6 +18,7 @@ import (
 	"github.com/magodo/terraform-plugin-framework-helper/dynamic"
 	"github.com/magodo/terraform-provider-restful/internal/client"
 	"github.com/magodo/terraform-provider-restful/internal/exparam"
+	myvalidator "github.com/magodo/terraform-provider-restful/internal/validator"
 )
 
 type ListResource struct {
@@ -25,6 +26,7 @@ type ListResource struct {
 }
 
 type ListResourceData struct {
+	BaseURL  types.String  `tfsdk:"base_url"`
 	Path     types.String  `tfsdk:"path"`
 	Name     types.String  `tfsdk:"name"`
 	Method   types.String  `tfsdk:"method"`
@@ -53,6 +55,16 @@ func (l *ListResource) ListResourceConfigSchema(ctx context.Context, req list.Li
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "List restful resources.",
 		Attributes: map[string]schema.Attribute{
+			"base_url": schema.StringAttribute{
+				MarkdownDescription: "Overrides the provider-level `base_url` for this list resource. When both are unset, this is required.",
+				Optional:            true,
+				Validators: []validator.String{
+					myvalidator.StringIsParsable("Ensure this is a valid HTTP URL.", func(s string) error {
+						_, err := url.Parse(s)
+						return err
+					}),
+				},
+			},
 			//////////////////////////
 			// List related attributes
 			//////////////////////////

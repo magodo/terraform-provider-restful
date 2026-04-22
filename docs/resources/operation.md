@@ -45,6 +45,9 @@ resource "restful_operation" "register_rp" {
 
 ### Optional
 
+- `base_url` (String) Overrides the provider-level `base_url` for this operation. When both are unset, this is required.
+
+	-> Ensure this is a valid HTTP URL.
 - `body` (Dynamic) The payload for the `Create`/`Update` call.
 - `delete_body` (Dynamic) The payload for the `Delete` call.
 - `delete_header` (Map of Strings) The header parameters that are applied to each delete request. This overrides the `header` set in the resource block.
@@ -154,6 +157,9 @@ Required:
 
 Optional:
 
+- `base_url` (String) Overrides the resource-level or provider-level `base_url` for this precheck request.
+
+	-> Ensure this is a valid HTTP URL.
 - `default_delay_sec` (Int64) The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `10`.
 - `header` (Map of Strings) The header parameters. This overrides the `header` set in the resource block.
 - `query` (Map of Lists of Strings) The query parameters. This overrides the `query` set in the resource block.
@@ -188,6 +194,9 @@ Required:
 
 Optional:
 
+- `base_url` (String) Overrides the resource-level or provider-level `base_url` for this precheck request.
+
+	-> Ensure this is a valid HTTP URL.
 - `default_delay_sec` (Int64) The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `10`.
 - `header` (Map of Strings) The header parameters. This overrides the `header` set in the resource block.
 - `path` (String) The path used to query readiness, relative to the `base_url` of the provider. By default, the `path` of this resource is used.

@@ -83,7 +83,7 @@ func TestResource_ADO_Project(t *testing.T) {
 func (d adoData) CheckDestroy(addr string) func(*terraform.State) error {
 	return func(s *terraform.State) error {
 		ctx := context.TODO()
-		c, err := client.New(ctx, d.url, &client.BuildOption{
+		c, err := client.New(ctx, &client.BuildOption{
 			Security: client.HTTPBasicOption{
 				Username: "",
 				Password: d.pat,
@@ -96,7 +96,7 @@ func (d adoData) CheckDestroy(addr string) func(*terraform.State) error {
 		resource := s.RootModule().Resources[addr]
 		if resource != nil {
 			query := client.Query{"api-version": []string{d.version}}
-			resp, err := c.Read(ctx, resource.Primary.ID, client.ReadOption{Query: query})
+			resp, err := c.Read(ctx, resource.Primary.ID, client.ReadOption{BaseURL: d.url, Query: query})
 			if err != nil {
 				return fmt.Errorf("reading %s: %v", addr, err)
 			}

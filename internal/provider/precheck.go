@@ -10,7 +10,7 @@ import (
 	"github.com/magodo/terraform-provider-restful/internal/locks"
 )
 
-func precheck(ctx context.Context, c *client.Client, apiOpt apiOption, defaultPath string, defaultHeader client.Header, defaultQuery client.Query, prechecks basetypes.ListValue, body basetypes.DynamicValue) (func(), diag.Diagnostics) {
+func precheck(ctx context.Context, c *client.Client, apiOpt apiOption, defaultBaseURL string, defaultPath string, defaultHeader client.Header, defaultQuery client.Query, prechecks basetypes.ListValue, body basetypes.DynamicValue) (func(), diag.Diagnostics) {
 	lockedNames := []string{}
 	var checks []precheckData
 	if diags := prechecks.ElementsAs(ctx, &checks, false); diags.HasError() {
@@ -24,7 +24,7 @@ func precheck(ctx context.Context, c *client.Client, apiOpt apiOption, defaultPa
 			if diags := check.Api.As(ctx, &d, basetypes.ObjectAsOptions{}); diags.HasError() {
 				return nil, diags
 			}
-			opt, diags := apiOpt.ForPrecheck(ctx, defaultPath, defaultHeader, defaultQuery, d, body)
+			opt, diags := apiOpt.ForPrecheck(ctx, defaultBaseURL, defaultPath, defaultHeader, defaultQuery, d, body)
 			if diags.HasError() {
 				return nil, diags
 			}

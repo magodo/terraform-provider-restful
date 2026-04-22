@@ -290,7 +290,7 @@ func TestResource_Azure_RouteTable_Precheck(t *testing.T) {
 func (d azureData) CheckDestroy(addr string) func(*terraform.State) error {
 	return func(s *terraform.State) error {
 		ctx := context.TODO()
-		c, err := client.New(ctx, d.url, &client.BuildOption{
+		c, err := client.New(ctx, &client.BuildOption{
 			Security: client.OAuth2ClientCredentialOption{
 				ClientId:     d.clientId,
 				ClientSecret: d.clientSecret,
@@ -308,7 +308,7 @@ func (d azureData) CheckDestroy(addr string) func(*terraform.State) error {
 		resource := s.RootModule().Resources[addr]
 		if resource != nil {
 			ver := resource.Primary.Attributes["query.api-version.0"]
-			resp, err := c.Read(ctx, resource.Primary.ID, client.ReadOption{Query: map[string][]string{"api-version": {ver}}})
+			resp, err := c.Read(ctx, resource.Primary.ID, client.ReadOption{BaseURL: d.url, Query: map[string][]string{"api-version": {ver}}})
 			if err != nil {
 				return fmt.Errorf("reading %s: %v", addr, err)
 			}

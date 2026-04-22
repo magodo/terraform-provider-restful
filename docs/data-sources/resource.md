@@ -27,6 +27,9 @@ data "restful_resource" "test" {
 ### Optional
 
 - `allow_not_exist` (Boolean) Whether to throw error if the data source being queried doesn't exist (i.e. status code is 404). Defaults to `false`.
+- `base_url` (String) Overrides the provider-level `base_url` for this data source. When both are unset, this is required.
+
+	-> Ensure this is a valid HTTP URL.
 - `body` (Dynamic) The request body that is sent when using `POST` method.
 - `header` (Map of Strings) The header parameters that are applied to each request. This overrides the `header` set in the provider block.
 - `method` (String) The HTTP Method for the request. `POST` support is only intended for read-only URLs, such as submitting a search. Defaults to `GET`.

@@ -399,7 +399,7 @@ func TestResource_CodeServer_DeleteMethodBody(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		CheckDestroy: func(s *terraform.State) error {
 			ctx := context.TODO()
-			c, err := client.New(context.TODO(), srv.URL, nil)
+			c, err := client.New(context.TODO(), nil)
 			if err != nil {
 				return err
 			}
@@ -408,7 +408,7 @@ func TestResource_CodeServer_DeleteMethodBody(t *testing.T) {
 				if key != addr {
 					continue
 				}
-				resp, err := c.Read(ctx, resource.Primary.ID, client.ReadOption{})
+				resp, err := c.Read(ctx, resource.Primary.ID, client.ReadOption{BaseURL: srv.URL})
 				if err != nil {
 					return fmt.Errorf("reading %s: %v", addr, err)
 				}
@@ -492,7 +492,7 @@ func TestResource_CodeServer_DeleteMethodBodyRaw(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		CheckDestroy: func(s *terraform.State) error {
 			ctx := context.TODO()
-			c, err := client.New(context.TODO(), srv.URL, nil)
+			c, err := client.New(context.TODO(), nil)
 			if err != nil {
 				return err
 			}
@@ -501,7 +501,7 @@ func TestResource_CodeServer_DeleteMethodBodyRaw(t *testing.T) {
 				if key != addr {
 					continue
 				}
-				resp, err := c.Read(ctx, resource.Primary.ID, client.ReadOption{})
+				resp, err := c.Read(ctx, resource.Primary.ID, client.ReadOption{BaseURL: srv.URL})
 				if err != nil {
 					return fmt.Errorf("reading %s: %v", addr, err)
 				}
@@ -548,7 +548,7 @@ func TestResource_CodeServer_DeleteMethodBodyRaw(t *testing.T) {
 func (d codeServerData) CheckDestroy(url, addr string) func(*terraform.State) error {
 	return func(s *terraform.State) error {
 		ctx := context.TODO()
-		c, err := client.New(context.TODO(), url, nil)
+		c, err := client.New(context.TODO(), nil)
 		if err != nil {
 			return err
 		}
@@ -557,7 +557,7 @@ func (d codeServerData) CheckDestroy(url, addr string) func(*terraform.State) er
 			if key != addr {
 				continue
 			}
-			resp, err := c.Read(ctx, resource.Primary.ID, client.ReadOption{})
+			resp, err := c.Read(ctx, resource.Primary.ID, client.ReadOption{BaseURL: url})
 			if err != nil {
 				return fmt.Errorf("reading %s: %v", addr, err)
 			}

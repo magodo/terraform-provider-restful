@@ -21,6 +21,9 @@ description: |-
 
 ### Optional
 
+- `base_url` (String) Overrides the provider-level `base_url` for this action. When both are unset, this is required.
+
+	-> Ensure this is a valid HTTP URL.
 - `body` (Dynamic) The payload for the `Invoke` call.
 - `ephemeral_body` (Dynamic, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) The ephemeral properties of the resource. This will be merge-patched to the `body` to construct the actual request body.
 - `header` (Map of Strings) The header parameters for the `Invoke` call. This overrides the `header` set in the provider block.

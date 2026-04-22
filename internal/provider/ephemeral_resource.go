@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	netUrl "net/url"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/dynamicvalidator"
@@ -37,6 +38,7 @@ const (
 )
 
 type ephemeralResourceData struct {
+	BaseURL    types.String  `tfsdk:"base_url"`
 	Method     types.String  `tfsdk:"method"`
 	Path       types.String  `tfsdk:"path"`
 	Body       types.Dynamic `tfsdk:"body"`
@@ -99,6 +101,17 @@ func (e *EphemeralResource) Schema(ctx context.Context, req ephemeral.SchemaRequ
 		Description:         "`restful_resource` manages an ephemeral resource.",
 		MarkdownDescription: "`restful_resource` manages an ephemeral resource.",
 		Attributes: map[string]schema.Attribute{
+			"base_url": schema.StringAttribute{
+				Description:         "Overrides the provider-level `base_url` for this ephemeral resource. When both are unset, this is required.",
+				MarkdownDescription: "Overrides the provider-level `base_url` for this ephemeral resource. When both are unset, this is required.",
+				Optional:            true,
+				Validators: []validator.String{
+					myvalidator.StringIsParsable("Ensure this is a valid HTTP URL.", func(s string) error {
+						_, err := netUrl.Parse(s)
+						return err
+					}),
+				},
+			},
 			"method": schema.StringAttribute{
 				Description:         "The HTTP method to open the ephemeral resource.",
 				MarkdownDescription: "The HTTP method to open the ephemeral resource.",
@@ -379,7 +392,7 @@ func (e *EphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequest,
 
 	tflog.Info(ctx, "Open an ephemeral resource", map[string]interface{}{"path": config.Path.ValueString()})
 
-	opt, diags := e.p.apiOpt.ForOperation(ctx, config.Method, config.Query, config.Header, config.OpenQuery, config.OpenHeader, nil)
+	opt, diags := e.p.apiOpt.ForOperation(ctx, config.BaseURL, config.Method, config.Query, config.Header, config.OpenQuery, config.OpenHeader, nil)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
@@ -497,6 +510,7 @@ func (e *EphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequest,
 		}
 
 		ed := ephemeralResourcePrivateData{
+			BaseURL:       config.BaseURL,
 			Method:        config.RenewMethod,
 			Path:          basetypes.NewStringValue(path),
 			Body:          renewBody,
@@ -557,6 +571,7 @@ func (e *EphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequest,
 		}
 
 		ed := ephemeralResourcePrivateData{
+			BaseURL:       config.BaseURL,
 			Method:        config.CloseMethod,
 			Path:          basetypes.NewStringValue(path),
 			Body:          closeBody,
@@ -624,7 +639,7 @@ func (e *EphemeralResource) Renew(ctx context.Context, req ephemeral.RenewReques
 			return
 		}
 	}
-	opt, diags := e.p.apiOpt.ForOperation(ctx, pd.Method, pd.DefaultQuery, pd.DefaultHeader, pd.Query, pd.Header, output)
+	opt, diags := e.p.apiOpt.ForOperation(ctx, pd.BaseURL, pd.Method, pd.DefaultQuery, pd.DefaultHeader, pd.Query, pd.Header, output)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
@@ -694,7 +709,7 @@ func (e *EphemeralResource) Close(ctx context.Context, req ephemeral.CloseReques
 			return
 		}
 	}
-	opt, diags := e.p.apiOpt.ForOperation(ctx, pd.Method, pd.DefaultQuery, pd.DefaultHeader, pd.Query, pd.Header, output)
+	opt, diags := e.p.apiOpt.ForOperation(ctx, pd.BaseURL, pd.Method, pd.DefaultQuery, pd.DefaultHeader, pd.Query, pd.Header, output)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return

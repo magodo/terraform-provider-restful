@@ -42,12 +42,15 @@ resource "restful_resource" "rg" {
 ### Required
 
 - `body` (Dynamic) The properties of the resource.
-- `path` (String) The path used to create the resource, relative to the `base_url` of the provider.
+- `path` (String) The path used to create the resource, relative to the `base_url` of the provider (or the resource-level `base_url`, if set).
 
 	~> If the value of this attribute changes, Terraform will destroy and recreate the resource.
 
 ### Optional
 
+- `base_url` (String) Overrides the provider-level `base_url` for this resource. When both are unset, this is required.
+
+	-> Ensure this is a valid HTTP URL.
 - `check_existance` (Boolean) Whether to check resource already existed? Defaults to `false`.
 - `create_header` (Map of Strings) The header parameters that are applied to each create request. This overrides the `header` set in the resource block.
 - `create_method` (String) The method used to create the resource. This overrides the `create_method` set in the provider block (defaults to POST).
@@ -216,6 +219,9 @@ Required:
 
 Optional:
 
+- `base_url` (String) Overrides the resource-level or provider-level `base_url` for this precheck request.
+
+	-> Ensure this is a valid HTTP URL.
 - `default_delay_sec` (Int64) The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `10`.
 - `header` (Map of Strings) The header parameters. This overrides the `header` set in the resource block.
 - `query` (Map of Lists of Strings) The query parameters. This overrides the `query` set in the resource block.
@@ -250,6 +256,9 @@ Required:
 
 Optional:
 
+- `base_url` (String) Overrides the resource-level or provider-level `base_url` for this precheck request.
+
+	-> Ensure this is a valid HTTP URL.
 - `default_delay_sec` (Int64) The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `10`.
 - `header` (Map of Strings) The header parameters. This overrides the `header` set in the resource block.
 - `path` (String) The path used to query readiness, relative to the `base_url` of the provider. By default, the `id` of this resource is used.
@@ -285,6 +294,9 @@ Required:
 
 Optional:
 
+- `base_url` (String) Overrides the resource-level or provider-level `base_url` for this precheck request.
+
+	-> Ensure this is a valid HTTP URL.
 - `default_delay_sec` (Int64) The interval between two pollings if there is no `Retry-After` in the response header, in second. Defaults to `10`.
 - `header` (Map of Strings) The header parameters. This overrides the `header` set in the resource block.
 - `path` (String) The path used to query readiness, relative to the `base_url` of the provider. By default, the `id` of this resource is used.

@@ -12,6 +12,7 @@ import (
 )
 
 type ephemeralResourcePrivateData struct {
+	BaseURL       types.String
 	Method        types.String
 	Path          types.String
 	Body          types.Dynamic
@@ -29,6 +30,7 @@ type ephemeralResourcePrivateData struct {
 }
 
 type ephemeralResourcePrivateDataGo struct {
+	BaseURL       string              `json:"base_url,omitempty"`
 	Method        string              `json:"method,omitempty"`
 	Path          string              `json:"path,omitempty"`
 	Body          []byte              `json:"body,omitempty"`
@@ -47,6 +49,7 @@ type ephemeralResourcePrivateDataGo struct {
 
 func (d ephemeralResourcePrivateData) MarshalJSON() ([]byte, error) {
 	dg := ephemeralResourcePrivateDataGo{
+		BaseURL:       d.BaseURL.ValueString(),
 		Method:        d.Method.ValueString(),
 		Path:          d.Path.ValueString(),
 		ExpiryAhead:   d.ExpiryAhead.ValueString(),
@@ -93,6 +96,12 @@ func (d *ephemeralResourcePrivateData) UnmarshalJSON(b []byte) error {
 		method = types.StringValue(dg.Method)
 	}
 	d.Method = method
+
+	baseURL := types.StringNull()
+	if dg.BaseURL != "" {
+		baseURL = types.StringValue(dg.BaseURL)
+	}
+	d.BaseURL = baseURL
 
 	path := types.StringNull()
 	if dg.Path != "" {

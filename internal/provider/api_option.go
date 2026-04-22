@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/magodo/terraform-plugin-framework-helper/dynamic"
 	"github.com/magodo/terraform-provider-restful/internal/client"
@@ -14,7 +15,7 @@ import (
 )
 
 type apiOption struct {
-	BaseURL            url.URL
+	BaseURL            string
 	CreateMethod       string
 	UpdateMethod       string
 	DeleteMethod       string
@@ -23,11 +24,32 @@ type apiOption struct {
 	Header             client.Header
 }
 
+// baseURL resolves the BaseURL by the order of: resource level -- fallback --> provider level
+func (opt apiOption) baseURL(baseUrl types.String) (string, diag.Diagnostics) {
+	if baseUrl.ValueString() != "" {
+		return baseUrl.ValueString(), nil
+	}
+	if opt.BaseURL != "" {
+		return opt.BaseURL, nil
+	}
+	return "", diag.Diagnostics{
+		diag.NewErrorDiagnostic(
+			"`base_url` is not specified",
+			"set it either at the provider level, or at the resource level",
+		),
+	}
+}
+
 func (opt apiOption) ForResourceCreate(ctx context.Context, d resourceData) (*client.CreateOption, diag.Diagnostics) {
+	baseURL, diags := opt.baseURL(d.BaseURL)
+	if diags.HasError() {
+		return nil, diags
+	}
 	out := client.CreateOption{
-		Method: opt.CreateMethod,
-		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query).TakeOrSelf(ctx, d.CreateQuery),
-		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header).TakeOrSelf(ctx, d.CreateHeader),
+		BaseURL: baseURL,
+		Method:  opt.CreateMethod,
+		Query:   opt.Query.Clone().TakeOrSelf(ctx, d.Query).TakeOrSelf(ctx, d.CreateQuery),
+		Header:  opt.Header.Clone().TakeOrSelf(ctx, d.Header).TakeOrSelf(ctx, d.CreateHeader),
 	}
 	if !d.CreateMethod.IsUnknown() && !d.CreateMethod.IsNull() {
 		out.Method = d.CreateMethod.ValueString()
@@ -37,25 +59,40 @@ func (opt apiOption) ForResourceCreate(ctx context.Context, d resourceData) (*cl
 }
 
 func (opt apiOption) ForResourceRead(ctx context.Context, d resourceData, body []byte) (*client.ReadOption, diag.Diagnostics) {
+	baseURL, diags := opt.baseURL(d.BaseURL)
+	if diags.HasError() {
+		return nil, diags
+	}
 	out := client.ReadOption{
-		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query).TakeWithExparamOrSelf(ctx, d.ReadQuery, body),
-		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header).TakeWithExparamOrSelf(ctx, d.ReadHeader, body),
+		BaseURL: baseURL,
+		Query:   opt.Query.Clone().TakeOrSelf(ctx, d.Query).TakeWithExparamOrSelf(ctx, d.ReadQuery, body),
+		Header:  opt.Header.Clone().TakeOrSelf(ctx, d.Header).TakeWithExparamOrSelf(ctx, d.ReadHeader, body),
 	}
 
 	return &out, nil
 }
 
 func (opt apiOption) ForResourcePostCreateRead(ctx context.Context, d resourceData, pr postCreateRead, body []byte) (*client.ReadOption, diag.Diagnostics) {
+	baseURL, diags := opt.baseURL(d.BaseURL)
+	if diags.HasError() {
+		return nil, diags
+	}
 	out := client.ReadOption{
-		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query).TakeWithExparamOrSelf(ctx, pr.Query, body),
-		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header).TakeWithExparamOrSelf(ctx, pr.Header, body),
+		BaseURL: baseURL,
+		Query:   opt.Query.Clone().TakeOrSelf(ctx, d.Query).TakeWithExparamOrSelf(ctx, pr.Query, body),
+		Header:  opt.Header.Clone().TakeOrSelf(ctx, d.Header).TakeWithExparamOrSelf(ctx, pr.Header, body),
 	}
 
 	return &out, nil
 }
 
 func (opt apiOption) ForResourceUpdate(ctx context.Context, d resourceData, body []byte) (*client.UpdateOption, diag.Diagnostics) {
+	baseURL, diags := opt.baseURL(d.BaseURL)
+	if diags.HasError() {
+		return nil, diags
+	}
 	out := client.UpdateOption{
+		BaseURL:            baseURL,
 		Method:             opt.UpdateMethod,
 		MergePatchDisabled: opt.MergePatchDisabled,
 		Query:              opt.Query.Clone().TakeOrSelf(ctx, d.Query).TakeWithExparamOrSelf(ctx, d.UpdateQuery, body),
@@ -72,10 +109,15 @@ func (opt apiOption) ForResourceUpdate(ctx context.Context, d resourceData, body
 }
 
 func (opt apiOption) ForResourceDelete(ctx context.Context, d resourceData, body []byte) (*client.DeleteOption, diag.Diagnostics) {
+	baseURL, diags := opt.baseURL(d.BaseURL)
+	if diags.HasError() {
+		return nil, diags
+	}
 	out := client.DeleteOption{
-		Method: opt.DeleteMethod,
-		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query).TakeWithExparamOrSelf(ctx, d.DeleteQuery, body),
-		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header).TakeWithExparamOrSelf(ctx, d.DeleteHeader, body),
+		BaseURL: baseURL,
+		Method:  opt.DeleteMethod,
+		Query:   opt.Query.Clone().TakeOrSelf(ctx, d.Query).TakeWithExparamOrSelf(ctx, d.DeleteQuery, body),
+		Header:  opt.Header.Clone().TakeOrSelf(ctx, d.Header).TakeWithExparamOrSelf(ctx, d.DeleteHeader, body),
 	}
 
 	if !d.DeleteMethod.IsUnknown() && !d.DeleteMethod.IsNull() {
@@ -86,30 +128,45 @@ func (opt apiOption) ForResourceDelete(ctx context.Context, d resourceData, body
 }
 
 func (opt apiOption) ForDataSourceRead(ctx context.Context, d dataSourceData) (*client.ReadOptionDS, diag.Diagnostics) {
+	baseURL, diags := opt.baseURL(d.BaseURL)
+	if diags.HasError() {
+		return nil, diags
+	}
 	out := client.ReadOptionDS{
-		Method: d.Method.ValueString(),
-		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
-		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
+		BaseURL: baseURL,
+		Method:  d.Method.ValueString(),
+		Query:   opt.Query.Clone().TakeOrSelf(ctx, d.Query),
+		Header:  opt.Header.Clone().TakeOrSelf(ctx, d.Header),
 	}
 
 	return &out, nil
 }
 
-func (opt apiOption) ForOperation(ctx context.Context, method basetypes.StringValue, defQuery, defHeader, ovQuery, ovHeader basetypes.MapValue, body []byte) (*client.OperationOption, diag.Diagnostics) {
+func (opt apiOption) ForOperation(ctx context.Context, baseURL types.String, method basetypes.StringValue, defQuery, defHeader, ovQuery, ovHeader basetypes.MapValue, body []byte) (*client.OperationOption, diag.Diagnostics) {
+	uRL, diags := opt.baseURL(baseURL)
+	if diags.HasError() {
+		return nil, diags
+	}
 	out := client.OperationOption{
-		Method: method.ValueString(),
-		Query:  opt.Query.Clone().TakeOrSelf(ctx, defQuery).TakeWithExparamOrSelf(ctx, ovQuery, body),
-		Header: opt.Header.Clone().TakeOrSelf(ctx, defHeader).TakeWithExparamOrSelf(ctx, ovHeader, body),
+		BaseURL: uRL,
+		Method:  method.ValueString(),
+		Query:   opt.Query.Clone().TakeOrSelf(ctx, defQuery).TakeWithExparamOrSelf(ctx, ovQuery, body),
+		Header:  opt.Header.Clone().TakeOrSelf(ctx, defHeader).TakeWithExparamOrSelf(ctx, ovHeader, body),
 	}
 
 	return &out, nil
 }
 
 func (opt apiOption) ForListResourceRead(ctx context.Context, d ListResourceData) (*client.ReadOptionLR, diag.Diagnostics) {
+	baseURL, diags := opt.baseURL(d.BaseURL)
+	if diags.HasError() {
+		return nil, diags
+	}
 	out := client.ReadOptionLR{
-		Method: d.Method.ValueString(),
-		Query:  opt.Query.Clone().TakeOrSelf(ctx, d.Query),
-		Header: opt.Header.Clone().TakeOrSelf(ctx, d.Header),
+		BaseURL: baseURL,
+		Method:  d.Method.ValueString(),
+		Query:   opt.Query.Clone().TakeOrSelf(ctx, d.Query),
+		Header:  opt.Header.Clone().TakeOrSelf(ctx, d.Header),
 	}
 
 	return &out, nil
@@ -172,7 +229,7 @@ func (opt apiOption) ForPoll(ctx context.Context, defaultHeader client.Header, d
 	}, nil
 }
 
-func (opt apiOption) ForPrecheck(ctx context.Context, defaultPath string, defaultHeader client.Header, defaultQuery client.Query, d precheckDataApi, body basetypes.DynamicValue) (*client.PollOption, diag.Diagnostics) {
+func (opt apiOption) ForPrecheck(ctx context.Context, defaultBaseURL string, defaultPath string, defaultHeader client.Header, defaultQuery client.Query, d precheckDataApi, body basetypes.DynamicValue) (*client.PollOption, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
 	var status statusDataGo
@@ -201,7 +258,16 @@ func (opt apiOption) ForPrecheck(ctx context.Context, defaultPath string, defaul
 		}
 	}
 
-	uRL := opt.BaseURL
+	baseURL := defaultBaseURL
+	if !d.BaseURL.IsNull() {
+		baseURL = d.BaseURL.ValueString()
+	}
+	uRL, err := url.Parse(baseURL)
+	if err != nil {
+		diags.Append(diag.NewErrorDiagnostic("failed to create precheck option", fmt.Sprintf("parsing base url %q: %v", baseURL, err)))
+		return nil, diags
+	}
+
 	path := defaultPath
 	if !d.Path.IsNull() {
 		path = d.Path.ValueString()

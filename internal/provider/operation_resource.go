@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	netUrl "net/url"
 
 	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
@@ -39,6 +40,7 @@ var _ tffwdocs.ResourceWithRenderOption = &OperationResource{}
 
 type operationResourceData struct {
 	ID        types.String `tfsdk:"id"`
+	BaseURL   types.String `tfsdk:"base_url"`
 	Path      types.String `tfsdk:"path"`
 	IdBuilder types.String `tfsdk:"id_builder"`
 	Method    types.String `tfsdk:"method"`
@@ -98,6 +100,17 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"base_url": schema.StringAttribute{
+				Description:         "Overrides the provider-level `base_url` for this operation. When both are unset, this is required.",
+				MarkdownDescription: "Overrides the provider-level `base_url` for this operation. When both are unset, this is required.",
+				Optional:            true,
+				Validators: []validator.String{
+					myvalidator.StringIsParsable("Ensure this is a valid HTTP URL.", func(s string) error {
+						_, err := netUrl.Parse(s)
+						return err
+					}),
 				},
 			},
 			// This is actually the same as the `read_path` of restful_resource, besides the name
@@ -340,7 +353,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, reqConfig tfsdk.
 		tflog.Info(ctx, "Update an operation resource", map[string]interface{}{"id": plan.ID.ValueString()})
 	}
 
-	opt, diags := r.p.apiOpt.ForOperation(ctx, plan.Method, plan.Query, plan.Header, plan.OperationQuery, plan.OperationHeader, nil)
+	opt, diags := r.p.apiOpt.ForOperation(ctx, plan.BaseURL, plan.Method, plan.Query, plan.Header, plan.OperationQuery, plan.OperationHeader, nil)
 	respDiags.Append(diags...)
 	if respDiags.HasError() {
 		return
@@ -348,7 +361,7 @@ func (r *OperationResource) createOrUpdate(ctx context.Context, reqConfig tfsdk.
 
 	// Precheck
 	if !plan.Precheck.IsNull() {
-		unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, plan.Path.ValueString(), opt.Header, opt.Query, plan.Precheck, basetypes.NewDynamicNull())
+		unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, opt.BaseURL, plan.Path.ValueString(), opt.Header, opt.Query, plan.Precheck, basetypes.NewDynamicNull())
 		respDiags.Append(diags...)
 		if respDiags.HasError() {
 			return
@@ -571,7 +584,7 @@ func (r *OperationResource) Delete(ctx context.Context, req resource.DeleteReque
 		return
 	}
 
-	opt, diags := r.p.apiOpt.ForOperation(ctx, state.DeleteMethod, state.Query, state.Header, state.DeleteQuery, state.DeleteHeader, output)
+	opt, diags := r.p.apiOpt.ForOperation(ctx, state.BaseURL, state.DeleteMethod, state.Query, state.Header, state.DeleteQuery, state.DeleteHeader, output)
 	resp.Diagnostics.Append(diags...)
 	if diags.HasError() {
 		return
@@ -579,7 +592,7 @@ func (r *OperationResource) Delete(ctx context.Context, req resource.DeleteReque
 
 	// Precheck
 	if !state.PrecheckDelete.IsNull() {
-		unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, state.ID.ValueString(), opt.Header, opt.Query, state.PrecheckDelete, r.getOutput(state))
+		unlockFunc, diags := precheck(ctx, c, r.p.apiOpt, opt.BaseURL, state.ID.ValueString(), opt.Header, opt.Query, state.PrecheckDelete, r.getOutput(state))
 		if diags.HasError() {
 			resp.Diagnostics.Append(diags...)
 			return

@@ -121,14 +121,11 @@ provider "restful" {
 
 ## Schema
 
-### Required
-
-- `base_url` (String) The base URL of the API provider.
-
-	-> Ensure this is a valid HTTP URL.
-
 ### Optional
 
+- `base_url` (String) The base URL of the API provider. This can be overridden at the resource level via the `base_url` attribute. When both are unset, a `base_url` must be specified at the resource level.
+
+	-> Ensure this is a valid HTTP URL.
 - `client` (Object) The client configuration. See [below for nested schema](#nested--client).
 - `create_method` (String) The method used to create the resource. Defaults to `POST`.
 

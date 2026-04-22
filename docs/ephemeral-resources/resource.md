@@ -40,6 +40,9 @@ ephemeral "restful_resource" "test" {
 
 ### Optional
 
+- `base_url` (String) Overrides the provider-level `base_url` for this ephemeral resource. When both are unset, this is required.
+
+	-> Ensure this is a valid HTTP URL.
 - `body` (Dynamic) The payload to open the ephemeral resource.
 - `close_body` (Dynamic) The payload to close the ephemeral resource.
 

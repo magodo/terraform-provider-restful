@@ -203,9 +203,9 @@ func (*Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *p
 		MarkdownDescription: "The restful provider provides resource and data source to interact with a platform that exposes a restful API.",
 		Attributes: map[string]schema.Attribute{
 			"base_url": schema.StringAttribute{
-				Description:         "The base URL of the API provider.",
-				MarkdownDescription: "The base URL of the API provider.",
-				Required:            true,
+				Description:         "The base URL of the API provider. This can be overridden at the resource level via the `base_url` attribute. When both are unset, a `base_url` must be specified at the resource level.",
+				MarkdownDescription: "The base URL of the API provider. This can be overridden at the resource level via the `base_url` attribute. When both are unset, a `base_url` must be specified at the resource level.",
+				Optional:            true,
 				Validators: []validator.String{
 					myvalidator.StringIsParsable("Ensure this is a valid HTTP URL.", func(s string) error {
 						_, err := url.Parse(s)
@@ -714,7 +714,7 @@ func (p *Provider) Init(ctx context.Context, config providerConfig) diag.Diagnos
 			diags diag.Diagnostics
 			err   error
 		)
-		p.client, err = client.New(ctx, config.BaseURL.ValueString(), clientOpt)
+		p.client, err = client.New(ctx, clientOpt)
 		if err != nil {
 			diags.AddError(
 				"Failed to configure provider",
@@ -724,24 +724,16 @@ func (p *Provider) Init(ctx context.Context, config providerConfig) diag.Diagnos
 			return
 		}
 
-		uRL, err := url.Parse(config.BaseURL.ValueString())
-		if err != nil {
-			diags.AddError(
-				"Failed to configure provider",
-				fmt.Sprintf("Parsing the base url %q: %v", config.BaseURL, err),
-			)
-			odiags = diags
-			return
-		}
-
 		p.apiOpt = apiOption{
-			BaseURL:            *uRL,
 			CreateMethod:       "POST",
 			UpdateMethod:       "PUT",
 			DeleteMethod:       "DELETE",
 			MergePatchDisabled: false,
 			Query:              map[string][]string{},
 			Header:             map[string]string{},
+		}
+		if !config.BaseURL.IsNull() {
+			p.apiOpt.BaseURL = config.BaseURL.ValueString()
 		}
 		if !config.CreateMethod.IsNull() {
 			p.apiOpt.CreateMethod = config.CreateMethod.ValueString()

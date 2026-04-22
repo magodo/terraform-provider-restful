@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/objectvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -29,6 +30,7 @@ var _ tffwdocs.DataSourceWithRenderOption = &DataSource{}
 
 type dataSourceData struct {
 	ID                 types.String  `tfsdk:"id"`
+	BaseURL            types.String  `tfsdk:"base_url"`
 	Method             types.String  `tfsdk:"method"`
 	Query              types.Map     `tfsdk:"query"`
 	Header             types.Map     `tfsdk:"header"`
@@ -153,6 +155,17 @@ func (d *DataSource) Schema(ctx context.Context, req datasource.SchemaRequest, r
 				MarkdownDescription: "The ID of the Resource, i.e. The path of the data source, relative to the `base_url` of the provider.",
 				Required:            true,
 			},
+			"base_url": schema.StringAttribute{
+				Description:         "Overrides the provider-level `base_url` for this data source. When both are unset, this is required.",
+				MarkdownDescription: "Overrides the provider-level `base_url` for this data source. When both are unset, this is required.",
+				Optional:            true,
+				Validators: []validator.String{
+					myvalidator.StringIsParsable("Ensure this is a valid HTTP URL.", func(s string) error {
+						_, err := url.Parse(s)
+						return err
+					}),
+				},
+			},
 			"method": schema.StringAttribute{
 				MarkdownDescription: "The HTTP Method for the request. `POST` support is only intended for read-only URLs, such as submitting a search. Defaults to `GET`.",
 				Optional:            true,
@@ -270,7 +283,7 @@ func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp 
 	}
 
 	if !config.Precheck.IsNull() {
-		unlockFunc, diags := precheck(ctx, c, d.p.apiOpt, "", opt.Header, opt.Query, config.Precheck, basetypes.NewDynamicNull())
+		unlockFunc, diags := precheck(ctx, c, d.p.apiOpt, opt.BaseURL, "", opt.Header, opt.Query, config.Precheck, basetypes.NewDynamicNull())
 		if diags.HasError() {
 			resp.Diagnostics.Append(diags...)
 			return
@@ -280,6 +293,7 @@ func (d *DataSource) Read(ctx context.Context, req datasource.ReadRequest, resp 
 
 	state := dataSourceData{
 		ID:            config.ID,
+		BaseURL:       config.BaseURL,
 		Method:        config.Method,
 		Query:         config.Query,
 		Header:        config.Header,

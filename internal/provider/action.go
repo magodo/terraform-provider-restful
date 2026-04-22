@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	netUrl "net/url"
 
 	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/go-resty/resty/v2"
@@ -31,6 +32,7 @@ var _ action.Action = &Action{}
 
 type actionData struct {
 	Path          types.String  `tfsdk:"path"`
+	BaseURL       types.String  `tfsdk:"base_url"`
 	Query         types.Map     `tfsdk:"query"`
 	Header        types.Map     `tfsdk:"header"`
 	Method        types.String  `tfsdk:"method"`
@@ -157,6 +159,16 @@ func (a *Action) Schema(ctx context.Context, req action.SchemaRequest, resp *act
 			"path": schema.StringAttribute{
 				MarkdownDescription: "The path for the `Invoke` call, relative to the `base_url` of the provider.",
 				Required:            true,
+			},
+			"base_url": schema.StringAttribute{
+				MarkdownDescription: "Overrides the provider-level `base_url` for this action. When both are unset, this is required.",
+				Optional:            true,
+				Validators: []validator.String{
+					myvalidator.StringIsParsable("Ensure this is a valid HTTP URL.", func(s string) error {
+						_, err := netUrl.Parse(s)
+						return err
+					}),
+				},
 			},
 			"query": schema.MapAttribute{
 				MarkdownDescription: "The query parameters for the `Invoke` call. This overrides the `query` set in the provider block.",
@@ -314,7 +326,7 @@ func (a *Action) Invoke(ctx context.Context, req action.InvokeRequest, resp *act
 
 	tflog.Info(ctx, "Invoking an action", map[string]any{"path": config.Path.ValueString()})
 
-	opt, diags := a.p.apiOpt.ForOperation(ctx, config.Method, config.Query, config.Header, types.MapNull(types.StringType), types.MapNull(types.StringType), nil)
+	opt, diags := a.p.apiOpt.ForOperation(ctx, config.BaseURL, config.Method, config.Query, config.Header, types.MapNull(types.StringType), types.MapNull(types.StringType), nil)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -325,7 +337,7 @@ func (a *Action) Invoke(ctx context.Context, req action.InvokeRequest, resp *act
 		resp.SendProgress(action.InvokeProgressEvent{
 			Message: "Prechecking the action...",
 		})
-		unlockFunc, diags := precheck(ctx, c, a.p.apiOpt, config.Path.ValueString(), opt.Header, opt.Query, config.Precheck, types.DynamicNull())
+		unlockFunc, diags := precheck(ctx, c, a.p.apiOpt, opt.BaseURL, config.Path.ValueString(), opt.Header, opt.Query, config.Precheck, types.DynamicNull())
 		resp.Diagnostics.Append(diags...)
 		if resp.Diagnostics.HasError() {
 			return

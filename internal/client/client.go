@@ -119,7 +119,22 @@ type Client struct {
 	*resty.Client
 }
 
-func New(ctx context.Context, baseURL string, opt *BuildOption) (*Client, error) {
+// resolvePath returns the effective target URL to pass to resty.
+// When baseURL is non-empty, it is joined with the path producing an absolute URL, which
+// overrides the client's default base URL. Otherwise, the path is returned as-is and resty
+// will resolve it against the client's configured base URL.
+func resolvePath(baseURL, path string) (string, error) {
+	if baseURL == "" {
+		return path, nil
+	}
+	joined, err := url.JoinPath(baseURL, path)
+	if err != nil {
+		return "", fmt.Errorf("joining base url %q with path %q: %v", baseURL, path, err)
+	}
+	return joined, nil
+}
+
+func New(ctx context.Context, opt *BuildOption) (*Client, error) {
 	if opt == nil {
 		opt = &BuildOption{}
 	}
@@ -146,8 +161,6 @@ func New(ctx context.Context, baseURL string, opt *BuildOption) (*Client, error)
 			return nil, err
 		}
 	}
-
-	client.SetBaseURL(baseURL)
 
 	return &Client{client}, nil
 }
@@ -199,12 +212,18 @@ func (c *Client) SetLoggerContext(ctx context.Context) {
 }
 
 type CreateOption struct {
-	Method string
-	Query  Query
-	Header Header
+	// BaseURL overrides the client's default base URL for this request. Optional.
+	BaseURL string
+	Method  string
+	Query   Query
+	Header  Header
 }
 
 func (c *Client) Create(ctx context.Context, path string, body string, opt CreateOption) (*resty.Response, error) {
+	target, err := resolvePath(opt.BaseURL, path)
+	if err != nil {
+		return nil, err
+	}
 	req := c.R().SetContext(ctx).SetBody(body)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 	req.SetHeaders(opt.Header)
@@ -214,30 +233,36 @@ func (c *Client) Create(ctx context.Context, path string, body string, opt Creat
 
 	switch opt.Method {
 	case "POST":
-		return req.Post(path)
+		return req.Post(target)
 	case "PUT":
-		return req.Put(path)
+		return req.Put(target)
 	case "PATCH":
-		return req.Patch(path)
+		return req.Patch(target)
 	default:
 		return nil, fmt.Errorf("unknown create method: %s", opt.Method)
 	}
 }
 
 type ReadOption struct {
-	Query  Query
-	Header Header
+	BaseURL string
+	Query   Query
+	Header  Header
 }
 
 func (c *Client) Read(ctx context.Context, path string, opt ReadOption) (*resty.Response, error) {
+	target, err := resolvePath(opt.BaseURL, path)
+	if err != nil {
+		return nil, err
+	}
 	req := c.R().SetContext(ctx)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 	req.SetHeaders(opt.Header)
 
-	return req.Get(path)
+	return req.Get(target)
 }
 
 type UpdateOption struct {
+	BaseURL            string
 	Method             string
 	MergePatchDisabled bool
 	Query              Query
@@ -245,6 +270,10 @@ type UpdateOption struct {
 }
 
 func (c *Client) Update(ctx context.Context, path string, body string, opt UpdateOption) (*resty.Response, error) {
+	target, err := resolvePath(opt.BaseURL, path)
+	if err != nil {
+		return nil, err
+	}
 	req := c.R().SetContext(ctx).SetBody(body)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 	req.SetHeaders(opt.Header)
@@ -254,23 +283,28 @@ func (c *Client) Update(ctx context.Context, path string, body string, opt Updat
 
 	switch opt.Method {
 	case "PATCH":
-		return req.Patch(path)
+		return req.Patch(target)
 	case "PUT":
-		return req.Put(path)
+		return req.Put(target)
 	case "POST":
-		return req.Post(path)
+		return req.Post(target)
 	default:
 		return nil, fmt.Errorf("unknown update method: %s", opt.Method)
 	}
 }
 
 type DeleteOption struct {
-	Method string
-	Query  Query
-	Header Header
+	BaseURL string
+	Method  string
+	Query   Query
+	Header  Header
 }
 
 func (c *Client) Delete(ctx context.Context, path string, body string, opt DeleteOption) (*resty.Response, error) {
+	target, err := resolvePath(opt.BaseURL, path)
+	if err != nil {
+		return nil, err
+	}
 	req := c.R().SetContext(ctx)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 	req.SetHeaders(opt.Header)
@@ -283,25 +317,30 @@ func (c *Client) Delete(ctx context.Context, path string, body string, opt Delet
 
 	switch opt.Method {
 	case "POST":
-		return req.Post(path)
+		return req.Post(target)
 	case "PATCH":
-		return req.Patch(path)
+		return req.Patch(target)
 	case "PUT":
-		return req.Put(path)
+		return req.Put(target)
 	case "DELETE":
-		return req.Delete(path)
+		return req.Delete(target)
 	default:
 		return nil, fmt.Errorf("unknown delete method: %s", opt.Method)
 	}
 }
 
 type OperationOption struct {
-	Method string
-	Query  Query
-	Header Header
+	BaseURL string
+	Method  string
+	Query   Query
+	Header  Header
 }
 
 func (c *Client) Operation(ctx context.Context, path string, body []byte, opt OperationOption) (*resty.Response, error) {
+	target, err := resolvePath(opt.BaseURL, path)
+	if err != nil {
+		return nil, err
+	}
 	req := c.R().SetContext(ctx)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 	req.SetHeaders(opt.Header)
@@ -324,21 +363,22 @@ func (c *Client) Operation(ctx context.Context, path string, body []byte, opt Op
 
 	switch opt.Method {
 	case "GET":
-		return req.Get(path)
+		return req.Get(target)
 	case "POST":
-		return req.Post(path)
+		return req.Post(target)
 	case "PUT":
-		return req.Put(path)
+		return req.Put(target)
 	case "PATCH":
-		return req.Patch(path)
+		return req.Patch(target)
 	case "DELETE":
-		return req.Delete(path)
+		return req.Delete(target)
 	default:
 		return nil, fmt.Errorf("unknown create method: %s", opt.Method)
 	}
 }
 
 type ReadOptionDS struct {
+	BaseURL string
 	// Method used for reading, which defaults to GET
 	Method string
 	Query  Query
@@ -346,6 +386,10 @@ type ReadOptionDS struct {
 }
 
 func (c *Client) ReadDS(ctx context.Context, path string, body []byte, opt ReadOptionDS) (*resty.Response, error) {
+	target, err := resolvePath(opt.BaseURL, path)
+	if err != nil {
+		return nil, err
+	}
 	req := c.R().SetContext(ctx)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 	req.SetHeaders(opt.Header)
@@ -360,17 +404,18 @@ func (c *Client) ReadDS(ctx context.Context, path string, body []byte, opt ReadO
 
 	switch opt.Method {
 	case "", "GET":
-		return req.Get(path)
+		return req.Get(target)
 	case "POST":
-		return req.Post(path)
+		return req.Post(target)
 	case "HEAD":
-		return req.Head(path)
+		return req.Head(target)
 	default:
 		return nil, fmt.Errorf("unknown read (ds) method: %s", opt.Method)
 	}
 }
 
 type ReadOptionLR struct {
+	BaseURL string
 	// Method used for reading, which defaults to GET
 	Method string
 	Query  Query
@@ -378,6 +423,10 @@ type ReadOptionLR struct {
 }
 
 func (c *Client) ReadLR(ctx context.Context, path string, body []byte, opt ReadOptionLR) (*resty.Response, error) {
+	target, err := resolvePath(opt.BaseURL, path)
+	if err != nil {
+		return nil, err
+	}
 	req := c.R().SetContext(ctx)
 	req.SetQueryParamsFromValues(url.Values(opt.Query))
 	req.SetHeaders(opt.Header)
@@ -392,11 +441,11 @@ func (c *Client) ReadLR(ctx context.Context, path string, body []byte, opt ReadO
 
 	switch opt.Method {
 	case "", "GET":
-		return req.Get(path)
+		return req.Get(target)
 	case "POST":
-		return req.Post(path)
+		return req.Post(target)
 	case "HEAD":
-		return req.Head(path)
+		return req.Head(target)
 	default:
 		return nil, fmt.Errorf("unknown read (lr) method: %s", opt.Method)
 	}
