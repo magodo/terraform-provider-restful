@@ -24,6 +24,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/statestore"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	tffwdocs "github.com/magodo/terraform-plugin-framework-docs"
@@ -33,6 +34,7 @@ import (
 )
 
 var _ provider.Provider = &Provider{}
+var _ provider.ProviderWithStateStores = &Provider{}
 var _ tffwdocs.ProviderWithRenderOption = &Provider{}
 
 type Provider struct {
@@ -193,6 +195,14 @@ func (*Provider) Actions(_ context.Context) []func() action.Action {
 	return []func() action.Action{
 		func() action.Action {
 			return &Action{}
+		},
+	}
+}
+
+func (*Provider) StateStores(_ context.Context) []func() statestore.StateStore {
+	return []func() statestore.StateStore{
+		func() statestore.StateStore {
+			return &StateStore{}
 		},
 	}
 }
@@ -683,6 +693,7 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 	resp.EphemeralResourceData = data
 	resp.ListResourceData = data
 	resp.ActionData = data
+	resp.StateStoreData = data
 }
 
 func (p *Provider) Init(ctx context.Context, config providerConfig) diag.Diagnostics {
