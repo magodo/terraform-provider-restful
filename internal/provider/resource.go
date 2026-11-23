@@ -1675,6 +1675,7 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 				"Failed to marshal `delete_body`",
 				err.Error(),
 			)
+			return
 		}
 		body = string(b)
 	}
@@ -1685,6 +1686,7 @@ func (r Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *
 				"Failed to expand the expressions in the `delete_body_raw`",
 				err.Error(),
 			)
+			return
 		}
 		body = b
 	}
