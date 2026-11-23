@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	jsonpatch "github.com/evanphx/json-patch"
+	"github.com/hashicorp/terraform-plugin-framework-validators/dynamicvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/objectvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -58,6 +59,7 @@ type operationResourceData struct {
 	Poll           types.Object  `tfsdk:"poll"`
 	DeleteMethod   types.String  `tfsdk:"delete_method"`
 	DeleteBody     types.Dynamic `tfsdk:"delete_body"`
+	DeleteBodyRaw  types.String  `tfsdk:"delete_body_raw"`
 	DeletePath     types.String  `tfsdk:"delete_path"`
 	PrecheckDelete types.List    `tfsdk:"precheck_delete"`
 	PollDelete     types.Object  `tfsdk:"poll_delete"`
@@ -191,6 +193,22 @@ func (r *OperationResource) Schema(ctx context.Context, req resource.SchemaReque
 				Description:         "The payload for the `Delete` call.",
 				MarkdownDescription: "The payload for the `Delete` call.",
 				Optional:            true,
+				Validators: []validator.Dynamic{
+					dynamicvalidator.ConflictsWith(
+						path.MatchRoot("delete_body_raw"),
+					),
+				},
+			},
+
+			"delete_body_raw": schema.StringAttribute{
+				Description:         "The raw payload for the `Delete` call. It can contain `$(body.x.y.z)` parameter that reference property from the `state.output`.",
+				MarkdownDescription: "The raw payload for the `Delete` call. It can contain `$(body.x.y.z)` parameter that reference property from the `state.output`.",
+				Optional:            true,
+				Validators: []validator.String{
+					stringvalidator.ConflictsWith(
+						path.MatchRoot("delete_body"),
+					),
+				},
 			},
 
 			"precheck_delete": precheckDelete,
@@ -599,16 +617,29 @@ func (r *OperationResource) Delete(ctx context.Context, req resource.DeleteReque
 		}
 	}
 
-	b, err := dynamic.ToJSON(state.DeleteBody)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			`Error to marshal "delete_body"`,
-			err.Error(),
-		)
-		return
+	var body string
+	if db := state.DeleteBody; !db.IsNull() {
+		b, err := dynamic.ToJSON(db)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Failed to marshal `delete_body`",
+				err.Error(),
+			)
+		}
+		body = string(b)
+	}
+	if db := state.DeleteBodyRaw; !db.IsNull() {
+		b, err := exparam.ExpandBody(db.ValueString(), output)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Failed to expand the expressions in the `delete_body_raw`",
+				err.Error(),
+			)
+		}
+		body = b
 	}
 
-	response, err := c.Operation(ctx, path, b, *opt)
+	response, err := c.Operation(ctx, path, []byte(body), *opt)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Delete: Error to call operation",
