@@ -47,6 +47,11 @@ resource "restful_operation" "register_rp" {
 
 - `body` (Dynamic) The payload for the `Create`/`Update` call.
 - `delete_body` (Dynamic) The payload for the `Delete` call.
+
+	-> Ensure that if an attribute is set, these are not set: "[delete_body_raw]".
+- `delete_body_raw` (String) The raw payload for the `Delete` call. It can contain `$(body.x.y.z)` parameter that reference property from the `state.output`.
+
+	-> Ensure that if an attribute is set, these are not set: "[delete_body]".
 - `delete_header` (Map of Strings) The header parameters that are applied to each delete request. This overrides the `header` set in the resource block.
 - `delete_method` (String) The method for the `Delete` call. If this is not specified, no `Delete` call will occur.
 
